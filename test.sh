@@ -17,5 +17,6 @@ assert() {
 }
 
 assert 13 "5 * 3 - 12 / (2 + 4)"
+assert 2 "-8+20+2*(-5)"
 
 echo OK
