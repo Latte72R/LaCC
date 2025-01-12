@@ -1,7 +1,7 @@
 *~
 *.o
 tmp*
-a.out
-lcc
+*.out
+9cc
 *.Identifier
 .vscode/*
