@@ -234,6 +234,14 @@ Node *primary() {
 
   Token *tok = consume_ident();
   if (tok) {
+    if (consume("(")) {
+      consume(")");
+      Node *node = new_node(ND_NONE);
+      node->kind = ND_FUNCALL;
+      node->name = tok->str;
+      node->val = tok->len;
+      return node;
+    }
     Node *node = calloc(1, sizeof(Node));
     node->kind = ND_LVAR;
 
@@ -250,7 +258,7 @@ Node *primary() {
       locals = lvar;
     }
     return node;
+  } else {
+    return new_num(expect_number());
   }
-
-  return new_num(expect_number());
 }
