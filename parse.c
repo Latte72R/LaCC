@@ -8,7 +8,8 @@
 
 extern Node *code[100];
 extern Token *token;
-extern LVar *locals;
+extern Function *functions;
+extern Function *current_fn;
 extern int labelseq;
 
 // Consumes the current token if it matches `op`.
@@ -43,6 +44,22 @@ int expect_number() {
   int val = token->val;
   token = token->next;
   return val;
+}
+
+// 変数を名前で検索する。見つからなかった場合はNULLを返す。
+LVar *find_lvar(Token *tok) {
+  for (LVar *var = current_fn->locals; var; var = var->next)
+    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+      return var;
+  return NULL;
+}
+
+// 関数を名前で検索する。見つからなかった場合はNULLを返す。
+Function *find_fn(Token *tok) {
+  for (Function *fn = functions; fn; fn = fn->next)
+    if (fn->len == tok->len && !memcmp(tok->str, fn->name, fn->len))
+      return fn;
+  return NULL;
 }
 
 bool at_eof() { return token->kind == TK_EOF; }
@@ -88,7 +105,56 @@ Node *stmt() {
     }
     consume("}");
     node->body[i].kind = ND_NONE;
-  } else if (token->kind == TK_IF) {
+    return node;
+  }
+  if (token->kind == TK_IDENT && token->next->kind == TK_RESERVED &&
+      memcmp(token->next->str, "(", token->next->len) == 0) {
+    Token *tok = consume_ident();
+    consume("(");
+    Function *fn = find_fn(tok);
+    if (!fn) {
+      // 関数定義
+      fn = calloc(1, sizeof(Function));
+      fn->next = functions;
+      fn->name = tok->str;
+      fn->len = tok->len;
+      fn->locals = calloc(1, sizeof(LVar));
+      fn->locals->offset = 0;
+      fn->variable_cnt = 0;
+      functions = fn;
+      Function *prev_fn = current_fn;
+      current_fn = fn;
+      Node *node = new_node(ND_FUNCDEF);
+      node->name = tok->str;
+      node->val = tok->len;
+      node->fn = fn;
+      if (!consume(")")) {
+        for (int i = 0; i < 4; i++) {
+          Token *tok_lvar = consume_ident();
+          if (!tok_lvar)
+            break;
+          Node *nd_lvar = calloc(1, sizeof(Node));
+          nd_lvar->kind = ND_LVAR;
+          node->args[i] = nd_lvar;
+          LVar *lvar = calloc(1, sizeof(LVar));
+          lvar->next = fn->locals;
+          lvar->name = tok_lvar->str;
+          lvar->len = tok_lvar->len;
+          lvar->offset = i * 8 + 8;
+          nd_lvar->offset = lvar->offset;
+          fn->locals = lvar;
+          fn->variable_cnt++;
+          if (!consume(","))
+            break;
+        }
+        expect(")");
+      }
+      node->body = stmt();
+      current_fn = prev_fn;
+      return node;
+    }
+  }
+  if (token->kind == TK_IF) {
     token = token->next;
     node = calloc(1, sizeof(Node));
     node->kind = ND_IF;
@@ -129,12 +195,10 @@ Node *stmt() {
     node = calloc(1, sizeof(Node));
     node->kind = ND_RETURN;
     node->lhs = expr();
-    if (!consume(";"))
-      error_at(token->str, "';'ではないトークンです");
+    expect(";");
   } else {
     node = expr();
-    if (!consume(";"))
-      error_at(token->str, "';'ではないトークンです");
+    expect(";");
   }
   return node;
 }
@@ -216,14 +280,6 @@ Node *unary() {
   return primary();
 }
 
-// 変数を名前で検索する。見つからなかった場合はNULLを返す。
-LVar *find_lvar(Token *tok) {
-  for (LVar *var = locals; var; var = var->next)
-    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
-      return var;
-  return NULL;
-}
-
 // primary = "(" expr ")" | num
 Node *primary() {
   if (consume("(")) {
@@ -233,15 +289,12 @@ Node *primary() {
   }
 
   Token *tok = consume_ident();
-  if (tok) {
-    if (consume("(")) {
-      consume(")");
-      Node *node = new_node(ND_NONE);
-      node->kind = ND_FUNCALL;
-      node->name = tok->str;
-      node->val = tok->len;
-      return node;
-    }
+  // 数値
+  if (!tok) {
+    return new_num(expect_number());
+  }
+  // 変数
+  if (!consume("(")) {
     Node *node = calloc(1, sizeof(Node));
     node->kind = ND_LVAR;
 
@@ -250,15 +303,28 @@ Node *primary() {
       node->offset = lvar->offset;
     } else {
       lvar = calloc(1, sizeof(LVar));
-      lvar->next = locals;
+      lvar->next = current_fn->locals;
       lvar->name = tok->str;
       lvar->len = tok->len;
-      lvar->offset = locals->offset + 8;
+      lvar->offset = current_fn->locals->offset + 8;
       node->offset = lvar->offset;
-      locals = lvar;
+      current_fn->locals = lvar;
+      current_fn->variable_cnt++;
     }
     return node;
-  } else {
-    return new_num(expect_number());
   }
+  Function *fn = find_fn(tok);
+  // 関数呼び出し
+  Node *node = new_node(ND_FUNCALL);
+  node->name = tok->str;
+  node->val = tok->len;
+  if (!consume(")")) {
+    for (int i = 0; i < 4; i++) {
+      node->args[i] = expr();
+      if (!consume(","))
+        break;
+    }
+    expect(")");
+  }
+  return node;
 }

@@ -5,6 +5,8 @@
 // Code generator
 //
 
+const char *regs[4] = {"rdi", "rsi", "rdx", "rcx"};
+
 void gen_lval(Node *node) {
   if (node->kind != ND_LVAR)
     error("代入の左辺値が変数ではありません");
@@ -85,7 +87,23 @@ void gen(Node *node) {
     printf("  jmp .Lbegin%d\n", node->id);
     printf(".Lend%d:\n", node->id);
     return;
+  case ND_FUNCDEF:
+    printf("%.*s:\n", node->val, node->name);
+    printf("  push rbp\n");
+    printf("  mov rbp, rsp\n");
+    printf("  sub rsp, %d\n", node->fn->locals->offset);
+    for (int i = 0; i < 4 && node->args[i]; i++) {
+      gen_lval(node->args[i]);
+      printf("  mov [rax], %s\n", regs[i]);
+    }
+    gen(node->body);
+    return;
   case ND_FUNCALL:
+    for (int i = 0; i < 4 && node->args[i]; i++) {
+      gen(node->args[i]);
+      printf("  pop rax\n");
+      printf("  mov %s, rax\n", regs[i]);
+    }
     printf("  call %.*s\n", node->val, node->name);
     printf("  push rax\n");
     return;

@@ -55,6 +55,17 @@ struct LVar {
   int offset; // RBPからのオフセット
 };
 
+// 関数の型
+typedef struct Function Function;
+
+struct Function {
+  Function *next;   // 次の関数かNULL
+  LVar *locals;     // ローカル変数
+  char *name;       // 変数の名前
+  int len;          // 名前の長さ
+  int variable_cnt; // ローカル変数の数
+};
+
 //
 // Parser
 //
@@ -76,6 +87,7 @@ typedef enum {
   ND_WHILE,   // while
   ND_FOR,     // for
   ND_RETURN,  // return
+  ND_FUNCDEF, // 関数定義
   ND_FUNCALL, // 関数呼び出し
   ND_BLOCK,   // { ... }
   ND_NONE,    // 空のノード
@@ -89,15 +101,17 @@ struct Node {
   Node *lhs;     // 左辺
   Node *rhs;     // 右辺
   int val; // kindがND_NUMの場合はその数値, ND_FUNCALLの場合は関数名の長さ
-  char *name; // kindがND_FUNCALLの場合のみ使う
-  int offset; // kindがND_LVARの場合のみ使う
-  int id;     // kindがND_IF, ND_WHILE, ND_FORの場合のみ使う
-  Node *cond; // kindがND_IF, ND_WHILE, ND_FORの場合のみ使う
-  Node *then; // kindがND_IFの場合のみ使う
-  Node *els;  // kindがND_IFの場合のみ使う
-  Node *init; // kindがND_FORの場合のみ使う
-  Node *inc;  // kindがND_FORの場合のみ使う
-  Node *body; // kindがND_BLOCKの場合のみ使う
+  char *name;    // kindがND_FUNCALL, ND_FUNCDEFの場合のみ使う
+  int offset;    // kindがND_LVAR, ND_FUNCDEFの場合のみ使う
+  int id;        // kindがND_IF, ND_WHILE, ND_FORの場合のみ使う
+  Node *cond;    // kindがND_IF, ND_WHILE, ND_FORの場合のみ使う
+  Node *then;    // kindがND_IFの場合のみ使う
+  Node *els;     // kindがND_IFの場合のみ使う
+  Node *init;    // kindがND_FORの場合のみ使う
+  Node *inc;     // kindがND_FORの場合のみ使う
+  Node *body;    // kindがND_BLOCKの場合のみ使う
+  Node *args[4]; // kindがND_FUNCALLの場合のみ使う
+  Function *fn;  // kindがND_FUNCDEFの場合のみ使う
 };
 
 Node *new_node(NodeKind kind);
