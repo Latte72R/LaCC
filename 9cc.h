@@ -21,6 +21,7 @@ typedef enum {
   TK_IF,
   TK_WHILE,
   TK_FOR,
+  TK_EXTERN,
   TK_EOF, // 入力の終わりを表すトークン
 } TokenKind;
 
@@ -38,7 +39,7 @@ struct Token {
 void error(char *fmt, ...);
 void error_at(char *loc, char *fmt, ...);
 bool consume(char *op);
-void expect(char *op);
+void expect(char *op, char *err, char *st);
 int expect_number();
 bool at_eof();
 Token *new_token(TokenKind kind, Token *cur, char *str, int len);
@@ -89,6 +90,7 @@ typedef enum {
   ND_RETURN,  // return
   ND_FUNCDEF, // 関数定義
   ND_FUNCALL, // 関数呼び出し
+  ND_EXTERN,  // extern
   ND_BLOCK,   // { ... }
   ND_NONE,    // 空のノード
 } NodeKind;
@@ -112,6 +114,7 @@ struct Node {
   Node *body;    // kindがND_BLOCKの場合のみ使う
   Node *args[4]; // kindがND_FUNCALLの場合のみ使う
   Function *fn;  // kindがND_FUNCDEFの場合のみ使う
+  bool endline;
 };
 
 Node *new_node(NodeKind kind);

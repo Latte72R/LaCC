@@ -1,5 +1,5 @@
 CFLAGS=-std=c11 -g -static
-SRCS=$(wildcard *.c)
+SRCS=codegen.c main.c parse.c tokenizer.c
 OBJS=$(SRCS:.c=.o)
 
 9cc: $(OBJS)
@@ -9,6 +9,9 @@ $(OBJS): 9cc.h
 
 test: 9cc
 	./test.sh
+
+rf: 9cc
+	./rf.sh $(FILE)
 
 clean:
 	rm -f 9cc *.o *~ tmp*

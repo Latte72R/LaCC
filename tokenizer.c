@@ -96,6 +96,12 @@ Token *tokenize() {
       continue;
     }
 
+    if (strncmp(p, "extern", 6) == 0 && !is_alnum(p[6])) {
+      cur = new_token(TK_EXTERN, cur, p, 6);
+      p += 6;
+      continue;
+    }
+
     if (strncmp(p, "if", 2) == 0 && !is_alnum(p[2])) {
       cur = new_token(TK_IF, cur, p, 2);
       p += 2;
@@ -123,11 +129,6 @@ Token *tokenize() {
       }
       cur = new_token(TK_IDENT, cur, p, i);
       p += i;
-      continue;
-    }
-
-    if (*p == ';') {
-      cur = new_token(TK_RESERVED, cur, p++, 1);
       continue;
     }
 

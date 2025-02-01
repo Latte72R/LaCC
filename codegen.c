@@ -19,13 +19,15 @@ void gen_lval(Node *node) {
 void gen(Node *node) {
   switch (node->kind) {
   case ND_NUM:
-    printf("  push %d\n", node->val);
+    if (!node->endline)
+      printf("  push %d\n", node->val);
     return;
   case ND_LVAR:
     gen_lval(node);
     printf("  pop rax\n");
     printf("  mov rax, [rax]\n");
-    printf("  push rax\n");
+    if (!node->endline)
+      printf("  push rax\n");
     return;
   case ND_ASSIGN:
     gen_lval(node->lhs);
@@ -34,10 +36,11 @@ void gen(Node *node) {
     printf("  pop rdi\n");
     printf("  pop rax\n");
     printf("  mov [rax], rdi\n");
-    printf("  push rdi\n");
+    if (!node->endline)
+      printf("  push rdi\n");
     return;
   case ND_RETURN:
-    gen(node->lhs);
+    gen(node->rhs);
     printf("  pop rax\n");
     printf("  mov rsp, rbp\n");
     printf("  pop rbp\n");
@@ -77,6 +80,7 @@ void gen(Node *node) {
     return;
   case ND_FOR:
     gen(node->init);
+    printf("  pop rax\n");
     printf(".Lbegin%d:\n", node->id);
     gen(node->cond);
     printf("  pop rax\n");
@@ -84,6 +88,7 @@ void gen(Node *node) {
     printf("  je .Lend%d\n", node->id);
     gen(node->then);
     gen(node->inc);
+    printf("  pop rax\n");
     printf("  jmp .Lbegin%d\n", node->id);
     printf(".Lend%d:\n", node->id);
     return;
@@ -91,9 +96,16 @@ void gen(Node *node) {
     printf("%.*s:\n", node->val, node->name);
     printf("  push rbp\n");
     printf("  mov rbp, rsp\n");
-    printf("  sub rsp, %d\n", node->fn->locals->offset);
+    int offset;
+    if (!(node->fn->locals->offset % 16)) {
+      offset = node->fn->locals->offset;
+    } else {
+      offset = node->fn->locals->offset + 8;
+    }
+    printf("  sub rsp, %d\n", offset);
     for (int i = 0; i < 4 && node->args[i]; i++) {
       gen_lval(node->args[i]);
+      printf("  pop rax\n");
       printf("  mov [rax], %s\n", regs[i]);
     }
     gen(node->body);
@@ -105,7 +117,10 @@ void gen(Node *node) {
       printf("  mov %s, rax\n", regs[i]);
     }
     printf("  call %.*s\n", node->val, node->name);
-    printf("  push rax\n");
+    if (!node->endline)
+      printf("  push rax\n");
+    return;
+  case ND_EXTERN:
     return;
   default:
     break;
@@ -155,5 +170,6 @@ void gen(Node *node) {
     break;
   }
 
-  printf("  push rax\n");
+  if (!node->endline)
+    printf("  push rax\n");
 }
