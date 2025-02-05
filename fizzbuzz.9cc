@@ -1,6 +1,6 @@
 
-extern int _pc(c);
-extern int _pn(n);
+int _pc(int c);
+int _pn(int n);
 
 int main() {
     int number = 30;

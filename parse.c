@@ -14,8 +14,7 @@ extern int labelseq;
 
 // Consumes the current token if it matches `op`.
 bool consume(char *op) {
-  if (token->kind != TK_RESERVED || strlen(op) != token->len ||
-      memcmp(token->str, op, token->len))
+  if (token->kind != TK_RESERVED || strlen(op) != token->len || memcmp(token->str, op, token->len))
     return false;
   token = token->next;
   return true;
@@ -39,8 +38,7 @@ Token *consume_type() {
 
 // Ensure that the current token is `op`.
 void expect(char *op, char *err, char *st) {
-  if (token->kind != TK_RESERVED || strlen(op) != token->len ||
-      memcmp(token->str, op, token->len))
+  if (token->kind != TK_RESERVED || strlen(op) != token->len || memcmp(token->str, op, token->len))
     error("expected \"%s\":\n  %s  [in %s statement]", op, err, st);
   token = token->next;
 }
@@ -48,8 +46,7 @@ void expect(char *op, char *err, char *st) {
 // Ensure that the current token is TK_NUM.
 int expect_number() {
   if (token->kind != TK_NUM)
-    error("expected a number but got \"%.*s\" [in expect_number]", token->len,
-          token->str);
+    error("expected a number but got \"%.*s\" [in expect_number]", token->len, token->str);
   int val = token->val;
   token = token->next;
   return val;
@@ -113,8 +110,7 @@ Node *function_definition(Token *tok) {
   if (!consume(")")) {
     for (int i = 0; i < 4; i++) {
       if (!consume_type()) {
-        error("expected a type but got \"%.*s\" [in function definition]",
-              token->len, token->str);
+        error("expected a type but got \"%.*s\" [in function definition]", token->len, token->str);
       }
       Token *tok_lvar = consume_ident();
       if (!tok_lvar) {
@@ -137,7 +133,12 @@ Node *function_definition(Token *tok) {
     }
     expect(")", "after arguments", "function definition");
   }
-  node->body = stmt();
+  if (!(token->kind == TK_RESERVED && !memcmp(token->str, "{", token->len))) {
+    node->kind = ND_EXTERN;
+    expect(";", "after line", "function definition");
+  } else {
+    node->body = stmt();
+  }
   current_fn = prev_fn;
   return node;
 }
@@ -170,46 +171,17 @@ Node *stmt() {
     node->kind = ND_BLOCK;
     node->body = calloc(100, sizeof(Node));
     int i = 0;
-    while (token->kind != TK_RESERVED && memcmp(token->str, "}", token->len)) {
+    while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
       node->body[i++] = *stmt();
     }
     node->body[i].kind = ND_NONE;
     expect("}", "after block", "block");
-  } else if (token->kind == TK_EXTERN) {
-    node = new_node(ND_EXTERN);
-    token = token->next;
-    if (!consume_type()) {
-      error("expected a type but got \"%.*s\" [in extern statement]",
-            token->len, token->str);
-    }
-    Token *tok = consume_ident();
-    if (!tok) {
-      error("expected an identifier but got \"%.*s\" [in extern statement]",
-            token->len, token->str);
-    }
-    expect("(", "after function name", "extern");
-    Function *fn = calloc(1, sizeof(Function));
-    fn->next = functions;
-    fn->name = tok->str;
-    fn->len = tok->len;
-    functions = fn;
-    if (!consume(")")) {
-      for (int i = 0; i < 4; i++) {
-        if (!consume_ident())
-          break;
-        if (!consume(","))
-          break;
-      }
-      expect(")", "after arguments", "extern");
-    }
-    expect(";", "after line", "extern");
   } else if (token->kind == TK_TYPE) {
     // 変数宣言または関数定義
     token = token->next;
     Token *tok = consume_ident();
     if (!tok) {
-      error("expected an identifier but got \"%.*s\" [in variable declaration]",
-            token->len, token->str);
+      error("expected an identifier but got \"%.*s\" [in variable declaration]", token->len, token->str);
     }
     if (consume("(")) {
       // 関数定義
@@ -280,8 +252,7 @@ Node *expr() { return assign(); }
 
 Node *assign() {
   Node *node;
-  if (token->kind == TK_IDENT && token->next &&
-      token->next->kind == TK_RESERVED &&
+  if (token->kind == TK_IDENT && token->next && token->next->kind == TK_RESERVED &&
       !memcmp(token->next->str, "=", token->next->len)) {
     Token *tok = consume_ident();
     node = new_node(ND_LVAR);
