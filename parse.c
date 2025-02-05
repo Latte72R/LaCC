@@ -29,6 +29,14 @@ Token *consume_ident() {
   return tok;
 }
 
+Token *consume_type() {
+  if (token->kind != TK_TYPE)
+    return false;
+  Token *tok = token;
+  token = token->next;
+  return tok;
+}
+
 // Ensure that the current token is `op`.
 void expect(char *op, char *err, char *st) {
   if (token->kind != TK_RESERVED || strlen(op) != token->len ||
@@ -83,6 +91,78 @@ Node *new_num(int val) {
   return node;
 }
 
+Node *function_definition(Token *tok) {
+  Function *fn = find_fn(tok);
+  if (fn) {
+    error("duplicated function name: %.*s", tok->len, tok->str);
+  }
+  fn = calloc(1, sizeof(Function));
+  fn->next = functions;
+  fn->name = tok->str;
+  fn->len = tok->len;
+  fn->locals = calloc(1, sizeof(LVar));
+  fn->locals->offset = 0;
+  fn->variable_cnt = 0;
+  functions = fn;
+  Function *prev_fn = current_fn;
+  current_fn = fn;
+  Node *node = new_node(ND_FUNCDEF);
+  node->name = tok->str;
+  node->val = tok->len;
+  node->fn = fn;
+  if (!consume(")")) {
+    for (int i = 0; i < 4; i++) {
+      if (!consume_type()) {
+        error("expected a type but got \"%.*s\" [in function definition]",
+              token->len, token->str);
+      }
+      Token *tok_lvar = consume_ident();
+      if (!tok_lvar) {
+        error("expected an identifier but got \"%.*s\" [in function "
+              "definition]",
+              token->len, token->str);
+      }
+      Node *nd_lvar = new_node(ND_LVAR);
+      node->args[i] = nd_lvar;
+      LVar *lvar = calloc(1, sizeof(LVar));
+      lvar->next = fn->locals;
+      lvar->name = tok_lvar->str;
+      lvar->len = tok_lvar->len;
+      lvar->offset = i * 8 + 8;
+      nd_lvar->offset = lvar->offset;
+      fn->locals = lvar;
+      fn->variable_cnt++;
+      if (!consume(","))
+        break;
+    }
+    expect(")", "after arguments", "function definition");
+  }
+  node->body = stmt();
+  current_fn = prev_fn;
+  return node;
+}
+
+Node *variable_declaration(Token *tok) {
+  LVar *lvar = find_lvar(tok);
+  if (lvar) {
+    error("duplicated variable name: %.*s", tok->len, tok->str);
+  }
+  Node *node = calloc(1, sizeof(Node));
+  node->kind = ND_LVAR;
+  lvar = calloc(1, sizeof(LVar));
+  lvar->next = current_fn->locals;
+  lvar->name = tok->str;
+  lvar->len = tok->len;
+  lvar->offset = current_fn->locals->offset + 8;
+  node->offset = lvar->offset;
+  current_fn->locals = lvar;
+  current_fn->variable_cnt++;
+  if (consume("=")) {
+    node = new_binary(ND_ASSIGN, node, equality());
+  }
+  return node;
+}
+
 Node *stmt() {
   Node *node;
   if (consume("{")) {
@@ -94,11 +174,19 @@ Node *stmt() {
       node->body[i++] = *stmt();
     }
     node->body[i].kind = ND_NONE;
-    consume("}");
+    expect("}", "after block", "block");
   } else if (token->kind == TK_EXTERN) {
     node = new_node(ND_EXTERN);
     token = token->next;
+    if (!consume_type()) {
+      error("expected a type but got \"%.*s\" [in extern statement]",
+            token->len, token->str);
+    }
     Token *tok = consume_ident();
+    if (!tok) {
+      error("expected an identifier but got \"%.*s\" [in extern statement]",
+            token->len, token->str);
+    }
     expect("(", "after function name", "extern");
     Function *fn = calloc(1, sizeof(Function));
     fn->next = functions;
@@ -115,6 +203,22 @@ Node *stmt() {
       expect(")", "after arguments", "extern");
     }
     expect(";", "after line", "extern");
+  } else if (token->kind == TK_TYPE) {
+    // 変数宣言または関数定義
+    token = token->next;
+    Token *tok = consume_ident();
+    if (!tok) {
+      error("expected an identifier but got \"%.*s\" [in variable declaration]",
+            token->len, token->str);
+    }
+    if (consume("(")) {
+      // 関数定義
+      node = function_definition(tok);
+    } else {
+      // 変数宣言
+      node = variable_declaration(tok);
+      expect(";", "after line", "variable declaration");
+    }
   } else if (token->kind == TK_IF) {
     token = token->next;
     node = calloc(1, sizeof(Node));
@@ -157,54 +261,6 @@ Node *stmt() {
     node->kind = ND_RETURN;
     node->rhs = equality();
     expect(";", "after line", "return");
-  } else if (token->kind == TK_IDENT && token->next->kind == TK_RESERVED &&
-             memcmp(token->next->str, "(", token->next->len) == 0) {
-    Function *fn = find_fn(token);
-    if (fn) {
-      node = expr();
-      expect(";", "after line", "function call");
-      node->endline = true;
-    } else {
-      // 関数定義
-      Token *tok = consume_ident();
-      consume("(");
-      fn = calloc(1, sizeof(Function));
-      fn->next = functions;
-      fn->name = tok->str;
-      fn->len = tok->len;
-      fn->locals = calloc(1, sizeof(LVar));
-      fn->locals->offset = 0;
-      fn->variable_cnt = 0;
-      functions = fn;
-      Function *prev_fn = current_fn;
-      current_fn = fn;
-      node = new_node(ND_FUNCDEF);
-      node->name = tok->str;
-      node->val = tok->len;
-      node->fn = fn;
-      if (!consume(")")) {
-        for (int i = 0; i < 4; i++) {
-          Token *tok_lvar = consume_ident();
-          if (!tok_lvar)
-            break;
-          Node *nd_lvar = new_node(ND_LVAR);
-          node->args[i] = nd_lvar;
-          LVar *lvar = calloc(1, sizeof(LVar));
-          lvar->next = fn->locals;
-          lvar->name = tok_lvar->str;
-          lvar->len = tok_lvar->len;
-          lvar->offset = i * 8 + 8;
-          nd_lvar->offset = lvar->offset;
-          fn->locals = lvar;
-          fn->variable_cnt++;
-          if (!consume(","))
-            break;
-        }
-        expect(")", "after arguments", "function definition");
-      }
-      node->body = stmt();
-      current_fn = prev_fn;
-    }
   } else {
     node = expr();
     expect(";", "after line", "expression");
@@ -223,9 +279,23 @@ void program() {
 Node *expr() { return assign(); }
 
 Node *assign() {
-  Node *node = equality();
-  if (consume("="))
-    node = new_binary(ND_ASSIGN, node, assign());
+  Node *node;
+  if (token->kind == TK_IDENT && token->next &&
+      token->next->kind == TK_RESERVED &&
+      !memcmp(token->next->str, "=", token->next->len)) {
+    Token *tok = consume_ident();
+    node = new_node(ND_LVAR);
+    LVar *lvar = find_lvar(tok);
+    if (lvar) {
+      node->offset = lvar->offset;
+    } else {
+      error("undefined variable: %.*s", tok->len, tok->str);
+    }
+    consume("=");
+    node = new_binary(ND_ASSIGN, node, equality());
+  } else {
+    node = equality();
+  }
   return node;
 }
 
@@ -293,9 +363,19 @@ Node *mul() {
 //       | primary
 Node *unary() {
   if (consume("+"))
-    return unary();
+    return primary();
   if (consume("-"))
-    return new_binary(ND_SUB, new_num(0), unary());
+    return new_binary(ND_SUB, new_num(0), primary());
+  if (consume("&")) {
+    Node *node = new_node(ND_ADDR);
+    node->rhs = unary();
+    return node;
+  }
+  if (consume("*")) {
+    Node *node = new_node(ND_DEREF);
+    node->rhs = unary();
+    return node;
+  }
   return primary();
 }
 
@@ -316,27 +396,21 @@ Node *primary() {
 
   // 変数
   else if (!consume("(")) {
-    node = calloc(1, sizeof(Node));
-    node->kind = ND_LVAR;
-
+    node = new_node(ND_LVAR);
     LVar *lvar = find_lvar(tok);
     if (lvar) {
       node->offset = lvar->offset;
     } else {
-      lvar = calloc(1, sizeof(LVar));
-      lvar->next = current_fn->locals;
-      lvar->name = tok->str;
-      lvar->len = tok->len;
-      lvar->offset = current_fn->locals->offset + 8;
-      node->offset = lvar->offset;
-      current_fn->locals = lvar;
-      current_fn->variable_cnt++;
+      error("undefined variable: %.*s", tok->len, tok->str);
     }
   }
 
   // 関数呼び出し
   else {
     Function *fn = find_fn(tok);
+    if (!fn) {
+      error("undefined function: %.*s", tok->len, tok->str);
+    }
     node = new_node(ND_FUNCALL);
     node->name = tok->str;
     node->val = tok->len;

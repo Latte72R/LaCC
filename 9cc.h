@@ -16,6 +16,7 @@
 typedef enum {
   TK_RESERVED, // 記号
   TK_IDENT,    // 識別子
+  TK_TYPE,     // 型
   TK_NUM,      // 整数トークン
   TK_RETURN,   // return
   TK_IF,
@@ -83,6 +84,8 @@ typedef enum {
   ND_ASSIGN,  // =
   ND_LVAR,    // ローカル変数
   ND_NUM,     // 整数
+  ND_ADDR,    // &
+  ND_DEREF,   // *
   ND_IF,      // if
   ND_ELSE,    // else
   ND_WHILE,   // while

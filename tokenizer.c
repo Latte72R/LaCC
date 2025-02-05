@@ -76,7 +76,7 @@ Token *tokenize() {
     }
 
     // Single-letter punctuator
-    if (strchr("+-*/()<>={};", *p)) {
+    if (strchr("+-*/()<>={};&", *p)) {
       cur = new_token(TK_RESERVED, cur, p++, 1);
       continue;
     }
@@ -116,6 +116,12 @@ Token *tokenize() {
 
     if (strncmp(p, "for", 3) == 0 && !is_alnum(p[3])) {
       cur = new_token(TK_FOR, cur, p, 3);
+      p += 3;
+      continue;
+    }
+
+    if (strncmp(p, "int", 3) == 0 && !is_alnum(p[3])) {
+      cur = new_token(TK_TYPE, cur, p, 3);
       p += 3;
       continue;
     }
