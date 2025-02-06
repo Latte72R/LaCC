@@ -50,10 +50,11 @@ Token *tokenize();
 // ローカル変数の型
 
 typedef struct Type Type;
+typedef enum { TY_INT, TY_PTR } TypeKind;
 
 struct Type {
-  enum { INT, PTR } ty;
-  struct Type *ptr_to;
+  TypeKind ty;
+  Type *ptr_to;
 };
 
 typedef struct LVar LVar;
@@ -75,6 +76,7 @@ struct Function {
   char *name;       // 変数の名前
   int len;          // 名前の長さ
   int variable_cnt; // ローカル変数の数
+  Type *type;       // 関数の型
 };
 
 //
@@ -127,6 +129,7 @@ struct Node {
   Node *args[4]; // kindがND_FUNCALLの場合のみ使う
   Function *fn;  // kindがND_FUNCDEFの場合のみ使う
   bool endline;
+  Type *type;
 };
 
 Node *new_node(NodeKind kind);
