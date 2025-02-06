@@ -336,14 +336,14 @@ Node *new_add(Node *lhs, Node *rhs) {
   }
   // lhsがptr, rhsがintなら
   if (lhs->type->ty == TY_PTR && rhs->type->ty == TY_INT) {
-    Node *mul_node = new_binary(ND_MUL, rhs, new_num(get_type_size(current_fn->locals->type)));
+    Node *mul_node = new_binary(ND_MUL, rhs, new_num(get_type_size(lhs->type)));
     node = new_binary(ND_ADD, lhs, mul_node);
     node->type = lhs->type;
     return node;
   }
   // lhsがint, rhsがptrなら
   if (lhs->type->ty == TY_INT && rhs->type->ty == TY_PTR) {
-    Node *mul_node = new_binary(ND_MUL, lhs, new_num(get_type_size(current_fn->locals->type)));
+    Node *mul_node = new_binary(ND_MUL, lhs, new_num(get_type_size(rhs->type)));
     node = new_binary(ND_ADD, rhs, mul_node);
     node->type = rhs->type;
     return node;
@@ -362,14 +362,14 @@ Node *new_sub(Node *lhs, Node *rhs) {
   }
   // lhsがptr, rhsがintなら
   if (lhs->type->ty == TY_PTR && rhs->type->ty == TY_INT) {
-    Node *mul_node = new_binary(ND_MUL, rhs, new_num(get_type_size(current_fn->locals->type)));
+    Node *mul_node = new_binary(ND_MUL, rhs, new_num(get_type_size(lhs->type)));
     node = new_binary(ND_SUB, lhs, mul_node);
     node->type = lhs->type;
     return node;
   }
   // lhsがint, rhsがptrなら
   if (lhs->type->ty == TY_INT && rhs->type->ty == TY_PTR) {
-    Node *mul_node = new_binary(ND_MUL, lhs, new_num(get_type_size(current_fn->locals->type)));
+    Node *mul_node = new_binary(ND_MUL, lhs, new_num(get_type_size(rhs->type)));
     node = new_binary(ND_SUB, rhs, mul_node);
     node->type = rhs->type;
     return node;
