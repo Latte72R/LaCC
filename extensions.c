@@ -3,12 +3,12 @@
 
 #include <stdio.h>
 
-char _pc(char c) {
+int _pc(int c) {
   printf("%c", c);
   return 0;
 }
 
-char _pn(char n) {
+int _pn(int n) {
   printf("%d", n);
   return 0;
 }

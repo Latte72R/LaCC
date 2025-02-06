@@ -30,10 +30,10 @@ void gen(Node *node) {
       printf("  push rax\n");
     return;
   case ND_ADDR:
-    gen_lval(node->rhs);
+    gen_lval(node->lhs);
     return;
   case ND_DEREF:
-    gen(node->rhs);
+    gen(node->lhs);
     printf("  pop rax\n");
     printf("  mov rax, [rax]\n");
     if (!node->endline)
@@ -106,13 +106,7 @@ void gen(Node *node) {
     printf("%.*s:\n", node->val, node->name);
     printf("  push rbp\n");
     printf("  mov rbp, rsp\n");
-    int offset;
-    if (!(node->fn->locals->offset % 16)) {
-      offset = node->fn->locals->offset;
-    } else {
-      offset = node->fn->locals->offset + 8;
-    }
-    printf("  sub rsp, %d\n", offset);
+    printf("  sub rsp, %d\n", node->fn->locals->offset);
     for (int i = 0; i < 4 && node->args[i]; i++) {
       gen_lval(node->args[i]);
       printf("  pop rax\n");
@@ -126,7 +120,20 @@ void gen(Node *node) {
       printf("  pop rax\n");
       printf("  mov %s, rax\n", regs[i]);
     }
+    // Align stack
+    printf("  mov rax, rsp\n");
+    printf("  and rax, 0xF\n");
+    printf("  cmp rax, 0\n");
+    printf("  je .Laligned%d\n", node->id);
+    printf("  sub rsp, 8\n");
+    printf("  jmp .Lfixup%d\n", node->id);
+    printf(".Laligned%d:\n", node->id);
     printf("  call %.*s\n", node->val, node->name);
+    printf("  jmp .Lend%d\n", node->id);
+    printf(".Lfixup%d:\n", node->id);
+    printf("  call %.*s\n", node->val, node->name);
+    printf("  add rsp, 8\n");
+    printf(".Lend%d:\n", node->id);
     if (!node->endline)
       printf("  push rax\n");
     return;

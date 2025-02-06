@@ -143,7 +143,7 @@ Node *function_definition(Token *tok) {
   return node;
 }
 
-Node *variable_declaration(Token *tok) {
+Node *variable_declaration(Token *tok, Type *type) {
   LVar *lvar = find_lvar(tok);
   if (lvar) {
     error("duplicated variable name: %.*s", tok->len, tok->str);
@@ -155,6 +155,7 @@ Node *variable_declaration(Token *tok) {
   lvar->name = tok->str;
   lvar->len = tok->len;
   lvar->offset = current_fn->locals->offset + 8;
+  lvar->type = type;
   node->offset = lvar->offset;
   current_fn->locals = lvar;
   current_fn->variable_cnt++;
@@ -179,6 +180,14 @@ Node *stmt() {
   } else if (token->kind == TK_TYPE) {
     // 変数宣言または関数定義
     token = token->next;
+    Type *type = calloc(1, sizeof(Type));
+    type->ty = INT;
+    while (consume("*")) {
+      Type *ptr = calloc(1, sizeof(Type));
+      ptr->ty = PTR;
+      ptr->ptr_to = type;
+      type = ptr;
+    }
     Token *tok = consume_ident();
     if (!tok) {
       error("expected an identifier but got \"%.*s\" [in variable declaration]", token->len, token->str);
@@ -188,7 +197,7 @@ Node *stmt() {
       node = function_definition(tok);
     } else {
       // 変数宣言
-      node = variable_declaration(tok);
+      node = variable_declaration(tok, type);
       expect(";", "after line", "variable declaration");
     }
   } else if (token->kind == TK_IF) {
@@ -251,22 +260,9 @@ void program() {
 Node *expr() { return assign(); }
 
 Node *assign() {
-  Node *node;
-  if (token->kind == TK_IDENT && token->next && token->next->kind == TK_RESERVED &&
-      !memcmp(token->next->str, "=", token->next->len)) {
-    Token *tok = consume_ident();
-    node = new_node(ND_LVAR);
-    LVar *lvar = find_lvar(tok);
-    if (lvar) {
-      node->offset = lvar->offset;
-    } else {
-      error("undefined variable: %.*s", tok->len, tok->str);
-    }
-    consume("=");
+  Node *node = equality();
+  if (consume("="))
     node = new_binary(ND_ASSIGN, node, equality());
-  } else {
-    node = equality();
-  }
   return node;
 }
 
@@ -339,12 +335,12 @@ Node *unary() {
     return new_binary(ND_SUB, new_num(0), primary());
   if (consume("&")) {
     Node *node = new_node(ND_ADDR);
-    node->rhs = unary();
+    node->lhs = unary();
     return node;
   }
   if (consume("*")) {
     Node *node = new_node(ND_DEREF);
-    node->rhs = unary();
+    node->lhs = unary();
     return node;
   }
   return primary();
@@ -385,6 +381,7 @@ Node *primary() {
     node = new_node(ND_FUNCALL);
     node->name = tok->str;
     node->val = tok->len;
+    node->id = labelseq++;
     if (!consume(")")) {
       for (int i = 0; i < 4; i++) {
         node->args[i] = equality();

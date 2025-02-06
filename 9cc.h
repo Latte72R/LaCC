@@ -48,6 +48,14 @@ bool startswith(char *p, char *q);
 Token *tokenize();
 
 // ローカル変数の型
+
+typedef struct Type Type;
+
+struct Type {
+  enum { INT, PTR } ty;
+  struct Type *ptr_to;
+};
+
 typedef struct LVar LVar;
 
 struct LVar {
@@ -55,6 +63,7 @@ struct LVar {
   char *name; // 変数の名前
   int len;    // 名前の長さ
   int offset; // RBPからのオフセット
+  Type *type; // 変数の型
 };
 
 // 関数の型
@@ -105,7 +114,7 @@ struct Node {
   NodeKind kind; // ノードの型
   Node *lhs;     // 左辺
   Node *rhs;     // 右辺
-  int val; // kindがND_NUMの場合はその数値, ND_FUNCALLの場合は関数名の長さ
+  int val;       // kindがND_NUMの場合はその数値, ND_FUNCALLの場合は関数名の長さ
   char *name;    // kindがND_FUNCALL, ND_FUNCDEFの場合のみ使う
   int offset;    // kindがND_LVAR, ND_FUNCDEFの場合のみ使う
   int id;        // kindがND_IF, ND_WHILE, ND_FORの場合のみ使う

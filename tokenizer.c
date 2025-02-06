@@ -43,8 +43,7 @@ Token *new_token(TokenKind kind, Token *cur, char *str, int len) {
 bool startswith(char *p, char *q) { return memcmp(p, q, strlen(q)) == 0; }
 
 int is_alnum(char c) {
-  return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') ||
-         ('0' <= c && c <= '9') || (c == '_');
+  return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') || (c == '_');
 }
 
 // Tokenize `user_input` and returns new tokens.
@@ -68,8 +67,7 @@ Token *tokenize() {
     }
 
     // Multi-letter punctuator
-    if (startswith(p, "==") || startswith(p, "!=") || startswith(p, "<=") ||
-        startswith(p, ">=")) {
+    if (startswith(p, "==") || startswith(p, "!=") || startswith(p, "<=") || startswith(p, ">=")) {
       cur = new_token(TK_RESERVED, cur, p, 2);
       p += 2;
       continue;
@@ -128,8 +126,7 @@ Token *tokenize() {
 
     if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z') || *p == '_') {
       int i = 0;
-      while (('a' <= *(p + i) && *(p + i) <= 'z') ||
-             ('A' <= *(p + i) && *(p + i) <= 'Z') ||
+      while (('a' <= *(p + i) && *(p + i) <= 'z') || ('A' <= *(p + i) && *(p + i) <= 'Z') ||
              ('0' <= *(p + i) && *(p + i) <= '9') || *(p + i) == '_') {
         i++;
       }
