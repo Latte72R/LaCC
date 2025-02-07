@@ -23,6 +23,7 @@ typedef enum {
   TK_WHILE,
   TK_FOR,
   TK_EXTERN,
+  TK_SIZEOF,
   TK_EOF, // 入力の終わりを表すトークン
 } TokenKind;
 

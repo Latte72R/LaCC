@@ -435,6 +435,11 @@ Node *mul() {
 // unary = ("+" | "-")? unary
 //       | primary
 Node *unary() {
+  if (token->kind == TK_SIZEOF) {
+    token = token->next;
+    Node *nd_unary = unary();
+    return new_num(get_type_size(nd_unary->type));
+  }
   if (consume("+"))
     return primary();
   if (consume("-")) {
