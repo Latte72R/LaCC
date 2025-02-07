@@ -52,6 +52,31 @@ int expect_number() {
   return val;
 }
 
+int get_type_size(Type *type) {
+  // intなら4、ポインタなら8
+  if (type->ty == TY_INT) {
+    return 4;
+  } else if (type->ty == TY_PTR || type->ty == TY_ARR) {
+    return 8;
+  } else {
+    error("invalid type [in get_type_size]");
+    return 0;
+  }
+}
+
+int get_sizeof(Type *type) {
+  if (type->ty == TY_INT) {
+    return 4;
+  } else if (type->ty == TY_PTR) {
+    return 8;
+  } else if (type->ty == TY_ARR) {
+    return get_sizeof(type->ptr_to) * type->array_size;
+  } else {
+    error("invalid type [in get_sizeof]");
+    return 0;
+  }
+}
+
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_lvar(Token *tok) {
   for (LVar *var = current_fn->locals; var; var = var->next)
@@ -140,9 +165,10 @@ Node *function_definition(Token *tok, Type *type) {
       lvar->next = fn->locals;
       lvar->name = tok_lvar->str;
       lvar->len = tok_lvar->len;
-      lvar->offset = i * 8 + 8;
+      lvar->offset = fn->locals->offset + get_type_size(type);
       lvar->type = type;
       nd_lvar->offset = lvar->offset;
+      nd_lvar->type = type;
       fn->locals = lvar;
       fn->variable_cnt++;
       if (!consume(","))
@@ -171,9 +197,21 @@ Node *variable_declaration(Token *tok, Type *type) {
   lvar->next = current_fn->locals;
   lvar->name = tok->str;
   lvar->len = tok->len;
-  lvar->offset = current_fn->locals->offset + 8;
+  if (consume("[")) {
+    Type *arr_type = calloc(1, sizeof(Type));
+    arr_type->ty = TY_ARR;
+    arr_type->ptr_to = type;
+    type = arr_type;
+    type->array_size = expect_number();
+    expect("]", "after number", "array declaration");
+    lvar->offset = current_fn->locals->offset + get_type_size(type);
+  } else {
+    type->array_size = 1;
+    lvar->offset = current_fn->locals->offset + get_type_size(type);
+  }
   lvar->type = type;
   node->offset = lvar->offset;
+  node->type = type;
   current_fn->locals = lvar;
   current_fn->variable_cnt++;
   if (consume("=")) {
@@ -288,12 +326,15 @@ Node *equality() {
   Node *node = relational();
 
   for (;;) {
-    if (consume("=="))
+    if (consume("==")) {
       node = new_binary(ND_EQ, node, relational());
-    else if (consume("!="))
+      node->type = new_type_int();
+    } else if (consume("!=")) {
       node = new_binary(ND_NE, node, relational());
-    else
+      node->type = new_type_int();
+    } else {
       return node;
+    }
   }
 }
 
@@ -302,27 +343,21 @@ Node *relational() {
   Node *node = add();
 
   for (;;) {
-    if (consume("<"))
+    if (consume("<")) {
       node = new_binary(ND_LT, node, add());
-    else if (consume("<="))
+      node->type = new_type_int();
+    } else if (consume("<=")) {
       node = new_binary(ND_LE, node, add());
-    else if (consume(">"))
+      node->type = new_type_int();
+    } else if (consume(">")) {
       node = new_binary(ND_LT, add(), node);
-    else if (consume(">="))
+      node->type = new_type_int();
+    } else if (consume(">=")) {
       node = new_binary(ND_LE, add(), node);
-    else
+      node->type = new_type_int();
+    } else {
       return node;
-  }
-}
-int get_type_size(Type *type) {
-  // intなら4、ポインタなら8
-  if (type->ty == TY_INT) {
-    return 4;
-  } else if (type->ty == TY_PTR) {
-    return 8;
-  } else {
-    error("unknown type: %d", type->ty);
-    return 0;
+    }
   }
 }
 
@@ -330,53 +365,56 @@ int get_type_size(Type *type) {
 // 整数側を型サイズで乗算するラッパ
 Node *new_add(Node *lhs, Node *rhs) {
   Node *node;
+  Node *mul_node;
   // どちらもポインタならエラー
   if (lhs->type->ty == TY_PTR && rhs->type->ty == TY_PTR) {
     error("invalid type: ptr + ptr [in new_add]");
   }
   // lhsがptr, rhsがintなら
   if (lhs->type->ty == TY_PTR && rhs->type->ty == TY_INT) {
-    Node *mul_node = new_binary(ND_MUL, rhs, new_num(get_type_size(lhs->type)));
+    mul_node = new_binary(ND_MUL, rhs, new_num(get_type_size(lhs->type->ptr_to)));
     node = new_binary(ND_ADD, lhs, mul_node);
     node->type = lhs->type;
-    return node;
   }
   // lhsがint, rhsがptrなら
-  if (lhs->type->ty == TY_INT && rhs->type->ty == TY_PTR) {
-    Node *mul_node = new_binary(ND_MUL, lhs, new_num(get_type_size(rhs->type)));
+  else if (lhs->type->ty == TY_INT && rhs->type->ty == TY_PTR) {
+    mul_node = new_binary(ND_MUL, lhs, new_num(get_type_size(rhs->type->ptr_to)));
     node = new_binary(ND_ADD, rhs, mul_node);
     node->type = rhs->type;
-    return node;
   }
   // それ以外は普通に演算
-  node = new_binary(ND_ADD, lhs, rhs);
-  node->type = new_type_int();
+  else {
+    node = new_binary(ND_ADD, lhs, rhs);
+    node->type = new_type_int();
+  }
   return node;
 }
 
 Node *new_sub(Node *lhs, Node *rhs) {
   Node *node;
+  Node *mul_node;
+
   // どちらもポインタならエラー
   if (lhs->type->ty == TY_PTR && rhs->type->ty == TY_PTR) {
     error("invalid type: ptr - ptr [in new_sub]");
   }
   // lhsがptr, rhsがintなら
   if (lhs->type->ty == TY_PTR && rhs->type->ty == TY_INT) {
-    Node *mul_node = new_binary(ND_MUL, rhs, new_num(get_type_size(lhs->type)));
+    mul_node = new_binary(ND_MUL, rhs, new_num(get_type_size(lhs->type->ptr_to)));
     node = new_binary(ND_SUB, lhs, mul_node);
     node->type = lhs->type;
-    return node;
   }
   // lhsがint, rhsがptrなら
-  if (lhs->type->ty == TY_INT && rhs->type->ty == TY_PTR) {
-    Node *mul_node = new_binary(ND_MUL, lhs, new_num(get_type_size(rhs->type)));
+  else if (lhs->type->ty == TY_INT && rhs->type->ty == TY_PTR) {
+    mul_node = new_binary(ND_MUL, lhs, new_num(get_type_size(rhs->type->ptr_to)));
     node = new_binary(ND_SUB, rhs, mul_node);
     node->type = rhs->type;
-    return node;
   }
   // それ以外は普通に演算
-  node = new_binary(ND_SUB, lhs, rhs);
-  node->type = new_type_int();
+  else {
+    node = new_binary(ND_SUB, lhs, rhs);
+    node->type = new_type_int();
+  }
   return node;
 }
 
@@ -415,16 +453,13 @@ Type *resolve_type_mul(Type *left, Type *right) {
 // mul = unary ("*" unary | "/" unary)*
 Node *mul() {
   Node *node = unary();
-  Node *nd_unary;
 
   for (;;) {
     if (consume("*")) {
-      nd_unary = unary();
-      node = new_binary(ND_MUL, node, nd_unary);
+      node = new_binary(ND_MUL, node, unary());
       node->type = resolve_type_mul(node->lhs->type, node->rhs->type);
     } else if (consume("/")) {
-      nd_unary = unary();
-      node = new_binary(ND_DIV, node, nd_unary);
+      node = new_binary(ND_DIV, node, unary());
       node->type = resolve_type_mul(node->lhs->type, node->rhs->type);
     } else {
       return node;
@@ -435,34 +470,33 @@ Node *mul() {
 // unary = ("+" | "-")? unary
 //       | primary
 Node *unary() {
+  Node *node;
   if (token->kind == TK_SIZEOF) {
     token = token->next;
-    Node *nd_unary = unary();
-    return new_num(get_type_size(nd_unary->type));
+    return new_num(get_sizeof(unary()->type));
   }
   if (consume("+"))
     return primary();
   if (consume("-")) {
-    Node *nd_primary = primary();
-    Node *node = new_binary(ND_SUB, new_num(0), nd_primary);
-    node->type = nd_primary->type;
+    node = new_binary(ND_SUB, new_num(0), primary());
+    node->type = node->rhs->type;
     return node;
   }
   if (consume("&")) {
-    Node *node = new_node(ND_ADDR);
+    node = new_node(ND_ADDR);
     node->lhs = unary();
     node->type = calloc(1, sizeof(Type));
     node->type->ty = TY_PTR;
-    node->type->ptr_to = node->lhs->type->ptr_to;
+    node->type->ptr_to = node->lhs->type;
     return node;
   }
   if (consume("*")) {
-    Node *node = new_node(ND_DEREF);
-    node->rhs = unary();
-    if (node->rhs->type->ty != TY_PTR) {
+    node = new_node(ND_DEREF);
+    node->lhs = unary();
+    if (node->lhs->type->ty != TY_PTR) {
       error("invalid pointer dereference");
     }
-    node->type = node->rhs->type->ptr_to;
+    node->type = node->lhs->type->ptr_to;
     return node;
   }
   return primary();

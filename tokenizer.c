@@ -74,7 +74,7 @@ Token *tokenize() {
     }
 
     // Single-letter punctuator
-    if (strchr("+-*/()<>={};&", *p)) {
+    if (strchr("+-*/()<>={}[];&", *p)) {
       cur = new_token(TK_RESERVED, cur, p++, 1);
       continue;
     }
@@ -96,6 +96,12 @@ Token *tokenize() {
 
     if (strncmp(p, "extern", 6) == 0 && !is_alnum(p[6])) {
       cur = new_token(TK_EXTERN, cur, p, 6);
+      p += 6;
+      continue;
+    }
+
+    if (strncmp(p, "sizeof", 6) == 0 && !is_alnum(p[6])) {
+      cur = new_token(TK_SIZEOF, cur, p, 6);
       p += 6;
       continue;
     }

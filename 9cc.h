@@ -51,11 +51,12 @@ Token *tokenize();
 // ローカル変数の型
 
 typedef struct Type Type;
-typedef enum { TY_INT, TY_PTR } TypeKind;
+typedef enum { TY_INT, TY_PTR, TY_ARR } TypeKind;
 
 struct Type {
   TypeKind ty;
   Type *ptr_to;
+  size_t array_size;
 };
 
 typedef struct LVar LVar;
@@ -136,6 +137,7 @@ struct Node {
 Node *new_node(NodeKind kind);
 Node *new_binary(NodeKind kind, Node *lhs, Node *rhs);
 Node *new_num(int val);
+int get_type_size(Type *type);
 
 Node *stmt();
 Node *assign();
