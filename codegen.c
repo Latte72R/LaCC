@@ -28,12 +28,10 @@ void gen(Node *node) {
   case ND_LVAR:
     gen_lval(node);
     printf("  pop rax\n");
-    if (get_type_size(node->type) == 4) {
-      printf("  mov eax, dword ptr [rax]\n");
-    } else if (get_type_size(node->type) == 8) {
-      printf("  mov rax, qword ptr [rax]\n");
-    } else {
-      error("invalid type size [in ND_LVAR]");
+    if (node->type->ty == TY_INT) {
+      printf("  mov eax, DWORD PTR [rax]\n");
+    } else if (node->type->ty == TY_PTR) {
+      printf("  mov rax, QWORD PTR [rax]\n");
     }
     if (!node->endline)
       printf("  push rax\n");
@@ -44,12 +42,10 @@ void gen(Node *node) {
   case ND_DEREF:
     gen(node->lhs);
     printf("  pop rax\n");
-    if (get_type_size(node->lhs->type) == 4) {
-      printf("  mov eax, dword ptr [rax]\n");
-    } else if (get_type_size(node->lhs->type) == 8) {
-      printf("  mov rax, qword ptr [rax]\n");
+    if (get_type_size(node->type) == 4) {
+      printf("  mov eax, DWORD PTR [rax]\n");
     } else {
-      error("invalid type size [in ND_DEREF]");
+      printf("  mov rax, QWORD PTR [rax]\n");
     }
     if (!node->endline)
       printf("  push rax\n");
@@ -61,9 +57,9 @@ void gen(Node *node) {
     printf("  pop rdi\n");
     printf("  pop rax\n");
     if (get_type_size(node->lhs->type) == 4) {
-      printf("  mov dword ptr [rax], edi\n");
+      printf("  mov DWORD PTR [rax], edi\n");
     } else if (get_type_size(node->lhs->type) == 8) {
-      printf("  mov qword ptr [rax], rdi\n");
+      printf("  mov QWORD PTR [rax], rdi\n");
     } else {
       error("invalid type size [in ND_ASSIGN]");
     }
@@ -132,9 +128,9 @@ void gen(Node *node) {
       gen_lval(node->args[i]);
       printf("  pop rax\n");
       if (get_type_size(node->args[i]->type) == 4) {
-        printf("  mov dword ptr [rax], e%s\n", regs[i]);
+        printf("  mov DWORD PTR [rax], e%s\n", regs[i]);
       } else if (get_type_size(node->args[i]->type) == 8) {
-        printf("  mov qword ptr [rax], r%s\n", regs[i]);
+        printf("  mov QWORD PTR [rax], r%s\n", regs[i]);
       } else {
         error("invalid type size [in ND_FUNCDEF]");
       }
@@ -171,6 +167,8 @@ void gen(Node *node) {
       printf("  push rax\n");
     return;
   case ND_EXTERN:
+    return;
+  case ND_VARDEC:
     return;
   default:
     break;

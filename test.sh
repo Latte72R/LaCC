@@ -27,8 +27,8 @@ assert 12 "int foo(int n) { return n * 4; } int main() { return foo(3); }"
 assert 3 "int main() { int a = 3; return *(&a); }"
 assert 5 "int main() { int a = 3; int *b = &a; *b = 5; return a; }"
 assert 25 "int foo(int *n) { *n = *n * 5; return 0;} int main() { int a = 5;  foo(&a); return a;}"
-assert 3 "int main() { int a = 3; int b = 7; return *(&b + 1); }"
 assert 4 "int main() { int a = 3; return sizeof(a); }"
+assert 28 "int main() { int a[2]; *a = 7; *(a + 1) = 4; int *p = &a; return *p * *(p + 1); }"
 assert 13 """
 int fibo(int n) {
   if (n < 2) {
