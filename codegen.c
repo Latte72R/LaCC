@@ -42,9 +42,9 @@ void gen(Node *node) {
   case ND_DEREF:
     gen(node->lhs);
     printf("  pop rax\n");
-    if (get_type_size(node->type) == 4) {
+    if (node->type->ty == TY_INT) {
       printf("  mov eax, DWORD PTR [rax]\n");
-    } else {
+    } else if (node->type->ty == TY_PTR) {
       printf("  mov rax, QWORD PTR [rax]\n");
     }
     if (!node->endline)
@@ -123,7 +123,13 @@ void gen(Node *node) {
     printf("%.*s:\n", node->val, node->name);
     printf("  push rbp\n");
     printf("  mov rbp, rsp\n");
-    printf("  sub rsp, %d\n", node->fn->locals->offset);
+    int offset;
+    if (node->fn->locals->offset % 8) {
+      offset = (node->fn->locals->offset / 8 + 1) * 8;
+    } else {
+      offset = node->fn->locals->offset;
+    }
+    printf("  sub rsp, %d\n", offset);
     for (int i = 0; i < 4 && node->args[i]; i++) {
       gen_lval(node->args[i]);
       printf("  pop rax\n");
@@ -140,6 +146,10 @@ void gen(Node *node) {
   case ND_FUNCALL:
     for (int i = 0; i < 4 && node->args[i]; i++) {
       gen(node->args[i]);
+    }
+    for (int i = 3; i >= 0; i--) {
+      if (!node->args[i])
+        continue;
       printf("  pop rax\n");
       if (get_type_size(node->args[i]->type) == 4) {
         printf("  mov e%s, eax\n", regs[i]);
@@ -193,6 +203,11 @@ void gen(Node *node) {
   case ND_DIV:
     printf("  cqo\n");
     printf("  idiv rdi\n");
+    break;
+  case ND_REM:
+    printf("  cqo\n");
+    printf("  idiv rdi\n");
+    printf("  mov rax, rdx\n");
     break;
   case ND_EQ:
     printf("  cmp rax, rdi\n");

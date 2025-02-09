@@ -384,7 +384,7 @@ Node *new_add(Node *lhs, Node *rhs) {
   // lhsがint, rhsがptrなら
   else if (lhs->type->ty == TY_INT && is_ptr_or_arr(rhs->type)) {
     mul_node = new_binary(ND_MUL, lhs, new_num(get_type_size(rhs->type->ptr_to)));
-    node = new_binary(ND_ADD, rhs, mul_node);
+    node = new_binary(ND_ADD, mul_node, rhs);
     node->type = rhs->type;
   }
   // それ以外は普通に演算
@@ -399,21 +399,19 @@ Node *new_sub(Node *lhs, Node *rhs) {
   Node *node;
   Node *mul_node;
 
-  // どちらもポインタならエラー
+  // lhsがptr, rhsがptrなら
   if (is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) {
     error("invalid type: ptr - ptr [in new_sub]");
+  }
+  // lhsがint, rhsがptrなら
+  if (lhs->type->ty == TY_INT && is_ptr_or_arr(rhs->type)) {
+    error("invalid type: int - ptr [in new_sub]");
   }
   // lhsがptr, rhsがintなら
   if (is_ptr_or_arr(lhs->type) && rhs->type->ty == TY_INT) {
     mul_node = new_binary(ND_MUL, rhs, new_num(get_type_size(lhs->type->ptr_to)));
     node = new_binary(ND_SUB, lhs, mul_node);
     node->type = lhs->type;
-  }
-  // lhsがint, rhsがptrなら
-  else if (lhs->type->ty == TY_INT && is_ptr_or_arr(rhs->type)) {
-    mul_node = new_binary(ND_MUL, lhs, new_num(get_type_size(rhs->type->ptr_to)));
-    node = new_binary(ND_SUB, rhs, mul_node);
-    node->type = rhs->type;
   }
   // それ以外は普通に演算
   else {
@@ -459,6 +457,9 @@ Node *mul() {
       node->type = resolve_type_mul(node->lhs->type, node->rhs->type);
     } else if (consume("/")) {
       node = new_binary(ND_DIV, node, unary());
+      node->type = resolve_type_mul(node->lhs->type, node->rhs->type);
+    } else if (consume("%")) {
+      node = new_binary(ND_REM, node, unary());
       node->type = resolve_type_mul(node->lhs->type, node->rhs->type);
     } else {
       return node;
@@ -523,6 +524,17 @@ Node *primary() {
     if (lvar) {
       node->offset = lvar->offset;
       node->type = lvar->type;
+      if (consume("[")) {
+        if (!is_ptr_or_arr(node->type)) {
+          error("invalid array access [in primary]");
+        }
+        node = new_add(node, equality());
+        expect("]", "after number", "array access");
+        Node *nd_deref = new_node(ND_DEREF);
+        nd_deref->lhs = node;
+        node = nd_deref;
+        node->type = node->lhs->type->ptr_to;
+      }
     } else {
       error("undefined variable: %.*s", tok->len, tok->str);
     }
