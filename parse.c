@@ -218,7 +218,7 @@ Node *variable_declaration(Token *tok, Type *type) {
   current_fn->variable_cnt++;
   if (consume("=")) {
     node->kind = ND_LVAR;
-    node = new_binary(ND_ASSIGN, node, equality());
+    node = new_binary(ND_ASSIGN, node, logical());
   }
   return node;
 }
@@ -265,7 +265,7 @@ Node *stmt() {
     node->kind = ND_IF;
     node->id = labelseq++;
     expect("(", "before condition", "if");
-    node->cond = equality();
+    node->cond = logical();
     expect(")", "after equality", "if");
     node->then = stmt();
     if (consume("else")) {
@@ -279,7 +279,7 @@ Node *stmt() {
     node = calloc(1, sizeof(Node));
     node->kind = ND_WHILE;
     node->id = labelseq++;
-    node->cond = equality();
+    node->cond = logical();
     expect(")", "after equality", "while");
     node->then = stmt();
   } else if (token->kind == TK_FOR) {
@@ -290,7 +290,7 @@ Node *stmt() {
     node->id = labelseq++;
     node->init = expr();
     expect(";", "after initialization", "for");
-    node->cond = equality();
+    node->cond = logical();
     expect(";", "after condition", "for");
     node->inc = expr();
     expect(")", "after step expression", "for");
@@ -299,7 +299,7 @@ Node *stmt() {
     token = token->next;
     node = calloc(1, sizeof(Node));
     node->kind = ND_RETURN;
-    node->rhs = equality();
+    node->rhs = logical();
     expect(";", "after line", "return");
   } else {
     node = expr();
@@ -319,11 +319,25 @@ void program() {
 Node *expr() { return assign(); }
 
 Node *assign() {
-  Node *node = equality();
+  Node *node = logical();
   if (consume("=")) {
-    node = new_binary(ND_ASSIGN, node, equality());
+    node = new_binary(ND_ASSIGN, node, logical());
   }
   return node;
+}
+
+// logical = equality ("&&" equality | "||" equality)*
+Node *logical() {
+  Node *node = equality();
+  for (;;) {
+    if (consume("&&")) {
+      node = new_binary(ND_AND, node, equality());
+    } else if (consume("||")) {
+      node = new_binary(ND_OR, node, equality());
+    } else {
+      return node;
+    }
+  }
 }
 
 // equality = relational ("==" relational | "!=" relational)*
@@ -471,8 +485,7 @@ Node *mul() {
 //       | primary
 Node *unary() {
   Node *node;
-  if (token->kind == TK_SIZEOF) {
-    token = token->next;
+  if (consume("sizeof")) {
     return new_num(get_sizeof(unary()->type));
   }
   if (consume("+"))
@@ -499,6 +512,12 @@ Node *unary() {
     node->type = node->lhs->type->ptr_to;
     return node;
   }
+  if (consume("!")) {
+    node = new_node(ND_NOT);
+    node->lhs = unary();
+    node->type = new_type_int();
+    return node;
+  }
   return primary();
 }
 
@@ -506,7 +525,7 @@ Node *unary() {
 Node *primary() {
   Node *node;
   if (consume("(")) {
-    node = equality();
+    node = logical();
     expect(")", "after expression", "primary");
     return node;
   }
@@ -515,6 +534,7 @@ Node *primary() {
   // 数値
   if (!tok) {
     node = new_num(expect_number());
+    return node;
   }
 
   // 変数
@@ -528,7 +548,7 @@ Node *primary() {
         if (!is_ptr_or_arr(node->type)) {
           error("invalid array access [in primary]");
         }
-        node = new_add(node, equality());
+        node = new_add(node, logical());
         expect("]", "after number", "array access");
         Node *nd_deref = new_node(ND_DEREF);
         nd_deref->lhs = node;
@@ -538,6 +558,7 @@ Node *primary() {
     } else {
       error("undefined variable: %.*s", tok->len, tok->str);
     }
+    return node;
   }
 
   // 関数呼び出し
@@ -553,13 +574,12 @@ Node *primary() {
     node->type = fn->type;
     if (!consume(")")) {
       for (int i = 0; i < 4; i++) {
-        node->args[i] = equality();
+        node->args[i] = logical();
         if (!consume(","))
           break;
       }
       expect(")", "after arguments", "function call");
     }
+    return node;
   }
-
-  return node;
 }

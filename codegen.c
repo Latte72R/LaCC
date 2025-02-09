@@ -50,6 +50,14 @@ void gen(Node *node) {
     if (!node->endline)
       printf("  push rax\n");
     return;
+  case ND_NOT:
+    gen(node->lhs);
+    printf("  pop rax\n");
+    printf("  cmp rax, 0\n");
+    printf("  sete al\n");
+    if (!node->endline)
+      printf("  push rax\n");
+    return;
   case ND_ASSIGN:
     gen_lval(node->lhs);
     gen(node->rhs);
@@ -228,6 +236,20 @@ void gen(Node *node) {
     printf("  cmp rax, rdi\n");
     printf("  setle al\n");
     printf("  movzx rax, al\n");
+    break;
+  case ND_AND:
+    printf("  test rax, rax\n");
+    printf("  setne al\n");
+    printf("  test rdi, rdi\n");
+    printf("  setne dl\n");
+    printf("  and al, dl\n");
+    break;
+  case ND_OR:
+    printf("  test rax, rax\n");
+    printf("  setne al\n");
+    printf("  test rdi, rdi\n");
+    printf("  setne dl\n");
+    printf("  or al, dl\n");
     break;
   default:
     break;

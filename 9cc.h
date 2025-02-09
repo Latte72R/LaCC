@@ -23,7 +23,6 @@ typedef enum {
   TK_WHILE,
   TK_FOR,
   TK_EXTERN,
-  TK_SIZEOF,
   TK_EOF, // 入力の終わりを表すトークン
 } TokenKind;
 
@@ -95,6 +94,9 @@ typedef enum {
   ND_NE,      // !=
   ND_LT,      // <
   ND_LE,      // <=
+  ND_AND,     // &&
+  ND_OR,      // ||
+  ND_NOT,     // !
   ND_ASSIGN,  // =
   ND_LVAR,    // ローカル変数
   ND_VARDEC,  // 変数宣言
@@ -144,6 +146,7 @@ int get_type_size(Type *type);
 Node *stmt();
 Node *assign();
 Node *expr();
+Node *logical();
 Node *equality();
 Node *relational();
 Node *add();
