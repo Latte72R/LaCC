@@ -9,6 +9,7 @@ $(OBJS): 9cc.h
 
 test: 9cc
 	./test.sh
+	./multitest.sh
 
 rf: 9cc
 	./rf.sh $(FILE)

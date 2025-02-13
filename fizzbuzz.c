@@ -1,6 +1,6 @@
 
 int _pc(int c);
-int _pn(int n);
+int _pd(int d);
 
 int main() {
   int number = 30;
@@ -15,23 +15,24 @@ int main() {
       _pc(117);
       _pc(122);
       _pc(122);
-      _pc(10);
+      _pc(32);
     } else if (i % 3 == 0) {
       _pc(70);
       _pc(105);
       _pc(122);
       _pc(122);
-      _pc(10);
+      _pc(32);
     } else if (i % 5 == 0) {
       _pc(66);
       _pc(117);
       _pc(122);
       _pc(122);
-      _pc(10);
+      _pc(32);
     } else {
-      _pn(i);
-      _pc(10);
+      _pd(i);
+      _pc(32);
     }
   }
+  _pc(10);
   return 0;
 }

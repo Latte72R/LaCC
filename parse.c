@@ -1,5 +1,6 @@
 
 #include "9cc.h"
+#include <stdbool.h>
 #include <string.h>
 
 //
@@ -11,6 +12,7 @@ extern Token *token;
 extern Function *functions;
 extern Function *current_fn;
 extern int labelseq;
+extern int loop_id;
 
 // Consumes the current token if it matches `op`.
 bool consume(char *op) {
@@ -226,8 +228,7 @@ Node *variable_declaration(Token *tok, Type *type) {
 Node *stmt() {
   Node *node;
   if (consume("{")) {
-    node = calloc(1, sizeof(Node));
-    node->kind = ND_BLOCK;
+    node = new_node(ND_BLOCK);
     node->body = calloc(100, sizeof(Node));
     int i = 0;
     while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
@@ -261,8 +262,7 @@ Node *stmt() {
     }
   } else if (token->kind == TK_IF) {
     token = token->next;
-    node = calloc(1, sizeof(Node));
-    node->kind = ND_IF;
+    node = new_node(ND_IF);
     node->id = labelseq++;
     expect("(", "before condition", "if");
     node->cond = logical();
@@ -276,17 +276,18 @@ Node *stmt() {
   } else if (token->kind == TK_WHILE) {
     token = token->next;
     expect("(", "before condition", "while");
-    node = calloc(1, sizeof(Node));
-    node->kind = ND_WHILE;
+    node = new_node(ND_WHILE);
     node->id = labelseq++;
     node->cond = logical();
     expect(")", "after equality", "while");
+    int loop_id_prev = loop_id;
+    loop_id = node->id;
     node->then = stmt();
+    loop_id = loop_id_prev;
   } else if (token->kind == TK_FOR) {
     token = token->next;
     expect("(", "before initialization", "for");
-    node = calloc(1, sizeof(Node));
-    node->kind = ND_FOR;
+    node = new_node(ND_FOR);
     node->id = labelseq++;
     node->init = expr();
     expect(";", "after initialization", "for");
@@ -294,13 +295,34 @@ Node *stmt() {
     expect(";", "after condition", "for");
     node->inc = expr();
     expect(")", "after step expression", "for");
+    int loop_id_prev = loop_id;
+    loop_id = node->id;
     node->then = stmt();
+    loop_id = loop_id_prev;
+  } else if (token->kind == TK_BREAK) {
+    if (loop_id == -1) {
+      error("stray break statement [in break statement]");
+    }
+    token = token->next;
+    expect(";", "after line", "break");
+    node = new_node(ND_BREAK);
+    node->endline = true;
+    node->id = loop_id;
+  } else if (token->kind == TK_CONTINUE) {
+    if (loop_id == -1) {
+      error("stray continue statement [in continue statement]");
+    }
+    token = token->next;
+    expect(";", "after line", "continue");
+    node = new_node(ND_CONTINUE);
+    node->endline = true;
+    node->id = loop_id;
   } else if (token->kind == TK_RETURN) {
     token = token->next;
-    node = calloc(1, sizeof(Node));
-    node->kind = ND_RETURN;
+    node = new_node(ND_RETURN);
     node->rhs = logical();
     expect(";", "after line", "return");
+    node->endline = true;
   } else {
     node = expr();
     expect(";", "after line", "expression");

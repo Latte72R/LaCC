@@ -6,6 +6,7 @@ Token *token;
 Node *code[100];
 int labelseq = 1;
 int variable_cnt = 0;
+int loop_id = -1;
 Function *functions;
 Function *current_fn;
 

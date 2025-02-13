@@ -131,6 +131,18 @@ Token *tokenize() {
       continue;
     }
 
+    if (strncmp(p, "break", 5) == 0 && !is_alnum(p[5])) {
+      cur = new_token(TK_BREAK, cur, p, 5);
+      p += 5;
+      continue;
+    }
+
+    if (strncmp(p, "continue", 8) == 0 && !is_alnum(p[8])) {
+      cur = new_token(TK_CONTINUE, cur, p, 8);
+      p += 8;
+      continue;
+    }
+
     if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z') || *p == '_') {
       int i = 0;
       while (('a' <= *(p + i) && *(p + i) <= 'z') || ('A' <= *(p + i) && *(p + i) <= 'Z') ||

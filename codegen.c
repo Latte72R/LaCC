@@ -111,6 +111,7 @@ void gen(Node *node) {
     printf("  je .Lend%d\n", node->id);
     gen(node->then);
     printf("  jmp .Lbegin%d\n", node->id);
+    printf(".Lstep%d:\n", node->id);
     printf(".Lend%d:\n", node->id);
     return;
   case ND_FOR:
@@ -122,10 +123,17 @@ void gen(Node *node) {
     printf("  cmp rax, 0\n");
     printf("  je .Lend%d\n", node->id);
     gen(node->then);
+    printf(".Lstep%d:\n", node->id);
     gen(node->inc);
     printf("  pop rax\n");
     printf("  jmp .Lbegin%d\n", node->id);
     printf(".Lend%d:\n", node->id);
+    return;
+  case ND_BREAK:
+    printf("  jmp .Lend%d\n", node->id);
+    return;
+  case ND_CONTINUE:
+    printf("  jmp .Lstep%d\n", node->id);
     return;
   case ND_FUNCDEF:
     printf("%.*s:\n", node->val, node->name);

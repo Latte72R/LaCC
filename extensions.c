@@ -3,12 +3,14 @@
 
 #include <stdio.h>
 
+// put char ('\n': 10, ' ': 32)
 int _pc(int c) {
   printf("%c", c);
   return 0;
 }
 
-int _pn(int n) {
-  printf("%d", n);
+// put decimal
+int _pd(int d) {
+  printf("%d", d);
   return 0;
 }

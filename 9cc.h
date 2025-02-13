@@ -22,6 +22,8 @@ typedef enum {
   TK_IF,
   TK_WHILE,
   TK_FOR,
+  TK_BREAK,
+  TK_CONTINUE,
   TK_EXTERN,
   TK_EOF, // 入力の終わりを表すトークン
 } TokenKind;
@@ -85,34 +87,36 @@ struct Function {
 //
 
 typedef enum {
-  ND_ADD,     // +
-  ND_SUB,     // -
-  ND_MUL,     // *
-  ND_DIV,     // /
-  ND_REM,     // %
-  ND_EQ,      // ==
-  ND_NE,      // !=
-  ND_LT,      // <
-  ND_LE,      // <=
-  ND_AND,     // &&
-  ND_OR,      // ||
-  ND_NOT,     // !
-  ND_ASSIGN,  // =
-  ND_LVAR,    // ローカル変数
-  ND_VARDEC,  // 変数宣言
-  ND_NUM,     // 整数
-  ND_ADDR,    // &
-  ND_DEREF,   // *
-  ND_IF,      // if
-  ND_ELSE,    // else
-  ND_WHILE,   // while
-  ND_FOR,     // for
-  ND_RETURN,  // return
-  ND_FUNCDEF, // 関数定義
-  ND_FUNCALL, // 関数呼び出し
-  ND_EXTERN,  // extern
-  ND_BLOCK,   // { ... }
-  ND_NONE,    // 空のノード
+  ND_ADD,      // +
+  ND_SUB,      // -
+  ND_MUL,      // *
+  ND_DIV,      // /
+  ND_REM,      // %
+  ND_EQ,       // ==
+  ND_NE,       // !=
+  ND_LT,       // <
+  ND_LE,       // <=
+  ND_AND,      // &&
+  ND_OR,       // ||
+  ND_NOT,      // !
+  ND_ASSIGN,   // =
+  ND_LVAR,     // ローカル変数
+  ND_VARDEC,   // 変数宣言
+  ND_NUM,      // 整数
+  ND_ADDR,     // &
+  ND_DEREF,    // *
+  ND_IF,       // if
+  ND_ELSE,     // else
+  ND_WHILE,    // while
+  ND_FOR,      // for
+  ND_BREAK,    // break
+  ND_CONTINUE, // continue
+  ND_RETURN,   // return
+  ND_FUNCDEF,  // 関数定義
+  ND_FUNCALL,  // 関数呼び出し
+  ND_EXTERN,   // extern
+  ND_BLOCK,    // { ... }
+  ND_NONE,     // 空のノード
 } NodeKind;
 
 typedef struct Node Node;
