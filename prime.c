@@ -1,6 +1,5 @@
 
-int _pc(int c);
-int _pd(int d);
+int printf();
 
 int main() {
   int prm[30];
@@ -16,8 +15,7 @@ int main() {
       if (j == n - 1) {
         prm[n] = i;
         n = n + 1;
-        _pd(i);
-        _pc(32);
+        printf("%d ", i);
         break;
       }
     }
@@ -26,6 +24,6 @@ int main() {
     }
     i = i + 1;
   }
-  _pc(10);
+  printf("\n");
   return 0;
 }

@@ -10,6 +10,7 @@ int loop_id = -1;
 Function *functions;
 Function *current_fn;
 LVar *globals;
+String *strings;
 
 int main(int argc, char **argv) {
   if (argc != 2) {
@@ -32,6 +33,13 @@ int main(int argc, char **argv) {
   for (LVar *var = globals; var; var = var->next) {
     printf("%.*s:\n", var->len, var->name);
     printf("  .zero %d\n", get_type_size(var->type));
+  }
+
+  // 文字列リテラル
+  printf(".section .rodata\n");
+  for (String *str = strings; str; str = str->next) {
+    printf(".L.str%d:\n", str->label);
+    printf("  .string \"%.*s\"\n", str->len, str->text);
   }
 
   // 先頭の式から順にコード生成

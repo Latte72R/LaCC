@@ -25,6 +25,7 @@ typedef enum {
   TK_BREAK,
   TK_CONTINUE,
   TK_EXTERN,
+  TK_STR, // 文字列
   TK_EOF, // 入力の終わりを表すトークン
 } TokenKind;
 
@@ -52,12 +53,20 @@ Token *tokenize();
 // ローカル変数の型
 
 typedef struct Type Type;
-typedef enum { TY_INT, TY_PTR, TY_ARR } TypeKind;
+typedef enum { TY_INT, TY_CHAR, TY_PTR, TY_ARR } TypeKind;
 
 struct Type {
   TypeKind ty;
   Type *ptr_to;
   size_t array_size;
+};
+
+typedef struct String String;
+struct String {
+  String *next;
+  char *text;
+  int len;
+  int label;
 };
 
 typedef struct LVar LVar;
@@ -104,6 +113,7 @@ typedef enum {
   ND_GVAR,     // グローバル変数
   ND_GLBDEC,   // グローバル変数宣言
   ND_NUM,      // 整数
+  ND_STR,      // 文字列
   ND_ADDR,     // &
   ND_DEREF,    // *
   ND_IF,       // if
@@ -139,6 +149,7 @@ struct Node {
   Node *args[4]; // kindがND_FUNCALLの場合のみ使う
   Function *fn;  // kindがND_FUNCDEF, ND_FUNCALLの場合のみ使う
   LVar *var;     // kindがND_LVAR, ND_GVARの場合のみ使う
+  String *str;   // kindがND_STRの場合のみ使う
   Type *type;
 };
 

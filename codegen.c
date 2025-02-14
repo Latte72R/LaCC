@@ -5,7 +5,7 @@
 // Code generator
 //
 
-const char *regs[4] = {"di", "si", "dx", "cx"};
+const char *regs[3][4] = {{"rdi", "rsi", "rdx", "rcx"}, {"edi", "esi", "edx", "ecx"}, {"dil", "sil", "dl", "cl"}};
 
 void gen_lval(Node *node) {
   if (node->kind == ND_LVAR) {
@@ -28,22 +28,19 @@ void gen(Node *node) {
     if (!node->endline)
       printf("  push %d\n", node->val);
     return;
-  case ND_LVAR:
-    gen_lval(node);
-    printf("  pop rax\n");
-    if (node->type->ty == TY_INT) {
-      printf("  mov eax, DWORD PTR [rax]\n");
-    } else if (node->type->ty == TY_PTR) {
-      printf("  mov rax, QWORD PTR [rax]\n");
-    }
+  case ND_STR:
+    printf(" lea rax, [rip + .L.str%d]\n", node->str->label);
     if (!node->endline)
       printf("  push rax\n");
     return;
+  case ND_LVAR:
   case ND_GVAR:
     gen_lval(node);
     printf("  pop rax\n");
     if (node->type->ty == TY_INT) {
       printf("  mov eax, DWORD PTR [rax]\n");
+    } else if (node->type->ty == TY_CHAR) {
+      printf("  movzx eax, BYTE PTR [rax]\n");
     } else if (node->type->ty == TY_PTR) {
       printf("  mov rax, QWORD PTR [rax]\n");
     }
@@ -58,6 +55,8 @@ void gen(Node *node) {
     printf("  pop rax\n");
     if (node->type->ty == TY_INT) {
       printf("  mov eax, DWORD PTR [rax]\n");
+    } else if (node->type->ty == TY_CHAR) {
+      printf("  movzx eax, BYTE PTR [rax]\n");
     } else if (node->type->ty == TY_PTR) {
       printf("  mov rax, QWORD PTR [rax]\n");
     }
@@ -80,6 +79,8 @@ void gen(Node *node) {
     printf("  pop rax\n");
     if (get_type_size(node->lhs->type) == 4) {
       printf("  mov DWORD PTR [rax], edi\n");
+    } else if (get_type_size(node->lhs->type) == 1) {
+      printf("  mov BYTE PTR [rax], dil\n");
     } else if (get_type_size(node->lhs->type) == 8) {
       printf("  mov QWORD PTR [rax], rdi\n");
     } else {
@@ -164,9 +165,11 @@ void gen(Node *node) {
       gen_lval(node->args[i]);
       printf("  pop rax\n");
       if (get_type_size(node->args[i]->type) == 4) {
-        printf("  mov DWORD PTR [rax], e%s\n", regs[i]);
+        printf("  mov DWORD PTR [rax], %s\n", regs[1][i]);
+      } else if (get_type_size(node->args[i]->type) == 1) {
+        printf("  mov BYTE PTR [rax], %s\n", regs[2][i]);
       } else if (get_type_size(node->args[i]->type) == 8) {
-        printf("  mov QWORD PTR [rax], r%s\n", regs[i]);
+        printf("  mov QWORD PTR [rax], %s\n", regs[0][i]);
       } else {
         error("invalid type size [in ND_FUNCDEF]");
       }
@@ -182,9 +185,11 @@ void gen(Node *node) {
         continue;
       printf("  pop rax\n");
       if (get_type_size(node->args[i]->type) == 4) {
-        printf("  mov e%s, eax\n", regs[i]);
+        printf("  mov %s, eax\n", regs[1][i]);
+      } else if (get_type_size(node->args[i]->type) == 1) {
+        printf("  movzx %s, al\n", regs[1][i]);
       } else if (get_type_size(node->args[i]->type) == 8) {
-        printf("  mov r%s, rax\n", regs[i]);
+        printf("  mov %s, rax\n", regs[0][i]);
       } else {
         error("invalid type size [in ND_FUNCALL]");
       }
@@ -197,6 +202,7 @@ void gen(Node *node) {
     printf("  sub rsp, 8\n");
     printf("  jmp .Lfixup%d\n", node->id);
     printf(".Laligned%d:\n", node->id);
+    printf("  mov	rax, 0\n");
     printf("  call %.*s\n", node->fn->len, node->fn->name);
     printf("  jmp .Lend%d\n", node->id);
     printf(".Lfixup%d:\n", node->id);
@@ -207,9 +213,7 @@ void gen(Node *node) {
       printf("  push rax\n");
     return;
   case ND_GLBDEC:
-    return;
   case ND_VARDEC:
-    return;
   case ND_EXTERN:
     return;
   default:

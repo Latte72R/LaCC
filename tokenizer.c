@@ -131,6 +131,12 @@ Token *tokenize() {
       continue;
     }
 
+    if (strncmp(p, "char", 4) == 0 && !is_alnum(p[4])) {
+      cur = new_token(TK_TYPE, cur, p, 4);
+      p += 4;
+      continue;
+    }
+
     if (strncmp(p, "break", 5) == 0 && !is_alnum(p[5])) {
       cur = new_token(TK_BREAK, cur, p, 5);
       p += 5;
@@ -140,6 +146,19 @@ Token *tokenize() {
     if (strncmp(p, "continue", 8) == 0 && !is_alnum(p[8])) {
       cur = new_token(TK_CONTINUE, cur, p, 8);
       p += 8;
+      continue;
+    }
+
+    if (*p == '"') {
+      char *q = ++p;
+      while (*p != '"') {
+        if (*p == '\0') {
+          error("unclosed string literal [in tokenize]");
+        }
+        p++;
+      }
+      cur = new_token(TK_STR, cur, q, p - q);
+      p++;
       continue;
     }
 

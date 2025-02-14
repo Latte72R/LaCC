@@ -14,6 +14,7 @@ extern Function *current_fn;
 extern int labelseq;
 extern int loop_id;
 extern LVar *globals;
+extern String *strings;
 
 // Consumes the current token if it matches `op`.
 bool consume(char *op) {
@@ -56,11 +57,14 @@ int expect_number() {
 }
 
 bool is_ptr_or_arr(Type *type) { return type->ty == TY_PTR || type->ty == TY_ARR; }
+bool is_number(Type *type) { return type->ty == TY_INT || type->ty == TY_CHAR; }
 
+// 変数として扱うときのサイズ
 int get_type_size(Type *type) {
-  // intなら4、ポインタなら8
   if (type->ty == TY_INT) {
     return 4;
+  } else if (type->ty == TY_CHAR) {
+    return 1;
   } else if (is_ptr_or_arr(type)) {
     return 8;
   } else {
@@ -69,9 +73,12 @@ int get_type_size(Type *type) {
   }
 }
 
+// 予約しているスタック領域のサイズ
 int get_sizeof(Type *type) {
   if (type->ty == TY_INT) {
     return 4;
+  } else if (type->ty == TY_CHAR) {
+    return 1;
   } else if (type->ty == TY_PTR) {
     return 8;
   } else if (type->ty == TY_ARR) {
@@ -271,9 +278,15 @@ Node *stmt() {
     expect("}", "after block", "block");
   } else if (token->kind == TK_TYPE) {
     // 変数宣言または関数定義
-    token = token->next;
     Type *type = calloc(1, sizeof(Type));
-    type->ty = TY_INT;
+    if (memcmp(token->str, "int", token->len) == 0) {
+      type->ty = TY_INT;
+    } else if (memcmp(token->str, "char", token->len) == 0) {
+      type->ty = TY_CHAR;
+    } else {
+      error("invalid type: %.*s [in variable declaration]", token->len, token->str);
+    }
+    token = token->next;
     while (consume("*")) {
       Type *ptr = calloc(1, sizeof(Type));
       ptr->ty = TY_PTR;
@@ -453,13 +466,13 @@ Node *new_add(Node *lhs, Node *rhs) {
     error("invalid type: ptr + ptr [in new_add]");
   }
   // lhsがptr, rhsがintなら
-  if (is_ptr_or_arr(lhs->type) && rhs->type->ty == TY_INT) {
+  if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
     mul_node = new_binary(ND_MUL, rhs, new_num(get_type_size(lhs->type->ptr_to)));
     node = new_binary(ND_ADD, lhs, mul_node);
     node->type = lhs->type;
   }
   // lhsがint, rhsがptrなら
-  else if (lhs->type->ty == TY_INT && is_ptr_or_arr(rhs->type)) {
+  else if (is_number(lhs->type) && is_ptr_or_arr(rhs->type)) {
     mul_node = new_binary(ND_MUL, lhs, new_num(get_type_size(rhs->type->ptr_to)));
     node = new_binary(ND_ADD, mul_node, rhs);
     node->type = rhs->type;
@@ -481,11 +494,11 @@ Node *new_sub(Node *lhs, Node *rhs) {
     error("invalid type: ptr - ptr [in new_sub]");
   }
   // lhsがint, rhsがptrなら
-  if (lhs->type->ty == TY_INT && is_ptr_or_arr(rhs->type)) {
+  if (is_number(lhs->type) && is_ptr_or_arr(rhs->type)) {
     error("invalid type: int - ptr [in new_sub]");
   }
   // lhsがptr, rhsがintなら
-  if (is_ptr_or_arr(lhs->type) && rhs->type->ty == TY_INT) {
+  if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
     mul_node = new_binary(ND_MUL, rhs, new_num(get_type_size(lhs->type->ptr_to)));
     node = new_binary(ND_SUB, lhs, mul_node);
     node->type = lhs->type;
@@ -517,7 +530,7 @@ Type *resolve_type_mul(Type *left, Type *right) {
   if (is_ptr_or_arr(left) || is_ptr_or_arr(right)) {
     error("invalid type [in resolve_type_mul]");
   }
-  if (left->ty == TY_INT && right->ty == TY_INT) {
+  if (is_number(left) && is_number(right)) {
     return new_type_int();
   }
   error("invalid type [in resolve_type_mul]");
@@ -593,11 +606,34 @@ Node *primary() {
     return node;
   }
 
-  Token *tok = consume_ident();
   // 数値
-  if (!tok) {
-    node = new_num(expect_number());
+  if (token->kind == TK_NUM) {
+    return new_num(expect_number());
+  }
+
+  // 文字列
+  if (token->kind == TK_STR) {
+    String *str = calloc(1, sizeof(String));
+    str->text = token->str;
+    str->len = token->len;
+    str->label = labelseq++;
+    str->next = strings;
+    strings = str;
+    token = token->next;
+    node = new_node(ND_STR);
+    node->str = str;
+    node->type = calloc(1, sizeof(Type));
+    node->type->ty = TY_PTR;
+    Type *type = calloc(1, sizeof(Type));
+    type->ty = TY_CHAR;
+    node->type->ptr_to = type;
     return node;
+  }
+
+  Token *tok = consume_ident();
+  if (!tok) {
+    error("expected an identifier but got \"%.*s\" [in primary]", token->len, token->str);
+    return NULL;
   }
 
   // 変数
