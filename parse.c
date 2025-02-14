@@ -16,10 +16,13 @@ extern int loop_id;
 extern LVar *globals;
 extern String *strings;
 
+char *consumed_ptr;
+
 // Consumes the current token if it matches `op`.
 bool consume(char *op) {
   if (token->kind != TK_RESERVED || strlen(op) != token->len || memcmp(token->str, op, token->len))
     return false;
+  consumed_ptr = token->str;
   token = token->next;
   return true;
 }
@@ -28,6 +31,7 @@ Token *consume_ident() {
   if (token->kind != TK_IDENT)
     return false;
   Token *tok = token;
+  consumed_ptr = token->str;
   token = token->next;
   return tok;
 }
@@ -36,6 +40,7 @@ Token *consume_type() {
   if (token->kind != TK_TYPE)
     return false;
   Token *tok = token;
+  consumed_ptr = token->str;
   token = token->next;
   return tok;
 }
@@ -43,14 +48,14 @@ Token *consume_type() {
 // Ensure that the current token is `op`.
 void expect(char *op, char *err, char *st) {
   if (token->kind != TK_RESERVED || strlen(op) != token->len || memcmp(token->str, op, token->len))
-    error("expected \"%s\":\n  %s  [in %s statement]", op, err, st);
+    error_at(token->str, "expected \"%s\":\n  %s  [in %s statement]", op, err, st);
   token = token->next;
 }
 
 // Ensure that the current token is TK_NUM.
 int expect_number() {
   if (token->kind != TK_NUM)
-    error("expected a number but got \"%.*s\" [in expect_number]", token->len, token->str);
+    error_at(token->str, "expected a number but got \"%.*s\" [in expect_number]", token->len, token->str);
   int val = token->val;
   token = token->next;
   return val;
@@ -68,7 +73,7 @@ int get_type_size(Type *type) {
   } else if (is_ptr_or_arr(type)) {
     return 8;
   } else {
-    error("invalid type [in get_type_size]");
+    error_at(token->str, "invalid type [in get_type_size]");
     return 0;
   }
 }
@@ -84,7 +89,7 @@ int get_sizeof(Type *type) {
   } else if (type->ty == TY_ARR) {
     return get_sizeof(type->ptr_to) * type->array_size;
   } else {
-    error("invalid type [in get_sizeof]");
+    error_at(token->str, "invalid type [in get_sizeof]");
     return 0;
   }
 }
@@ -143,7 +148,7 @@ Node *new_num(int val) {
 Node *function_definition(Token *tok, Type *type) {
   Function *fn = find_fn(tok);
   if (fn) {
-    error("duplicated function name: %.*s", tok->len, tok->str);
+    error_at(token->str, "duplicated function name: %.*s", tok->len, tok->str);
   }
   fn = calloc(1, sizeof(Function));
   fn->next = functions;
@@ -160,7 +165,7 @@ Node *function_definition(Token *tok, Type *type) {
   if (!consume(")")) {
     for (int i = 0; i < 4; i++) {
       if (!consume_type()) {
-        error("expected a type but got \"%.*s\" [in function definition]", token->len, token->str);
+        error_at(token->str, "expected a type but got \"%.*s\" [in function definition]", token->len, token->str);
       }
       Type *type = calloc(1, sizeof(Type));
       type->ty = TY_INT;
@@ -172,9 +177,10 @@ Node *function_definition(Token *tok, Type *type) {
       }
       Token *tok_lvar = consume_ident();
       if (!tok_lvar) {
-        error("expected an identifier but got \"%.*s\" [in function "
-              "definition]",
-              token->len, token->str);
+        error_at(token->str,
+                 "expected an identifier but got \"%.*s\" [in function "
+                 "definition]",
+                 token->len, token->str);
       }
       Node *nd_lvar = new_node(ND_LVAR);
       node->args[i] = nd_lvar;
@@ -205,7 +211,7 @@ Node *function_definition(Token *tok, Type *type) {
 Node *variable_declaration(Token *tok, Type *type) {
   LVar *lvar = find_lvar(tok);
   if (lvar) {
-    error("duplicated variable name: %.*s [in variable declaration]", tok->len, tok->str);
+    error_at(token->str, "duplicated variable name: %.*s [in variable declaration]", tok->len, tok->str);
   }
   Node *node = new_node(ND_VARDEC);
   lvar = calloc(1, sizeof(LVar));
@@ -238,7 +244,7 @@ Node *variable_declaration(Token *tok, Type *type) {
 Node *global_variable_declaration(Token *tok, Type *type) {
   LVar *lvar = find_global_lvar(tok);
   if (lvar) {
-    error("duplicated variable name: %.*s [in global variable declaration]", tok->len, tok->str);
+    error_at(token->str, "duplicated variable name: %.*s [in global variable declaration]", tok->len, tok->str);
   }
   Node *node = new_node(ND_GLBDEC);
   lvar = calloc(1, sizeof(LVar));
@@ -260,7 +266,7 @@ Node *global_variable_declaration(Token *tok, Type *type) {
   lvar->next = globals;
   globals = lvar;
   if (consume("=")) {
-    error("initialization of global variable is not supported [in global variable declaration]");
+    error_at(token->str, "initialization of global variable is not supported [in global variable declaration]");
   }
   return node;
 }
@@ -284,7 +290,7 @@ Node *stmt() {
     } else if (memcmp(token->str, "char", token->len) == 0) {
       type->ty = TY_CHAR;
     } else {
-      error("invalid type: %.*s [in variable declaration]", token->len, token->str);
+      error_at(token->str, "invalid type: %.*s [in variable declaration]", token->len, token->str);
     }
     token = token->next;
     while (consume("*")) {
@@ -295,12 +301,12 @@ Node *stmt() {
     }
     Token *tok = consume_ident();
     if (!tok) {
-      error("expected an identifier but got \"%.*s\" [in variable declaration]", token->len, token->str);
+      error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len, token->str);
     }
     if (consume("(")) {
       // 関数定義
       if (current_fn) {
-        error("nested function is not supported [in function definition]");
+        error_at(token->str, "nested function is not supported [in function definition]");
       }
       node = function_definition(tok, type);
     } else if (current_fn) {
@@ -355,7 +361,7 @@ Node *stmt() {
     loop_id = loop_id_prev;
   } else if (token->kind == TK_BREAK) {
     if (loop_id == -1) {
-      error("stray break statement [in break statement]");
+      error_at(token->str, "stray break statement [in break statement]");
     }
     token = token->next;
     expect(";", "after line", "break");
@@ -364,7 +370,7 @@ Node *stmt() {
     node->id = loop_id;
   } else if (token->kind == TK_CONTINUE) {
     if (loop_id == -1) {
-      error("stray continue statement [in continue statement]");
+      error_at(token->str, "stray continue statement [in continue statement]");
     }
     token = token->next;
     expect(";", "after line", "continue");
@@ -458,12 +464,12 @@ Node *relational() {
 
 // ポインタ + 整数 または 整数 + ポインタ の場合に
 // 整数側を型サイズで乗算するラッパ
-Node *new_add(Node *lhs, Node *rhs) {
+Node *new_add(Node *lhs, Node *rhs, char *ptr) {
   Node *node;
   Node *mul_node;
   // どちらもポインタならエラー
   if (is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) {
-    error("invalid type: ptr + ptr [in new_add]");
+    error_at(ptr, "invalid type: ptr + ptr [in new_add]");
   }
   // lhsがptr, rhsがintなら
   if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
@@ -485,17 +491,17 @@ Node *new_add(Node *lhs, Node *rhs) {
   return node;
 }
 
-Node *new_sub(Node *lhs, Node *rhs) {
+Node *new_sub(Node *lhs, Node *rhs, char *ptr) {
   Node *node;
   Node *mul_node;
 
   // lhsがptr, rhsがptrなら
   if (is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) {
-    error("invalid type: ptr - ptr [in new_sub]");
+    error_at(ptr, "invalid operands to binary expression [in new_sub]");
   }
   // lhsがint, rhsがptrなら
   if (is_number(lhs->type) && is_ptr_or_arr(rhs->type)) {
-    error("invalid type: int - ptr [in new_sub]");
+    error_at(ptr, "invalid operands to binary expression [in new_sub]");
   }
   // lhsがptr, rhsがintなら
   if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
@@ -514,43 +520,47 @@ Node *new_sub(Node *lhs, Node *rhs) {
 // add = mul ("+" mul | "-" mul)*
 // ポインタ演算を挟み込む
 Node *add() {
+  char *consumed_ptr_prev;
   Node *node = mul();
   for (;;) {
     if (consume("+")) {
-      node = new_add(node, mul());
+      consumed_ptr_prev = consumed_ptr;
+      node = new_add(node, mul(), consumed_ptr_prev);
     } else if (consume("-")) {
-      node = new_sub(node, mul());
+      consumed_ptr_prev = consumed_ptr;
+      node = new_sub(node, mul(), consumed_ptr_prev);
     } else {
       return node;
     }
   }
 }
 
-Type *resolve_type_mul(Type *left, Type *right) {
-  if (is_ptr_or_arr(left) || is_ptr_or_arr(right)) {
-    error("invalid type [in resolve_type_mul]");
-  }
+Type *resolve_type_mul(Type *left, Type *right, char *ptr) {
   if (is_number(left) && is_number(right)) {
     return new_type_int();
   }
-  error("invalid type [in resolve_type_mul]");
+  error_at(ptr, "invalid operands to binary expression [in resolve_type_mul]");
   return NULL;
 }
 
 // mul = unary ("*" unary | "/" unary)*
 Node *mul() {
+  char *consumed_ptr_prev;
   Node *node = unary();
 
   for (;;) {
     if (consume("*")) {
+      consumed_ptr_prev = consumed_ptr;
       node = new_binary(ND_MUL, node, unary());
-      node->type = resolve_type_mul(node->lhs->type, node->rhs->type);
+      node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
     } else if (consume("/")) {
+      consumed_ptr_prev = consumed_ptr;
       node = new_binary(ND_DIV, node, unary());
-      node->type = resolve_type_mul(node->lhs->type, node->rhs->type);
+      node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
     } else if (consume("%")) {
+      consumed_ptr_prev = consumed_ptr;
       node = new_binary(ND_REM, node, unary());
-      node->type = resolve_type_mul(node->lhs->type, node->rhs->type);
+      node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
     } else {
       return node;
     }
@@ -580,10 +590,11 @@ Node *unary() {
     return node;
   }
   if (consume("*")) {
+    char *consumed_ptr_prev = consumed_ptr;
     node = new_node(ND_DEREF);
     node->lhs = unary();
     if (!is_ptr_or_arr(node->lhs->type)) {
-      error("invalid pointer dereference");
+      error_at(consumed_ptr_prev, "invalid pointer dereference");
     }
     node->type = node->lhs->type->ptr_to;
     return node;
@@ -632,7 +643,7 @@ Node *primary() {
 
   Token *tok = consume_ident();
   if (!tok) {
-    error("expected an identifier but got \"%.*s\" [in primary]", token->len, token->str);
+    error_at(token->str, "expected an identifier but got \"%.*s\" [in primary]", token->len, token->str);
     return NULL;
   }
 
@@ -645,10 +656,11 @@ Node *primary() {
       node->var = lvar;
       node->type = lvar->type;
       if (consume("[")) {
+        char *consumed_ptr_prev = consumed_ptr;
         if (!is_ptr_or_arr(node->type)) {
-          error("invalid array access [in primary]");
+          error_at(consumed_ptr_prev, "invalid array access [in primary]");
         }
-        node = new_add(node, logical());
+        node = new_add(node, logical(), consumed_ptr_prev);
         expect("]", "after number", "array access");
         Node *nd_deref = new_node(ND_DEREF);
         nd_deref->lhs = node;
@@ -660,10 +672,11 @@ Node *primary() {
       node->var = gvar;
       node->type = gvar->type;
       if (consume("[")) {
+        char *consumed_ptr_prev = consumed_ptr;
         if (!is_ptr_or_arr(node->type)) {
-          error("invalid array access [in primary]");
+          error_at(consumed_ptr_prev, "invalid array access [in primary]");
         }
-        node = new_add(node, logical());
+        node = new_add(node, logical(), consumed_ptr_prev);
         expect("]", "after number", "array access");
         Node *nd_deref = new_node(ND_DEREF);
         nd_deref->lhs = node;
@@ -671,7 +684,7 @@ Node *primary() {
         node->type = node->lhs->type->ptr_to;
       }
     } else {
-      error("undefined variable: %.*s [in primary]", tok->len, tok->str);
+      error_at(tok->str, "undefined variable: %.*s [in primary]", tok->len, tok->str);
     }
     return node;
   }
@@ -680,7 +693,7 @@ Node *primary() {
   else {
     Function *fn = find_fn(tok);
     if (!fn) {
-      error("undefined function: %.*s [in primary]", tok->len, tok->str);
+      error_at(tok->str, "undefined function: %.*s [in primary]", tok->len, tok->str);
     }
     node = new_node(ND_FUNCALL);
     node->fn = fn;
