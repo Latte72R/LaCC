@@ -37,5 +37,6 @@ assert 13 """int fibo(int n) { if (n < 2) { return n; } else { return fibo(n - 1
 int main() { return fibo(7); }"""
 assert 27 "int main() { int a = 0; int i; for (i = 0; i < 10; i = i + 1) { if (i % 3 == 0) continue; a = a + i; } return a; }"
 assert 7 "int main() { int a = 0; while (a < 10) { if (a > 6) break; a = a + 1; } return a;}"
+assert 5 "int num; int main() { num = 5; return num; }"
 
 echo OK

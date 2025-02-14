@@ -60,12 +60,6 @@ Token *tokenize() {
       continue;
     }
 
-    if (strncmp(p, "else", 4) == 0 && !is_alnum(p[4])) {
-      cur = new_token(TK_RESERVED, cur, p, 4);
-      p += 4;
-      continue;
-    }
-
     // Multi-letter punctuator
     if (startswith(p, "==") || startswith(p, "!=") || startswith(p, "<=") || startswith(p, ">=") ||
         startswith(p, "&&") || startswith(p, "||")) {
@@ -80,18 +74,24 @@ Token *tokenize() {
       continue;
     }
 
-    if (strncmp(p, "sizeof", 6) == 0 && !is_alnum(p[6])) {
-      cur = new_token(TK_RESERVED, cur, p, 6);
-      p += 6;
-      continue;
-    }
-
     // Integer literal
     if (isdigit(*p)) {
       cur = new_token(TK_NUM, cur, p, 0);
       char *q = p;
       cur->val = strtol(p, &p, 10);
       cur->len = p - q;
+      continue;
+    }
+
+    if (strncmp(p, "sizeof", 6) == 0 && !is_alnum(p[6])) {
+      cur = new_token(TK_RESERVED, cur, p, 6);
+      p += 6;
+      continue;
+    }
+
+    if (strncmp(p, "else", 4) == 0 && !is_alnum(p[4])) {
+      cur = new_token(TK_RESERVED, cur, p, 4);
+      p += 4;
       continue;
     }
 
@@ -154,7 +154,7 @@ Token *tokenize() {
       continue;
     }
 
-    error_at(p, "invalid token");
+    error_at(p, "invalid token [in tokenize]");
   }
 
   new_token(TK_EOF, cur, p, 0);

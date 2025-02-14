@@ -74,12 +74,11 @@ struct LVar {
 typedef struct Function Function;
 
 struct Function {
-  Function *next;   // 次の関数かNULL
-  LVar *locals;     // ローカル変数
-  char *name;       // 変数の名前
-  int len;          // 名前の長さ
-  int variable_cnt; // ローカル変数の数
-  Type *type;       // 関数の型
+  Function *next; // 次の関数かNULL
+  LVar *locals;   // ローカル変数
+  char *name;     // 変数の名前
+  int len;        // 名前の長さ
+  Type *type;     // 関数の型
 };
 
 //
@@ -102,6 +101,8 @@ typedef enum {
   ND_ASSIGN,   // =
   ND_LVAR,     // ローカル変数
   ND_VARDEC,   // 変数宣言
+  ND_GVAR,     // グローバル変数
+  ND_GLBDEC,   // グローバル変数宣言
   ND_NUM,      // 整数
   ND_ADDR,     // &
   ND_DEREF,    // *
@@ -126,10 +127,9 @@ struct Node {
   NodeKind kind; // ノードの型
   Node *lhs;     // 左辺
   Node *rhs;     // 右辺
-  int val;       // kindがND_NUMの場合はその数値, ND_FUNCALLの場合は関数名の長さ
-  char *name;    // kindがND_FUNCALL, ND_FUNCDEFの場合のみ使う
-  int offset;    // kindがND_LVAR, ND_FUNCDEFの場合のみ使う
+  int val;       // kindがND_NUMの場合はその数値
   int id;        // kindがND_IF, ND_WHILE, ND_FORの場合のみ使う
+  bool endline;
   Node *cond;    // kindがND_IF, ND_WHILE, ND_FORの場合のみ使う
   Node *then;    // kindがND_IFの場合のみ使う
   Node *els;     // kindがND_IFの場合のみ使う
@@ -137,8 +137,8 @@ struct Node {
   Node *inc;     // kindがND_FORの場合のみ使う
   Node *body;    // kindがND_BLOCKの場合のみ使う
   Node *args[4]; // kindがND_FUNCALLの場合のみ使う
-  Function *fn;  // kindがND_FUNCDEFの場合のみ使う
-  bool endline;
+  Function *fn;  // kindがND_FUNCDEF, ND_FUNCALLの場合のみ使う
+  LVar *var;     // kindがND_LVAR, ND_GVARの場合のみ使う
   Type *type;
 };
 

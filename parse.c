@@ -13,6 +13,7 @@ extern Function *functions;
 extern Function *current_fn;
 extern int labelseq;
 extern int loop_id;
+extern LVar *globals;
 
 // Consumes the current token if it matches `op`.
 bool consume(char *op) {
@@ -89,6 +90,14 @@ LVar *find_lvar(Token *tok) {
   return NULL;
 }
 
+// 変数を名前で検索する。見つからなかった場合はNULLを返す。
+LVar *find_global_lvar(Token *tok) {
+  for (LVar *var = globals; var; var = var->next)
+    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+      return var;
+  return NULL;
+}
+
 // 関数を名前で検索する。見つからなかった場合はNULLを返す。
 Function *find_fn(Token *tok) {
   for (Function *fn = functions; fn; fn = fn->next)
@@ -135,14 +144,11 @@ Node *function_definition(Token *tok, Type *type) {
   fn->len = tok->len;
   fn->locals = calloc(1, sizeof(LVar));
   fn->locals->offset = 0;
-  fn->variable_cnt = 0;
   fn->type = type;
   functions = fn;
   Function *prev_fn = current_fn;
   current_fn = fn;
   Node *node = new_node(ND_FUNCDEF);
-  node->name = tok->str;
-  node->val = tok->len;
   node->fn = fn;
   if (!consume(")")) {
     for (int i = 0; i < 4; i++) {
@@ -171,10 +177,9 @@ Node *function_definition(Token *tok, Type *type) {
       lvar->len = tok_lvar->len;
       lvar->offset = fn->locals->offset + get_sizeof(type);
       lvar->type = type;
-      nd_lvar->offset = lvar->offset;
+      nd_lvar->var = lvar;
       nd_lvar->type = type;
       fn->locals = lvar;
-      fn->variable_cnt++;
       if (!consume(","))
         break;
     }
@@ -193,10 +198,9 @@ Node *function_definition(Token *tok, Type *type) {
 Node *variable_declaration(Token *tok, Type *type) {
   LVar *lvar = find_lvar(tok);
   if (lvar) {
-    error("duplicated variable name: %.*s", tok->len, tok->str);
+    error("duplicated variable name: %.*s [in variable declaration]", tok->len, tok->str);
   }
-  Node *node = calloc(1, sizeof(Node));
-  node->kind = ND_VARDEC;
+  Node *node = new_node(ND_VARDEC);
   lvar = calloc(1, sizeof(LVar));
   lvar->name = tok->str;
   lvar->len = tok->len;
@@ -212,15 +216,44 @@ Node *variable_declaration(Token *tok, Type *type) {
     type->array_size = 1;
     lvar->offset = current_fn->locals->offset + get_sizeof(type);
   }
-  lvar->type = type;
-  node->offset = lvar->offset;
+  node->var = lvar;
   node->type = type;
+  lvar->type = type;
   lvar->next = current_fn->locals;
   current_fn->locals = lvar;
-  current_fn->variable_cnt++;
   if (consume("=")) {
     node->kind = ND_LVAR;
     node = new_binary(ND_ASSIGN, node, logical());
+  }
+  return node;
+}
+
+Node *global_variable_declaration(Token *tok, Type *type) {
+  LVar *lvar = find_global_lvar(tok);
+  if (lvar) {
+    error("duplicated variable name: %.*s [in global variable declaration]", tok->len, tok->str);
+  }
+  Node *node = new_node(ND_GLBDEC);
+  lvar = calloc(1, sizeof(LVar));
+  lvar->name = tok->str;
+  lvar->len = tok->len;
+  if (consume("[")) {
+    Type *arr_type = calloc(1, sizeof(Type));
+    arr_type->ty = TY_ARR;
+    arr_type->ptr_to = type;
+    arr_type->array_size = expect_number();
+    type = arr_type;
+    expect("]", "after number", "array declaration");
+  } else {
+    type->array_size = 1;
+  }
+  node->var = lvar;
+  node->type = type;
+  lvar->type = type;
+  lvar->next = globals;
+  globals = lvar;
+  if (consume("=")) {
+    error("initialization of global variable is not supported [in global variable declaration]");
   }
   return node;
 }
@@ -253,11 +286,19 @@ Node *stmt() {
     }
     if (consume("(")) {
       // 関数定義
+      if (current_fn) {
+        error("nested function is not supported [in function definition]");
+      }
       node = function_definition(tok, type);
-    } else {
-      // 変数宣言
+    } else if (current_fn) {
+      // ローカル変数宣言
       node = variable_declaration(tok, type);
       expect(";", "after line", "variable declaration");
+      node->endline = true;
+    } else {
+      // グローバル変数宣言
+      node = global_variable_declaration(tok, type);
+      expect(";", "after line", "global variable declaration");
       node->endline = true;
     }
   } else if (token->kind == TK_IF) {
@@ -561,10 +602,11 @@ Node *primary() {
 
   // 変数
   else if (!consume("(")) {
-    node = new_node(ND_LVAR);
     LVar *lvar = find_lvar(tok);
+    LVar *gvar = find_global_lvar(tok);
     if (lvar) {
-      node->offset = lvar->offset;
+      node = new_node(ND_LVAR);
+      node->var = lvar;
       node->type = lvar->type;
       if (consume("[")) {
         if (!is_ptr_or_arr(node->type)) {
@@ -577,8 +619,23 @@ Node *primary() {
         node = nd_deref;
         node->type = node->lhs->type->ptr_to;
       }
+    } else if (gvar) {
+      node = new_node(ND_GVAR);
+      node->var = gvar;
+      node->type = gvar->type;
+      if (consume("[")) {
+        if (!is_ptr_or_arr(node->type)) {
+          error("invalid array access [in primary]");
+        }
+        node = new_add(node, logical());
+        expect("]", "after number", "array access");
+        Node *nd_deref = new_node(ND_DEREF);
+        nd_deref->lhs = node;
+        node = nd_deref;
+        node->type = node->lhs->type->ptr_to;
+      }
     } else {
-      error("undefined variable: %.*s", tok->len, tok->str);
+      error("undefined variable: %.*s [in primary]", tok->len, tok->str);
     }
     return node;
   }
@@ -587,11 +644,10 @@ Node *primary() {
   else {
     Function *fn = find_fn(tok);
     if (!fn) {
-      error("undefined function: %.*s", tok->len, tok->str);
+      error("undefined function: %.*s [in primary]", tok->len, tok->str);
     }
     node = new_node(ND_FUNCALL);
-    node->name = tok->str;
-    node->val = tok->len;
+    node->fn = fn;
     node->id = labelseq++;
     node->type = fn->type;
     if (!consume(")")) {

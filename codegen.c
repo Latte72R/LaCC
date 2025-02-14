@@ -10,7 +10,10 @@ const char *regs[4] = {"di", "si", "dx", "cx"};
 void gen_lval(Node *node) {
   if (node->kind == ND_LVAR) {
     printf("  mov rax, rbp\n");
-    printf("  sub rax, %d\n", node->offset);
+    printf("  sub rax, %d\n", node->var->offset);
+    printf("  push rax\n");
+  } else if (node->kind == ND_GVAR) {
+    printf("  lea rax, %.*s[rip]\n", node->var->len, node->var->name);
     printf("  push rax\n");
   } else if (node->kind == ND_DEREF) {
     gen(node->lhs);
@@ -26,6 +29,17 @@ void gen(Node *node) {
       printf("  push %d\n", node->val);
     return;
   case ND_LVAR:
+    gen_lval(node);
+    printf("  pop rax\n");
+    if (node->type->ty == TY_INT) {
+      printf("  mov eax, DWORD PTR [rax]\n");
+    } else if (node->type->ty == TY_PTR) {
+      printf("  mov rax, QWORD PTR [rax]\n");
+    }
+    if (!node->endline)
+      printf("  push rax\n");
+    return;
+  case ND_GVAR:
     gen_lval(node);
     printf("  pop rax\n");
     if (node->type->ty == TY_INT) {
@@ -136,7 +150,7 @@ void gen(Node *node) {
     printf("  jmp .Lstep%d\n", node->id);
     return;
   case ND_FUNCDEF:
-    printf("%.*s:\n", node->val, node->name);
+    printf("%.*s:\n", node->fn->len, node->fn->name);
     printf("  push rbp\n");
     printf("  mov rbp, rsp\n");
     int offset;
@@ -183,18 +197,20 @@ void gen(Node *node) {
     printf("  sub rsp, 8\n");
     printf("  jmp .Lfixup%d\n", node->id);
     printf(".Laligned%d:\n", node->id);
-    printf("  call %.*s\n", node->val, node->name);
+    printf("  call %.*s\n", node->fn->len, node->fn->name);
     printf("  jmp .Lend%d\n", node->id);
     printf(".Lfixup%d:\n", node->id);
-    printf("  call %.*s\n", node->val, node->name);
+    printf("  call %.*s\n", node->fn->len, node->fn->name);
     printf("  add rsp, 8\n");
     printf(".Lend%d:\n", node->id);
     if (!node->endline)
       printf("  push rax\n");
     return;
-  case ND_EXTERN:
+  case ND_GLBDEC:
     return;
   case ND_VARDEC:
+    return;
+  case ND_EXTERN:
     return;
   default:
     break;
