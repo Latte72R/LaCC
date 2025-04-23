@@ -3,11 +3,15 @@
 #define _9CC_H_
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdarg.h>
-#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define TRUE 1
+#define FALSE 0
 
 //
 // Tokenizer
@@ -42,18 +46,18 @@ struct Token {
 // Reports an error and exit.
 void error(char *fmt, ...);
 void error_at(char *loc, char *fmt, ...);
-bool consume(char *op);
+int consume(char *op);
 void expect(char *op, char *err, char *st);
 int expect_number();
-bool at_eof();
+int at_eof();
 Token *new_token(TokenKind kind, Token *cur, char *str, int len);
-bool startswith(char *p, char *q);
+int startswith(char *p, char *q);
 Token *tokenize();
 
 // ローカル変数の型
 
 typedef struct Type Type;
-typedef enum { TY_INT, TY_CHAR, TY_PTR, TY_ARR } TypeKind;
+typedef enum { TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_VOID } TypeKind;
 
 struct Type {
   TypeKind ty;
@@ -99,7 +103,7 @@ typedef enum {
   ND_SUB,      // -
   ND_MUL,      // *
   ND_DIV,      // /
-  ND_REM,      // %
+  ND_MOD,      // %
   ND_EQ,       // ==
   ND_NE,       // !=
   ND_LT,       // <
@@ -139,7 +143,7 @@ struct Node {
   Node *rhs;     // 右辺
   int val;       // kindがND_NUMの場合はその数値
   int id;        // kindがND_IF, ND_WHILE, ND_FORの場合のみ使う
-  bool endline;
+  int endline;
   Node *cond;    // kindがND_IF, ND_WHILE, ND_FORの場合のみ使う
   Node *then;    // kindがND_IFの場合のみ使う
   Node *els;     // kindがND_IFの場合のみ使う
@@ -164,6 +168,8 @@ Node *expr();
 Node *logical();
 Node *equality();
 Node *relational();
+Node *new_add(Node *lhs, Node *rhs, char *consumed_ptr);
+Node *new_sub(Node *lhs, Node *rhs, char *consumed_ptr);
 Node *add();
 Node *mul();
 Node *unary();

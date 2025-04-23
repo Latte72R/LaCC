@@ -8,7 +8,7 @@
 const char *regs[3][4] = {{"rdi", "rsi", "rdx", "rcx"}, {"edi", "esi", "edx", "ecx"}, {"dil", "sil", "dl", "cl"}};
 
 void gen_lval(Node *node) {
-  if (node->kind == ND_LVAR) {
+  if (node->kind == ND_LVAR || node->kind == ND_VARDEC) {
     printf("  mov rax, rbp\n");
     printf("  sub rax, %d\n", node->var->offset);
     printf("  push rax\n");
@@ -29,7 +29,7 @@ void gen(Node *node) {
       printf("  push %d\n", node->val);
     return;
   case ND_STR:
-    printf(" lea rax, [rip + .L.str%d]\n", node->str->label);
+    printf("  lea rax, [rip + .L.str%d]\n", node->str->label);
     if (!node->endline)
       printf("  push rax\n");
     return;
@@ -175,6 +175,12 @@ void gen(Node *node) {
       }
     }
     gen(node->body);
+    if (node->fn->type->ty == TY_VOID) {
+      printf("  pop rax\n");
+      printf("  mov rsp, rbp\n");
+      printf("  pop rbp\n");
+      printf("  ret\n");
+    }
     return;
   case ND_FUNCALL:
     for (int i = 0; i < 4 && node->args[i]; i++) {
@@ -202,7 +208,7 @@ void gen(Node *node) {
     printf("  sub rsp, 8\n");
     printf("  jmp .Lfixup%d\n", node->id);
     printf(".Laligned%d:\n", node->id);
-    printf("  mov	rax, 0\n");
+    printf("  mov rax, 0\n");
     printf("  call %.*s\n", node->fn->len, node->fn->name);
     printf("  jmp .Lend%d\n", node->id);
     printf(".Lfixup%d:\n", node->id);
@@ -240,7 +246,7 @@ void gen(Node *node) {
     printf("  cqo\n");
     printf("  idiv rdi\n");
     break;
-  case ND_REM:
+  case ND_MOD:
     printf("  cqo\n");
     printf("  idiv rdi\n");
     printf("  mov rax, rdx\n");

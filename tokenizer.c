@@ -6,6 +6,7 @@
 //
 
 extern char *user_input;
+extern char *filename;
 
 // Reports an error and exit.
 void error(char *fmt, ...) {
@@ -42,7 +43,7 @@ void error_at(char *loc, char *fmt, ...) {
       line_num++;
 
   // 見つかった行を、ファイル名と行番号と一緒に表示
-  int indent = fprintf(stderr, "\033[1m\033[32mline %d: \033[0m", line_num) - 13;
+  int indent = fprintf(stderr, "\033[1m\033[32m %s:%d\033[0m: ", filename, line_num) - 13;
   fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
   // エラー箇所を"^"で指し示して、エラーメッセージを表示
@@ -64,7 +65,7 @@ Token *new_token(TokenKind kind, Token *cur, char *str, int len) {
   return tok;
 }
 
-bool startswith(char *p, char *q) { return memcmp(p, q, strlen(q)) == 0; }
+int startswith(char *p, char *q) { return memcmp(p, q, strlen(q)) == 0; }
 
 int is_alnum(char c) {
   return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') || (c == '_');
@@ -84,9 +85,28 @@ Token *tokenize() {
       continue;
     }
 
+    // 行コメントをスキップ
+    if (strncmp(p, "//", 2) == 0) {
+      p += 2;
+      while (*p != '\n' && *p != '\0')
+        p++;
+      continue;
+    }
+
+    // ブロックコメントをスキップ
+    if (strncmp(p, "/*", 2) == 0) {
+      char *q = strstr(p + 2, "*/");
+      if (!q)
+        error_at(p, "unclosed block comment [in tokenize]");
+      p = q + 2;
+      continue;
+    }
+
     // Multi-letter punctuator
     if (startswith(p, "==") || startswith(p, "!=") || startswith(p, "<=") || startswith(p, ">=") ||
-        startswith(p, "&&") || startswith(p, "||")) {
+        startswith(p, "&&") || startswith(p, "||") || startswith(p, "++") || startswith(p, "--") ||
+        startswith(p, "+=") || startswith(p, "-=") || startswith(p, "*=") || startswith(p, "/=") ||
+        startswith(p, "%=")) {
       cur = new_token(TK_RESERVED, cur, p, 2);
       p += 2;
       continue;
@@ -156,6 +176,12 @@ Token *tokenize() {
     }
 
     if (strncmp(p, "char", 4) == 0 && !is_alnum(p[4])) {
+      cur = new_token(TK_TYPE, cur, p, 4);
+      p += 4;
+      continue;
+    }
+
+    if (strncmp(p, "void", 4) == 0 && !is_alnum(p[4])) {
       cur = new_token(TK_TYPE, cur, p, 4);
       p += 4;
       continue;

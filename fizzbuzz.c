@@ -1,6 +1,7 @@
 
 int printf();
 
+// FizzBuzz
 int main() {
   int number = 30;
   int i;

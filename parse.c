@@ -1,6 +1,5 @@
 
 #include "9cc.h"
-#include <stdbool.h>
 #include <string.h>
 
 //
@@ -19,30 +18,46 @@ extern String *strings;
 char *consumed_ptr;
 
 // Consumes the current token if it matches `op`.
-bool consume(char *op) {
+int consume(char *op) {
   if (token->kind != TK_RESERVED || strlen(op) != token->len || memcmp(token->str, op, token->len))
-    return false;
+    return FALSE;
   consumed_ptr = token->str;
   token = token->next;
-  return true;
+  return TRUE;
 }
 
 Token *consume_ident() {
   if (token->kind != TK_IDENT)
-    return false;
+    return FALSE;
   Token *tok = token;
   consumed_ptr = token->str;
   token = token->next;
   return tok;
 }
 
-Token *consume_type() {
+Type *consume_type() {
   if (token->kind != TK_TYPE)
-    return false;
+    error_at(token->str, "expected a type but got \"%.*s\" [in function definition]", token->len, token->str);
   Token *tok = token;
   consumed_ptr = token->str;
   token = token->next;
-  return tok;
+  Type *type = calloc(1, sizeof(Type));
+  if (memcmp(tok->str, "int", tok->len) == 0) {
+    type->ty = TY_INT;
+  } else if (memcmp(tok->str, "char", tok->len) == 0) {
+    type->ty = TY_CHAR;
+  } else if (memcmp(tok->str, "void", tok->len) == 0) {
+    type->ty = TY_VOID;
+  } else {
+    error_at(token->str, "expected a type but got \"%.*s\" [in function definition]", tok->len, tok->str);
+  }
+  while (consume("*")) {
+    Type *ptr = calloc(1, sizeof(Type));
+    ptr->ty = TY_PTR;
+    ptr->ptr_to = type;
+    type = ptr;
+  }
+  return type;
 }
 
 // Ensure that the current token is `op`.
@@ -61,8 +76,8 @@ int expect_number() {
   return val;
 }
 
-bool is_ptr_or_arr(Type *type) { return type->ty == TY_PTR || type->ty == TY_ARR; }
-bool is_number(Type *type) { return type->ty == TY_INT || type->ty == TY_CHAR; }
+int is_ptr_or_arr(Type *type) { return type->ty == TY_PTR || type->ty == TY_ARR; }
+int is_number(Type *type) { return type->ty == TY_INT || type->ty == TY_CHAR; }
 
 // 変数として扱うときのサイズ
 int get_type_size(Type *type) {
@@ -121,7 +136,7 @@ Function *find_fn(Token *tok) {
 Node *new_node(NodeKind kind) {
   Node *node = calloc(1, sizeof(Node));
   node->kind = kind;
-  node->endline = false;
+  node->endline = FALSE;
   return node;
 }
 
@@ -129,6 +144,7 @@ Node *new_binary(NodeKind kind, Node *lhs, Node *rhs) {
   Node *node = new_node(kind);
   node->lhs = lhs;
   node->rhs = rhs;
+  node->type = lhs->type;
   return node;
 }
 
@@ -164,17 +180,7 @@ Node *function_definition(Token *tok, Type *type) {
   node->fn = fn;
   if (!consume(")")) {
     for (int i = 0; i < 4; i++) {
-      if (!consume_type()) {
-        error_at(token->str, "expected a type but got \"%.*s\" [in function definition]", token->len, token->str);
-      }
-      Type *type = calloc(1, sizeof(Type));
-      type->ty = TY_INT;
-      while (consume("*")) {
-        Type *ptr = calloc(1, sizeof(Type));
-        ptr->ty = TY_PTR;
-        ptr->ptr_to = type;
-        type = ptr;
-      }
+      type = consume_type();
       Token *tok_lvar = consume_ident();
       if (!tok_lvar) {
         error_at(token->str,
@@ -235,7 +241,6 @@ Node *variable_declaration(Token *tok, Type *type) {
   lvar->next = current_fn->locals;
   current_fn->locals = lvar;
   if (consume("=")) {
-    node->kind = ND_LVAR;
     node = new_binary(ND_ASSIGN, node, logical());
   }
   return node;
@@ -284,21 +289,7 @@ Node *stmt() {
     expect("}", "after block", "block");
   } else if (token->kind == TK_TYPE) {
     // 変数宣言または関数定義
-    Type *type = calloc(1, sizeof(Type));
-    if (memcmp(token->str, "int", token->len) == 0) {
-      type->ty = TY_INT;
-    } else if (memcmp(token->str, "char", token->len) == 0) {
-      type->ty = TY_CHAR;
-    } else {
-      error_at(token->str, "invalid type: %.*s [in variable declaration]", token->len, token->str);
-    }
-    token = token->next;
-    while (consume("*")) {
-      Type *ptr = calloc(1, sizeof(Type));
-      ptr->ty = TY_PTR;
-      ptr->ptr_to = type;
-      type = ptr;
-    }
+    Type *type = consume_type();
     Token *tok = consume_ident();
     if (!tok) {
       error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len, token->str);
@@ -313,12 +304,12 @@ Node *stmt() {
       // ローカル変数宣言
       node = variable_declaration(tok, type);
       expect(";", "after line", "variable declaration");
-      node->endline = true;
+      node->endline = TRUE;
     } else {
       // グローバル変数宣言
       node = global_variable_declaration(tok, type);
       expect(";", "after line", "global variable declaration");
-      node->endline = true;
+      node->endline = TRUE;
     }
   } else if (token->kind == TK_IF) {
     token = token->next;
@@ -366,7 +357,7 @@ Node *stmt() {
     token = token->next;
     expect(";", "after line", "break");
     node = new_node(ND_BREAK);
-    node->endline = true;
+    node->endline = TRUE;
     node->id = loop_id;
   } else if (token->kind == TK_CONTINUE) {
     if (loop_id == -1) {
@@ -375,18 +366,18 @@ Node *stmt() {
     token = token->next;
     expect(";", "after line", "continue");
     node = new_node(ND_CONTINUE);
-    node->endline = true;
+    node->endline = TRUE;
     node->id = loop_id;
   } else if (token->kind == TK_RETURN) {
     token = token->next;
     node = new_node(ND_RETURN);
     node->rhs = logical();
     expect(";", "after line", "return");
-    node->endline = true;
+    node->endline = TRUE;
   } else {
     node = expr();
     expect(";", "after line", "expression");
-    node->endline = true;
+    node->endline = TRUE;
   }
   return node;
 }
@@ -404,6 +395,16 @@ Node *assign() {
   Node *node = logical();
   if (consume("=")) {
     node = new_binary(ND_ASSIGN, node, logical());
+  } else if (consume("+=")) {
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_ADD, node, logical()));
+  } else if (consume("-=")) {
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_SUB, node, logical()));
+  } else if (consume("*=")) {
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_MUL, node, logical()));
+  } else if (consume("/=")) {
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_DIV, node, logical()));
+  } else if (consume("%=")) {
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_MOD, node, logical()));
   }
   return node;
 }
@@ -559,7 +560,7 @@ Node *mul() {
       node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
     } else if (consume("%")) {
       consumed_ptr_prev = consumed_ptr;
-      node = new_binary(ND_REM, node, unary());
+      node = new_binary(ND_MOD, node, unary());
       node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
     } else {
       return node;
@@ -611,9 +612,16 @@ Node *unary() {
 // primary = "(" expr ")" | num
 Node *primary() {
   Node *node;
+
+  // 括弧
   if (consume("(")) {
     node = logical();
     expect(")", "after expression", "primary");
+    if (consume("++")) {
+      node = new_binary(ND_ASSIGN, node, new_add(node, new_num(1), consumed_ptr));
+    } else if (consume("--")) {
+      node = new_binary(ND_ASSIGN, node, new_sub(node, new_num(1), consumed_ptr));
+    }
     return node;
   }
 
@@ -685,6 +693,11 @@ Node *primary() {
       }
     } else {
       error_at(tok->str, "undefined variable: %.*s [in primary]", tok->len, tok->str);
+    }
+    if (consume("++")) {
+      node = new_binary(ND_ASSIGN, node, new_add(node, new_num(1), consumed_ptr));
+    } else if (consume("--")) {
+      node = new_binary(ND_ASSIGN, node, new_sub(node, new_num(1), consumed_ptr));
     }
     return node;
   }

@@ -8,11 +8,7 @@ OBJS=$(SRCS:.c=.o)
 $(OBJS): 9cc.h
 
 test: 9cc
-	./test.sh
 	./multitest.sh
-
-rf: 9cc
-	./rf.sh $(FILE)
 
 clean:
 	rm -f 9cc *.o *~ tmp*
