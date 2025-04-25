@@ -260,7 +260,7 @@ Node *function_definition(Token *tok, Type *type) {
 Node *local_variable_declaration(Token *tok, Type *type) {
   LVar *lvar = find_lvar(tok);
   if (lvar) {
-    error_at(token->str, "duplicated variable name: %.*s [in variable declaration]", tok->len, tok->str);
+    error_at(tok->str, "duplicated variable name: %.*s [in variable declaration]", tok->len, tok->str);
   }
   Node *node = new_node(ND_VARDEC);
   lvar = calloc(1, sizeof(LVar));
@@ -443,6 +443,7 @@ Node *stmt() {
     node->id = labelseq++;
     expect("(", "before condition", "if");
     node->cond = logical();
+    node->cond->endline = TRUE;
     expect(")", "after equality", "if");
     node->then = stmt();
     if (consume("else")) {
@@ -456,6 +457,7 @@ Node *stmt() {
     node = new_node(ND_WHILE);
     node->id = labelseq++;
     node->cond = logical();
+    node->cond->endline = TRUE;
     expect(")", "after equality", "while");
     int loop_id_prev = loop_id;
     loop_id = node->id;
@@ -466,11 +468,23 @@ Node *stmt() {
     expect("(", "before initialization", "for");
     node = new_node(ND_FOR);
     node->id = labelseq++;
-    node->init = expr();
-    expect(";", "after initialization", "for");
+    if (is_type(token)) {
+      Type *type = consume_type();
+      Token *tok = consume_ident();
+      if (!tok) {
+        error_at(token->str, "expected an identifier but got \"%.*s\" [in for]", token->len, token->str);
+      }
+      node->init = local_variable_declaration(tok, type);
+    } else {
+      node->init = expr();
+      node->init->endline = TRUE;
+      expect(";", "after initialization", "for");
+    }
     node->cond = logical();
+    node->cond->endline = TRUE;
     expect(";", "after condition", "for");
     node->inc = expr();
+    node->inc->endline = TRUE;
     expect(")", "after step expression", "for");
     int loop_id_prev = loop_id;
     loop_id = node->id;
@@ -538,7 +552,7 @@ Node *assign() {
 // logical = equality ("&&" equality | "||" equality)*
 Node *logical() {
   Node *node = equality();
-  for (;;) {
+  while (TRUE) {
     if (consume("&&")) {
       node = new_binary(ND_AND, node, equality());
     } else if (consume("||")) {
@@ -553,7 +567,7 @@ Node *logical() {
 Node *equality() {
   Node *node = relational();
 
-  for (;;) {
+  while (TRUE) {
     if (consume("==")) {
       node = new_binary(ND_EQ, node, relational());
       node->type = new_type_int();
@@ -570,7 +584,7 @@ Node *equality() {
 Node *relational() {
   Node *node = add();
 
-  for (;;) {
+  while (TRUE) {
     if (consume("<")) {
       node = new_binary(ND_LT, node, add());
       node->type = new_type_int();
@@ -649,7 +663,7 @@ Node *new_sub(Node *lhs, Node *rhs, char *ptr) {
 Node *add() {
   char *consumed_ptr_prev;
   Node *node = mul();
-  for (;;) {
+  while (TRUE) {
     if (consume("+")) {
       consumed_ptr_prev = consumed_ptr;
       node = new_add(node, mul(), consumed_ptr_prev);
@@ -675,7 +689,7 @@ Node *mul() {
   char *consumed_ptr_prev;
   Node *node = refer_struct();
 
-  for (;;) {
+  while (TRUE) {
     if (consume("*")) {
       consumed_ptr_prev = consumed_ptr;
       node = new_binary(ND_MUL, node, refer_struct());

@@ -90,8 +90,7 @@ int test17() {
 int test18() { return fibo_test18(9); }
 int test19() {
   int a = 0;
-  int i;
-  for (i = 0; i < 10; i++) {
+  for (int i = 0; i < 10; i++) {
     if (i % 3 == 0)
       continue;
     a += i;
