@@ -1,11 +1,9 @@
 
-#ifndef _9CC_H_
-#define _9CC_H_
+#ifndef _LCC_H_
+#define _LCC_H_
 
 #include <ctype.h>
-#include <errno.h>
 #include <stdarg.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,8 +27,11 @@ typedef enum {
   TK_BREAK,
   TK_CONTINUE,
   TK_EXTERN,
-  TK_STR, // 文字列
-  TK_EOF, // 入力の終わりを表すトークン
+  TK_STR,     // 文字列
+  TK_TYPEDEF, // typedef
+  TK_ENUM,    // enum
+  TK_STRUCT,  // struct
+  TK_EOF,     // 入力の終わりを表すトークン
 } TokenKind;
 
 // Token type
@@ -56,13 +57,14 @@ Token *tokenize();
 
 // ローカル変数の型
 
-typedef struct Type Type;
-typedef enum { TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_VOID } TypeKind;
+typedef enum { TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_VOID, TY_STRUCT, TY_ENUM } TypeKind;
 
+typedef struct Type Type;
 struct Type {
   TypeKind ty;
   Type *ptr_to;
-  size_t array_size;
+  int array_size;
+  int size;
 };
 
 typedef struct String String;
@@ -74,7 +76,6 @@ struct String {
 };
 
 typedef struct LVar LVar;
-
 struct LVar {
   LVar *next; // 次の変数かNULL
   char *name; // 変数の名前
@@ -83,9 +84,27 @@ struct LVar {
   Type *type; // 変数の型
 };
 
+typedef struct Struct Struct;
+struct Struct {
+  Struct *next; // 次の構造体かNULL
+  LVar *var;    // 次の変数かNULL
+  char *name;   // 変数の名前
+  int len;      // 名前の長さ
+  int offset;   // RBPからのオフセット
+  Type *type;   // 変数の型
+  int size;     // 構造体のサイズ
+};
+
+typedef struct StructTag StructTag;
+struct StructTag {
+  StructTag *next; // 次の構造体かNULL
+  Struct *main;    // struct
+  char *name;      // タグの名前
+  int len;         // 名前の長さ
+};
+
 // 関数の型
 typedef struct Function Function;
-
 struct Function {
   Function *next; // 次の関数かNULL
   LVar *locals;   // ローカル変数
@@ -131,12 +150,15 @@ typedef enum {
   ND_FUNCALL,  // 関数呼び出し
   ND_EXTERN,   // extern
   ND_BLOCK,    // { ... }
+  ND_ARR,      // 配列
+  ND_ENUM,     // 列挙体
+  ND_STRUCT,   // 構造体
+  ND_TYPEDEF,  // typedef
   ND_NONE,     // 空のノード
 } NodeKind;
 
-typedef struct Node Node;
-
 // 抽象構文木のノード
+typedef struct Node Node;
 struct Node {
   NodeKind kind; // ノードの型
   Node *lhs;     // 左辺

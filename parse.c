@@ -1,6 +1,5 @@
 
-#include "9cc.h"
-#include <string.h>
+#include "lcc.h"
 
 //
 // Parser
@@ -13,9 +12,51 @@ extern Function *current_fn;
 extern int labelseq;
 extern int loop_id;
 extern LVar *globals;
+extern Struct *structs;
+extern StructTag *struct_tags;
 extern String *strings;
 
 char *consumed_ptr;
+
+// 変数を名前で検索する。見つからなかった場合はNULLを返す。
+LVar *find_lvar(Token *tok) {
+  for (LVar *var = current_fn->locals; var; var = var->next)
+    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+      return var;
+  return NULL;
+}
+
+// 変数を名前で検索する。見つからなかった場合はNULLを返す。
+LVar *find_gver(Token *tok) {
+  for (LVar *var = globals; var; var = var->next)
+    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+      return var;
+  return NULL;
+}
+
+// structを名前で検索する。見つからなかった場合はNULLを返す。
+Struct *find_struct(Token *tok) {
+  for (Struct *var = structs; var; var = var->next)
+    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+      return var;
+  return NULL;
+}
+
+// struct_tagを名前で検索する。見つからなかった場合はNULLを返す。
+StructTag *find_struct_tag(Token *tok) {
+  for (StructTag *var = struct_tags; var; var = var->next)
+    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+      return var;
+  return NULL;
+}
+
+// 関数を名前で検索する。見つからなかった場合はNULLを返す。
+Function *find_fn(Token *tok) {
+  for (Function *fn = functions; fn; fn = fn->next)
+    if (fn->len == tok->len && !memcmp(tok->str, fn->name, fn->len))
+      return fn;
+  return NULL;
+}
 
 // Consumes the current token if it matches `op`.
 int consume(char *op) {
@@ -36,20 +77,26 @@ Token *consume_ident() {
 }
 
 Type *consume_type() {
-  if (token->kind != TK_TYPE)
-    error_at(token->str, "expected a type but got \"%.*s\" [in function definition]", token->len, token->str);
   Token *tok = token;
   consumed_ptr = token->str;
   token = token->next;
   Type *type = calloc(1, sizeof(Type));
-  if (memcmp(tok->str, "int", tok->len) == 0) {
+  if (tok->kind == TK_IDENT) {
+    Struct *var = find_struct(tok);
+    if (!var)
+      error_at(tok->str, "unknown struct type: %.*s", tok->len, tok->str);
+    type->ty = TY_STRUCT;
+    type->size = var->size;
+  } else if (tok->kind != TK_TYPE) {
+    error_at(tok->str, "expected a type but got \"%.*s\" [in consume type]", token->len, token->str);
+  } else if (memcmp(tok->str, "int", tok->len) == 0) {
     type->ty = TY_INT;
   } else if (memcmp(tok->str, "char", tok->len) == 0) {
     type->ty = TY_CHAR;
   } else if (memcmp(tok->str, "void", tok->len) == 0) {
     type->ty = TY_VOID;
   } else {
-    error_at(token->str, "expected a type but got \"%.*s\" [in function definition]", tok->len, tok->str);
+    error_at(tok->str, "expected a type but got \"%.*s\" [in consume type]", tok->len, tok->str);
   }
   while (consume("*")) {
     Type *ptr = calloc(1, sizeof(Type));
@@ -103,34 +150,12 @@ int get_sizeof(Type *type) {
     return 8;
   } else if (type->ty == TY_ARR) {
     return get_sizeof(type->ptr_to) * type->array_size;
+  } else if (type->ty == TY_STRUCT) {
+    return type->size;
   } else {
     error_at(token->str, "invalid type [in get_sizeof]");
     return 0;
   }
-}
-
-// 変数を名前で検索する。見つからなかった場合はNULLを返す。
-LVar *find_lvar(Token *tok) {
-  for (LVar *var = current_fn->locals; var; var = var->next)
-    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
-      return var;
-  return NULL;
-}
-
-// 変数を名前で検索する。見つからなかった場合はNULLを返す。
-LVar *find_global_lvar(Token *tok) {
-  for (LVar *var = globals; var; var = var->next)
-    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
-      return var;
-  return NULL;
-}
-
-// 関数を名前で検索する。見つからなかった場合はNULLを返す。
-Function *find_fn(Token *tok) {
-  for (Function *fn = functions; fn; fn = fn->next)
-    if (fn->len == tok->len && !memcmp(tok->str, fn->name, fn->len))
-      return fn;
-  return NULL;
 }
 
 Node *new_node(NodeKind kind) {
@@ -214,7 +239,7 @@ Node *function_definition(Token *tok, Type *type) {
   return node;
 }
 
-Node *variable_declaration(Token *tok, Type *type) {
+Node *local_variable_declaration(Token *tok, Type *type) {
   LVar *lvar = find_lvar(tok);
   if (lvar) {
     error_at(token->str, "duplicated variable name: %.*s [in variable declaration]", tok->len, tok->str);
@@ -243,11 +268,13 @@ Node *variable_declaration(Token *tok, Type *type) {
   if (consume("=")) {
     node = new_binary(ND_ASSIGN, node, logical());
   }
+  expect(";", "after line", "variable declaration");
+  node->endline = TRUE;
   return node;
 }
 
 Node *global_variable_declaration(Token *tok, Type *type) {
-  LVar *lvar = find_global_lvar(tok);
+  LVar *lvar = find_gver(tok);
   if (lvar) {
     error_at(token->str, "duplicated variable name: %.*s [in global variable declaration]", tok->len, tok->str);
   }
@@ -273,6 +300,53 @@ Node *global_variable_declaration(Token *tok, Type *type) {
   if (consume("=")) {
     error_at(token->str, "initialization of global variable is not supported [in global variable declaration]");
   }
+  expect(";", "after line", "global variable declaration");
+  node->endline = TRUE;
+  return node;
+}
+
+Node *new_struct(Token *tok) {
+  Node *node = new_node(ND_STRUCT);
+  StructTag *struct_tag = find_struct_tag(tok);
+  if (!struct_tag) {
+    error_at(tok->str, "unknown tag: %.*s [in struct declaration]", tok->len, tok->str);
+  }
+  Struct *struct_ = struct_tag->main;
+  int offset = 0;
+  expect("{", "before struct members", "struct");
+  while (token->kind != TK_EOF && !(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
+    Type *type = consume_type();
+    Token *member_tok = consume_ident();
+    if (!member_tok) {
+      error_at(token->str, "expected an identifier but got \"%.*s\" [in struct declaration]", token->len, token->str);
+    }
+    LVar *member_var = calloc(1, sizeof(LVar));
+    member_var->name = member_tok->str;
+    member_var->len = member_tok->len;
+    member_var->type = type;
+    member_var->next = struct_->var;
+    struct_->var = member_var;
+    int type_size = get_type_size(type);
+    if (offset % type_size != 0) {
+      offset += type_size - (offset % type_size);
+    }
+    member_var->offset = offset;
+    offset += get_type_size(type);
+    if (consume(";")) {
+      continue;
+    } else {
+      error_at(token->str, "expected ';' after struct member declaration [in struct declaration]");
+    }
+  }
+  struct_->type = calloc(1, sizeof(Type));
+  struct_->type->ty = TY_STRUCT;
+  if (offset % 8 != 0) {
+    offset += 8 - (offset % 8);
+  }
+  struct_->type->size = offset;
+  expect("}", "after struct members", "struct");
+  expect(";", "after struct definition", "struct");
+  node->endline = TRUE;
   return node;
 }
 
@@ -302,15 +376,54 @@ Node *stmt() {
       node = function_definition(tok, type);
     } else if (current_fn) {
       // ローカル変数宣言
-      node = variable_declaration(tok, type);
-      expect(";", "after line", "variable declaration");
-      node->endline = TRUE;
+      node = local_variable_declaration(tok, type);
     } else {
       // グローバル変数宣言
       node = global_variable_declaration(tok, type);
-      expect(";", "after line", "global variable declaration");
-      node->endline = TRUE;
     }
+  } else if (token->kind == TK_STRUCT) {
+    token = token->next;
+    Token *tok;
+    tok = consume_ident();
+    if (!tok) {
+      error_at(token->str, "expected an identifier but got \"%.*s\" [in struct definition]", token->len, token->str);
+    }
+    node = new_struct(tok);
+  } else if (token->kind == TK_TYPEDEF) {
+    token = token->next;
+    if (token->kind == TK_STRUCT) {
+      token = token->next;
+      node = new_node(ND_TYPEDEF);
+      Token *tok1 = consume_ident();
+      if (!tok1) {
+        error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
+      }
+      Token *tok2 = consume_ident();
+      if (!tok2) {
+        error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
+      }
+      if (find_struct_tag(tok1)) {
+        error_at(tok1->str, "duplicated tag name: %.*s [in typedef]", tok1->len, tok1->str);
+      }
+      if (find_struct(tok2)) {
+        error_at(tok2->str, "duplicated struct name: %.*s [in typedef]", tok2->len, tok2->str);
+      }
+      Struct *var = calloc(1, sizeof(Struct));
+      var->name = tok2->str;
+      var->len = tok2->len;
+      var->next = structs;
+      structs = var;
+      StructTag *tag = calloc(1, sizeof(StructTag));
+      tag->name = tok1->str;
+      tag->len = tok1->len;
+      tag->main = var;
+      tag->next = struct_tags;
+      struct_tags = tag;
+    } else {
+      error_at(token->str, "expected a struct but got \"%.*s\" [in typedef]", token->len, token->str);
+    }
+    node->endline = TRUE;
+    expect(";", "after line", "typedef");
   } else if (token->kind == TK_IF) {
     token = token->next;
     node = new_node(ND_IF);
@@ -658,41 +771,30 @@ Node *primary() {
   // 変数
   else if (!consume("(")) {
     LVar *lvar = find_lvar(tok);
-    LVar *gvar = find_global_lvar(tok);
+    LVar *gvar = find_gver(tok);
     if (lvar) {
       node = new_node(ND_LVAR);
       node->var = lvar;
       node->type = lvar->type;
-      if (consume("[")) {
-        char *consumed_ptr_prev = consumed_ptr;
-        if (!is_ptr_or_arr(node->type)) {
-          error_at(consumed_ptr_prev, "invalid array access [in primary]");
-        }
-        node = new_add(node, logical(), consumed_ptr_prev);
-        expect("]", "after number", "array access");
-        Node *nd_deref = new_node(ND_DEREF);
-        nd_deref->lhs = node;
-        node = nd_deref;
-        node->type = node->lhs->type->ptr_to;
-      }
     } else if (gvar) {
       node = new_node(ND_GVAR);
       node->var = gvar;
       node->type = gvar->type;
-      if (consume("[")) {
-        char *consumed_ptr_prev = consumed_ptr;
-        if (!is_ptr_or_arr(node->type)) {
-          error_at(consumed_ptr_prev, "invalid array access [in primary]");
-        }
-        node = new_add(node, logical(), consumed_ptr_prev);
-        expect("]", "after number", "array access");
-        Node *nd_deref = new_node(ND_DEREF);
-        nd_deref->lhs = node;
-        node = nd_deref;
-        node->type = node->lhs->type->ptr_to;
-      }
+
     } else {
       error_at(tok->str, "undefined variable: %.*s [in primary]", tok->len, tok->str);
+    }
+    if (consume("[")) {
+      char *consumed_ptr_prev = consumed_ptr;
+      if (!is_ptr_or_arr(node->type)) {
+        error_at(consumed_ptr_prev, "invalid array access [in primary]");
+      }
+      node = new_add(node, logical(), consumed_ptr_prev);
+      expect("]", "after number", "array access");
+      Node *nd_deref = new_node(ND_DEREF);
+      nd_deref->lhs = node;
+      node = nd_deref;
+      node->type = node->lhs->type->ptr_to;
     }
     if (consume("++")) {
       node = new_binary(ND_ASSIGN, node, new_add(node, new_num(1), consumed_ptr));

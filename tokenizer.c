@@ -1,5 +1,5 @@
 
-#include "9cc.h"
+#include "lcc.h"
 
 //
 // Tokenizer
@@ -148,6 +148,24 @@ Token *tokenize() {
     if (strncmp(p, "extern", 6) == 0 && !is_alnum(p[6])) {
       cur = new_token(TK_EXTERN, cur, p, 6);
       p += 6;
+      continue;
+    }
+
+    if (strncmp(p, "enum", 4) == 0 && !is_alnum(p[4])) {
+      cur = new_token(TK_ENUM, cur, p, 4);
+      p += 4;
+      continue;
+    }
+
+    if (strncmp(p, "struct", 6) == 0 && !is_alnum(p[6])) {
+      cur = new_token(TK_STRUCT, cur, p, 6);
+      p += 6;
+      continue;
+    }
+
+    if (strncmp(p, "typedef", 7) == 0 && !is_alnum(p[7])) {
+      cur = new_token(TK_TYPEDEF, cur, p, 7);
+      p += 7;
       continue;
     }
 

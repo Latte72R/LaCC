@@ -1,5 +1,5 @@
 
-#include "9cc.h"
+#include "lcc.h"
 
 char *user_input;
 Token *token;
@@ -10,6 +10,8 @@ int loop_id = -1;
 Function *functions;
 Function *current_fn;
 LVar *globals;
+Struct *structs;
+StructTag *struct_tags;
 String *strings;
 char *filename;
 
@@ -18,14 +20,14 @@ char *read_file(char *path) {
   // ファイルを開く
   FILE *fp = fopen(path, "r");
   if (!fp)
-    error("cannot open %s: %s", path, strerror(errno));
+    error("cannot open %s", path);
 
   // ファイルの長さを調べる
   if (fseek(fp, 0, SEEK_END) == -1)
-    error("%s: fseek: %s", path, strerror(errno));
+    error("%s: fseek", path);
   size_t size = ftell(fp);
   if (fseek(fp, 0, SEEK_SET) == -1)
-    error("%s: fseek: %s", path, strerror(errno));
+    error("%s: fseek", path);
 
   // ファイル内容を読み込む
   char *buf = calloc(1, size + 2);

@@ -1,11 +1,13 @@
 
-#include "9cc.h"
+#include "lcc.h"
 
 //
 // Code generator
 //
 
-const char *regs[3][4] = {{"rdi", "rsi", "rdx", "rcx"}, {"edi", "esi", "edx", "ecx"}, {"dil", "sil", "dl", "cl"}};
+char *regs1[4] = {"rdi", "rsi", "rdx", "rcx"};
+char *regs4[4] = {"edi", "esi", "edx", "ecx"};
+char *regs8[4] = {"rdi", "rsi", "rdx", "rcx"};
 
 void gen_lval(Node *node) {
   if (node->kind == ND_LVAR || node->kind == ND_VARDEC) {
@@ -165,18 +167,17 @@ void gen(Node *node) {
       gen_lval(node->args[i]);
       printf("  pop rax\n");
       if (get_type_size(node->args[i]->type) == 4) {
-        printf("  mov DWORD PTR [rax], %s\n", regs[1][i]);
+        printf("  mov DWORD PTR [rax], %s\n", regs4[i]);
       } else if (get_type_size(node->args[i]->type) == 1) {
-        printf("  mov BYTE PTR [rax], %s\n", regs[2][i]);
+        printf("  mov BYTE PTR [rax], %s\n", regs1[i]);
       } else if (get_type_size(node->args[i]->type) == 8) {
-        printf("  mov QWORD PTR [rax], %s\n", regs[0][i]);
+        printf("  mov QWORD PTR [rax], %s\n", regs8[i]);
       } else {
         error("invalid type size [in ND_FUNCDEF]");
       }
     }
     gen(node->body);
     if (node->fn->type->ty == TY_VOID) {
-      printf("  pop rax\n");
       printf("  mov rsp, rbp\n");
       printf("  pop rbp\n");
       printf("  ret\n");
@@ -191,11 +192,11 @@ void gen(Node *node) {
         continue;
       printf("  pop rax\n");
       if (get_type_size(node->args[i]->type) == 4) {
-        printf("  mov %s, eax\n", regs[1][i]);
+        printf("  mov %s, eax\n", regs4[i]);
       } else if (get_type_size(node->args[i]->type) == 1) {
-        printf("  movzx %s, al\n", regs[1][i]);
+        printf("  movzx %s, al\n", regs1[i]);
       } else if (get_type_size(node->args[i]->type) == 8) {
-        printf("  mov %s, rax\n", regs[0][i]);
+        printf("  mov %s, rax\n", regs8[i]);
       } else {
         error("invalid type size [in ND_FUNCALL]");
       }
@@ -221,6 +222,9 @@ void gen(Node *node) {
   case ND_GLBDEC:
   case ND_VARDEC:
   case ND_EXTERN:
+  case ND_TYPEDEF:
+  case ND_ENUM:
+  case ND_STRUCT:
     return;
   default:
     break;
