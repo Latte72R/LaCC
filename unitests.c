@@ -1,8 +1,17 @@
 
 void printf();
+void calloc();
 
 int num;
 char str[2];
+
+int failures;
+
+typedef struct B B;
+struct B {
+  int a;
+  int b;
+};
 
 int foo_test11(int n) { return n * 4; }
 int foo_test14(int *n) {
@@ -98,128 +107,59 @@ int test20() {
   }
   return a;
 }
-void test21() { num = 5; }
+
+int test21_sub() { return num; }
+
+int test21() {
+  num = 5;
+  return test21_sub();
+}
+
 int test22() {
   str[0] = 3;
   str[1] = 4;
   return str[0] * str[1];
 }
 
-int main() {
-  int failures = 0;
-  int result;
+int test23() {
+  B *d = calloc(1, sizeof(B));
+  d->a = 3;
+  d->b = 7;
+  return d->a * d->b;
+}
 
-  result = test1();
-  if (result != 13) {
-    printf("test1 failed (expected: 13 / result: %d)\n", result);
+void check(int result, int id, int ans) {
+  if (result != ans) {
+    printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
     failures++;
   }
-  result = test2();
-  if (result != 2) {
-    printf("test2 failed (expected: 2 / result: %d)\n", result);
-    failures++;
-  }
-  result = test3();
-  if (result != 13) {
-    printf("test3 failed (expected: 13 / result: %d)\n", result);
-    failures++;
-  }
-  result = test4();
-  if (result != 1) {
-    printf("test4 failed (expected: 1 / result: %d)\n", result);
-    failures++;
-  }
-  result = test5();
-  if (result != 0) {
-    printf("test5 failed (expected: 0 / result: %d)\n", result);
-    failures++;
-  }
-  result = test6();
-  if (result != 1) {
-    printf("test6 failed (expected: 1 / result: %d)\n", result);
-    failures++;
-  }
-  result = test7();
-  if (result != 0) {
-    printf("test7 failed (expected: 0 / result: %d)\n", result);
-    failures++;
-  }
-  result = test8();
-  if (result != 10) {
-    printf("test8 failed (expected: 10 / result: %d)\n", result);
-    failures++;
-  }
-  result = test9();
-  if (result != 10) {
-    printf("test9 failed (expected: 10 / result: %d)\n", result);
-    failures++;
-  }
-  result = test10();
-  if (result != 2) {
-    printf("test10 failed (expected: 2 / result: %d)\n", result);
-    failures++;
-  }
-  result = test11();
-  if (result != 12) {
-    printf("test11 failed (expected: 12 / result: %d)\n", result);
-    failures++;
-  }
-  result = test12();
-  if (result != 3) {
-    printf("test12 failed (expected: 3 / result: %d)\n", result);
-    failures++;
-  }
-  result = test13();
-  if (result != 5) {
-    printf("test13 failed (expected: 5 / result: %d)\n", result);
-    failures++;
-  }
-  result = test14();
-  if (result != 25) {
-    printf("test14 failed (expected: 25 / result: %d)\n", result);
-    failures++;
-  }
-  result = test15();
-  if (result != 4) {
-    printf("test15 failed (expected: 4 / result: %d)\n", result);
-    failures++;
-  }
-  result = test16();
-  if (result != 28) {
-    printf("test16 failed (expected: 28 / result: %d)\n", result);
-    failures++;
-  }
-  result = test17();
-  if (result != 4) {
-    printf("test17 failed (expected: 4 / result: %d)\n", result);
-    failures++;
-  }
-  result = test18();
-  if (result != 34) {
-    printf("test18 failed (expected: 34 / result: %d)\n", result);
-    failures++;
-  }
-  result = test19();
-  if (result != 27) {
-    printf("test19 failed (expected: 27 / result: %d)\n", result);
-    failures++;
-  }
-  result = test20();
-  if (result != 7) {
-    printf("test20 failed (expected: 7 / result: %d)\n", result);
-    failures++;
-  }
-  test21();
-  result = num;
-  if (result != 5) {
-    printf("test21 failed (expected: 5 / result: %d)\n", result);
-    failures++;
-  }
-  result = test22();
-  if (result != 12) {
-    printf("test22 failed (expected: 12 / result: %d)\n", result);
-    failures++;
-  }
+}
+
+int main() {
+  failures = 0;
+  check(test1(), 1, 13);
+  check(test2(), 2, 2);
+  check(test3(), 3, 13);
+  check(test4(), 4, 1);
+  check(test5(), 5, 0);
+  check(test6(), 6, 1);
+  check(test7(), 7, 0);
+  check(test8(), 8, 10);
+  check(test9(), 9, 10);
+  check(test10(), 10, 2);
+  check(test11(), 11, 12);
+  check(test12(), 12, 3);
+  check(test13(), 13, 5);
+  check(test14(), 14, 25);
+  check(test15(), 15, 4);
+  check(test16(), 16, 28);
+  check(test17(), 17, 4);
+  check(test18(), 18, 34);
+  check(test19(), 19, 27);
+  check(test20(), 20, 7);
+  check(test21(), 21, 5);
+  check(test22(), 22, 12);
+  check(test23(), 23, 21);
 
   if (failures == 0) {
     printf("\033[1m\033[32mAll tests passed!\033[0m\n");

@@ -62,7 +62,11 @@ int main(int argc, char **argv) {
   printf(".data\n");
   for (LVar *var = globals; var; var = var->next) {
     printf("%.*s:\n", var->len, var->name);
-    printf("  .zero %d\n", get_type_size(var->type));
+    if (var->offset) {
+      printf("  .long %d\n", var->offset);
+    } else {
+      printf("  .zero %d\n", get_type_size(var->type));
+    }
   }
 
   // 文字列リテラル

@@ -1,0 +1,2 @@
+-Wno-incompatible-library-redeclaration
+-Wno-deprecated-non-prototype

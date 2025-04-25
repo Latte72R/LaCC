@@ -2,15 +2,15 @@ CFLAGS=-std=c11 -g -static
 SRCS=codegen.c main.c parse.c tokenizer.c
 OBJS=$(SRCS:.c=.o)
 
-9cc: $(OBJS)
-	$(CC) -o 9cc $(OBJS) $(LDFLAGS)
+lcc: $(OBJS)
+	$(CC) -o lcc $(OBJS) $(LDFLAGS)
 
-$(OBJS): 9cc.h
+$(OBJS): lcc.h
 
-test: 9cc
+test: lcc
 	./multitest.sh
 
 clean:
-	rm -f 9cc *.o *~ tmp*
+	rm -f lcc *.o *~ tmp*
 
 .PHONY: test clean

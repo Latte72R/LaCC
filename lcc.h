@@ -57,16 +57,6 @@ Token *tokenize();
 
 // ローカル変数の型
 
-typedef enum { TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_VOID, TY_STRUCT, TY_ENUM } TypeKind;
-
-typedef struct Type Type;
-struct Type {
-  TypeKind ty;
-  Type *ptr_to;
-  int array_size;
-  int size;
-};
-
 typedef struct String String;
 struct String {
   String *next;
@@ -74,6 +64,10 @@ struct String {
   int len;
   int label;
 };
+
+typedef enum { TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_VOID, TY_STRUCT, TY_ENUM } TypeKind;
+
+typedef struct Type Type;
 
 typedef struct LVar LVar;
 struct LVar {
@@ -90,8 +84,6 @@ struct Struct {
   LVar *var;    // 次の変数かNULL
   char *name;   // 変数の名前
   int len;      // 名前の長さ
-  int offset;   // RBPからのオフセット
-  Type *type;   // 変数の型
   int size;     // 構造体のサイズ
 };
 
@@ -101,6 +93,13 @@ struct StructTag {
   Struct *main;    // struct
   char *name;      // タグの名前
   int len;         // 名前の長さ
+};
+
+struct Type {
+  TypeKind ty;
+  Type *ptr_to;
+  int array_size;
+  Struct *struct_;
 };
 
 // 関数の型
@@ -154,6 +153,7 @@ typedef enum {
   ND_ENUM,     // 列挙体
   ND_STRUCT,   // 構造体
   ND_TYPEDEF,  // typedef
+  ND_TYPE,     // 型
   ND_NONE,     // 空のノード
 } NodeKind;
 
@@ -194,6 +194,7 @@ Node *new_add(Node *lhs, Node *rhs, char *consumed_ptr);
 Node *new_sub(Node *lhs, Node *rhs, char *consumed_ptr);
 Node *add();
 Node *mul();
+Node *refer_struct();
 Node *unary();
 Node *primary();
 

@@ -99,7 +99,7 @@ void gen(Node *node) {
     printf("  ret\n");
     return;
   case ND_BLOCK:
-    for (int i = 0; node->body[i].kind != ND_NONE; i++) {
+    for (int i = 0; (&(node->body[i]))->kind != ND_NONE; i++) {
       gen(&(node->body[i]));
     }
     return;
@@ -225,6 +225,7 @@ void gen(Node *node) {
   case ND_TYPEDEF:
   case ND_ENUM:
   case ND_STRUCT:
+  case ND_TYPE:
     return;
   default:
     break;

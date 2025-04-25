@@ -1,5 +1,5 @@
 
-int printf();
+void printf();
 
 // FizzBuzz
 int main() {
