@@ -65,7 +65,7 @@ struct String {
   int label;
 };
 
-typedef enum { TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_VOID, TY_STRUCT, TY_ENUM } TypeKind;
+typedef enum { TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_VOID, TY_STRUCT } TypeKind;
 
 typedef struct Type Type;
 
@@ -85,6 +85,13 @@ struct Struct {
   char *name;   // 変数の名前
   int len;      // 名前の長さ
   int size;     // 構造体のサイズ
+};
+
+typedef struct Enum Enum;
+struct Enum {
+  Enum *next; // 次のEnumかNULL
+  char *name; // 変数の名前
+  int len;    // 名前の長さ
 };
 
 typedef struct StructTag StructTag;

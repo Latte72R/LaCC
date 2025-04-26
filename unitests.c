@@ -10,7 +10,7 @@ int failures;
 typedef struct STRUCT STRUCT;
 struct STRUCT {
   int a;
-  int b;
+  int b[2];
 };
 
 typedef enum { A, B, C } ENUM;
@@ -123,10 +123,11 @@ int test22() {
 }
 
 int test23() {
-  STRUCT *d = calloc(1, sizeof(B));
-  d->a = 3;
-  d->b = 7;
-  return d->a * d->b;
+  STRUCT *c = calloc(1, sizeof(B));
+  c->a = 5;
+  c->b[0] = 1;
+  c->b[1] = 6;
+  return c->a * (c->b[0] + c->b[1]);
 }
 
 ENUM test24() {
@@ -165,7 +166,7 @@ int main() {
   check(test20(), 20, 7);
   check(test21(), 21, 5);
   check(test22(), 22, 12);
-  check(test23(), 23, 21);
+  check(test23(), 23, 35);
   check(test24(), 24, 2);
 
   if (failures == 0) {

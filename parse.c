@@ -366,6 +366,16 @@ Node *new_struct(Token *tok) {
     if (!member_tok) {
       error_at(token->str, "expected an identifier but got \"%.*s\" [in struct declaration]", token->len, token->str);
     }
+    if (consume("[")) {
+      Type *arr_type = calloc(1, sizeof(Type));
+      arr_type->ty = TY_ARR;
+      arr_type->ptr_to = type;
+      arr_type->array_size = expect_number();
+      type = arr_type;
+      expect("]", "after number", "struct");
+    } else {
+      type->array_size = 1;
+    }
     LVar *member_var = calloc(1, sizeof(LVar));
     member_var->name = member_tok->str;
     member_var->len = member_tok->len;
@@ -782,12 +792,12 @@ Node *refer_struct() {
   Token *prev_tok = token;
   Node *node = unary();
   if (consume("->")) {
+    if (node->type->ty != TY_PTR) {
+      error_at(prev_tok->str, "%.*s is not a pointer [in struct reference]", prev_tok->len, prev_tok->str);
+    }
     Token *tok = consume_ident();
     if (!tok) {
       error_at(token->str, "expected an identifier but got \"%.*s\" [in struct reference]", token->len, token->str);
-    }
-    if (node->type->ty != TY_PTR) {
-      error_at(prev_tok->str, "%.*s is not a pointer [in struct reference]", prev_tok->len, prev_tok->str);
     }
     Struct *struct_ = node->type->ptr_to->struct_;
     if (!struct_) {
@@ -802,9 +812,21 @@ Node *refer_struct() {
     type->ty = TY_PTR;
     type->ptr_to = var->type;
     ptr->type = type;
-    node = new_node(ND_DEREF);
-    node->lhs = ptr;
-    node->type = var->type;
+    if (consume("[")) {
+      char *consumed_ptr_prev = consumed_ptr;
+      if (!is_ptr_or_arr(var->type)) {
+        error_at(consumed_ptr_prev, "invalid array access [in struct reference]");
+      }
+      ptr = new_add(ptr, logical(), consumed_ptr_prev);
+      expect("]", "after number", "struct reference");
+      node = new_node(ND_DEREF);
+      node->lhs = ptr;
+      node->type = var->type->ptr_to;
+    } else {
+      node = new_node(ND_DEREF);
+      node->lhs = ptr;
+      node->type = var->type;
+    }
     return node;
   }
   return node;
