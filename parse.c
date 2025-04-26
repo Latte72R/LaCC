@@ -95,7 +95,7 @@ int consume(char *op) {
 
 Token *consume_ident() {
   if (token->kind != TK_IDENT)
-    return FALSE;
+    return NULL;
   Token *tok = token;
   consumed_ptr = token->str;
   token = token->next;
@@ -104,8 +104,6 @@ Token *consume_ident() {
 
 Type *consume_type() {
   Token *tok = token;
-  consumed_ptr = token->str;
-  token = token->next;
   Type *type = calloc(1, sizeof(Type));
   if (tok->kind == TK_IDENT) {
     Struct *struct_ = find_struct(tok);
@@ -116,10 +114,10 @@ Type *consume_type() {
     } else if (enum_) {
       type->ty = TY_INT;
     } else {
-      error_at(tok->str, "unknown type: %.*s", tok->len, tok->str);
+      return NULL;
     }
   } else if (tok->kind != TK_TYPE) {
-    error_at(tok->str, "expected a type but got \"%.*s\" [in consume type]", token->len, token->str);
+    return NULL;
   } else if (memcmp(tok->str, "int", tok->len) == 0) {
     type->ty = TY_INT;
   } else if (memcmp(tok->str, "char", tok->len) == 0) {
@@ -127,8 +125,10 @@ Type *consume_type() {
   } else if (memcmp(tok->str, "void", tok->len) == 0) {
     type->ty = TY_VOID;
   } else {
-    error_at(tok->str, "expected a type but got \"%.*s\" [in consume type]", tok->len, tok->str);
+    error_at(tok->str, "unknown type \"%.*s\" [in consume type]", tok->len, tok->str);
   }
+  consumed_ptr = token->str;
+  token = token->next;
   while (consume("*")) {
     Type *ptr = calloc(1, sizeof(Type));
     ptr->ty = TY_PTR;
@@ -180,7 +180,7 @@ int get_type_size(Type *type) {
   } else if (is_ptr_or_arr(type)) {
     return 8;
   } else {
-    error_at(token->str, "invalid type [in get_type_size]");
+    error_at(token->str, "invalid type (%d) [in get_type_size]", type->ty);
     return 0;
   }
 }
@@ -250,14 +250,12 @@ Node *function_definition(Token *tok, Type *type) {
   Node *node = new_node(ND_FUNCDEF);
   node->fn = fn;
   if (!consume(")")) {
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 4; i++) {
       type = consume_type();
       Token *tok_lvar = consume_ident();
       if (!tok_lvar) {
-        error_at(token->str,
-                 "expected an identifier but got \"%.*s\" [in function "
-                 "definition]",
-                 token->len, token->str);
+        error_at(token->str, "expected an identifier but got \"%.*s\" [in function definition]", token->len,
+                 token->str);
       }
       Node *nd_lvar = new_node(ND_LVAR);
       node->args[i] = nd_lvar;
@@ -279,7 +277,7 @@ Node *function_definition(Token *tok, Type *type) {
     node->kind = ND_EXTERN;
     expect(";", "after line", "function definition");
   } else {
-    node->body = stmt();
+    node->lhs = stmt();
   }
   current_fn = prev_fn;
   return node;
@@ -393,7 +391,7 @@ Node *new_struct(Token *tok) {
       offset += type_size - (offset % type_size);
     }
     member_var->offset = offset;
-    offset += get_type_size(type);
+    offset += type_size;
     if (consume(";")) {
       continue;
     } else {
@@ -409,19 +407,23 @@ Node *new_struct(Token *tok) {
 
 Node *stmt() {
   Node *node;
+  Token *tok;
+  Type *type;
+  int loop_id_prev;
   if (consume("{")) {
     node = new_node(ND_BLOCK);
-    node->body = calloc(100, sizeof(Node));
+    node->body = calloc(1, sizeof(Node *));
     int i = 0;
     while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
-      node->body[i++] = *stmt();
+      node->body[i++] = stmt();
+      node->body = realloc(node->body, sizeof(Node *) * (i + 1));
     }
-    (&node->body[i])->kind = ND_NONE;
+    node->body[i] = new_node(ND_NONE);
     expect("}", "after block", "block");
   } else if (is_type(token)) {
     // 変数宣言または関数定義
-    Type *type = consume_type();
-    Token *tok = consume_ident();
+    type = consume_type();
+    tok = consume_ident();
     if (!tok) {
       error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len, token->str);
     }
@@ -440,7 +442,6 @@ Node *stmt() {
     }
   } else if (token->kind == TK_STRUCT) {
     token = token->next;
-    Token *tok;
     tok = consume_ident();
     if (!tok) {
       error_at(token->str, "expected an identifier but got \"%.*s\" [in struct definition]", token->len, token->str);
@@ -503,7 +504,7 @@ Node *stmt() {
           error_at(token->str, "expected ',' after member declaration [in typedef]");
         }
       }
-      Token *tok = consume_ident();
+      tok = consume_ident();
       if (!tok) {
         error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
       } else if (find_enum(tok)) {
@@ -544,7 +545,7 @@ Node *stmt() {
     node->cond = logical();
     node->cond->endline = TRUE;
     expect(")", "after equality", "while");
-    int loop_id_prev = loop_id;
+    loop_id_prev = loop_id;
     loop_id = node->id;
     node->then = stmt();
     loop_id = loop_id_prev;
@@ -554,8 +555,8 @@ Node *stmt() {
     node = new_node(ND_FOR);
     node->id = labelseq++;
     if (is_type(token)) {
-      Type *type = consume_type();
-      Token *tok = consume_ident();
+      type = consume_type();
+      tok = consume_ident();
       if (!tok) {
         error_at(token->str, "expected an identifier but got \"%.*s\" [in for]", token->len, token->str);
       }
@@ -571,7 +572,7 @@ Node *stmt() {
     node->inc = expr();
     node->inc->endline = TRUE;
     expect(")", "after step expression", "for");
-    int loop_id_prev = loop_id;
+    loop_id_prev = loop_id;
     loop_id = node->id;
     node->then = stmt();
     loop_id = loop_id_prev;
@@ -770,74 +771,28 @@ Type *resolve_type_mul(Type *left, Type *right, char *ptr) {
   error_at(ptr, "invalid operands to binary expression [in resolve_type_mul]");
   return NULL;
 }
-
 // mul = unary ("*" unary | "/" unary)*
 Node *mul() {
   char *consumed_ptr_prev;
-  Node *node = refer_struct();
+  Node *node = unary();
 
   while (TRUE) {
     if (consume("*")) {
       consumed_ptr_prev = consumed_ptr;
-      node = new_binary(ND_MUL, node, refer_struct());
+      node = new_binary(ND_MUL, node, unary());
       node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
     } else if (consume("/")) {
       consumed_ptr_prev = consumed_ptr;
-      node = new_binary(ND_DIV, node, refer_struct());
+      node = new_binary(ND_DIV, node, unary());
       node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
     } else if (consume("%")) {
       consumed_ptr_prev = consumed_ptr;
-      node = new_binary(ND_MOD, node, refer_struct());
+      node = new_binary(ND_MOD, node, unary());
       node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
     } else {
       return node;
     }
   }
-}
-
-// Structure Reference
-Node *refer_struct() {
-  Token *prev_tok = token;
-  Node *node = unary();
-  if (consume("->")) {
-    if (node->type->ty != TY_PTR) {
-      error_at(prev_tok->str, "%.*s is not a pointer [in struct reference]", prev_tok->len, prev_tok->str);
-    }
-    Token *tok = consume_ident();
-    if (!tok) {
-      error_at(token->str, "expected an identifier but got \"%.*s\" [in struct reference]", token->len, token->str);
-    }
-    Struct *struct_ = node->type->ptr_to->struct_;
-    if (!struct_) {
-      error_at(prev_tok->str, "unknown struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
-    } else if (!struct_->size) {
-      error_at(prev_tok->str, "not initialized struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
-    }
-    LVar *var = find_struct_member(struct_, tok);
-    Node *offset_node = new_num(var->offset);
-    Node *ptr = new_binary(ND_ADD, node, offset_node);
-    Type *type = calloc(1, sizeof(Type));
-    type->ty = TY_PTR;
-    type->ptr_to = var->type;
-    ptr->type = type;
-    if (consume("[")) {
-      char *consumed_ptr_prev = consumed_ptr;
-      if (!is_ptr_or_arr(var->type)) {
-        error_at(consumed_ptr_prev, "invalid array access [in struct reference]");
-      }
-      ptr = new_add(ptr, logical(), consumed_ptr_prev);
-      expect("]", "after number", "struct reference");
-      node = new_node(ND_DEREF);
-      node->lhs = ptr;
-      node->type = var->type->ptr_to;
-    } else {
-      node = new_node(ND_DEREF);
-      node->lhs = ptr;
-      node->type = var->type;
-    }
-    return node;
-  }
-  return node;
 }
 
 // unary = ("+" | "-")? unary
@@ -848,9 +803,9 @@ Node *unary() {
     return new_num(get_sizeof(unary()->type));
   }
   if (consume("+"))
-    return primary();
+    return refer_struct();
   if (consume("-")) {
-    node = new_binary(ND_SUB, new_num(0), primary());
+    node = new_binary(ND_SUB, new_num(0), refer_struct());
     node->type = node->rhs->type;
     return node;
   }
@@ -878,12 +833,60 @@ Node *unary() {
     node->type = new_type_int();
     return node;
   }
-  return primary();
+  return refer_struct();
+}
+
+// Structure Reference
+Node *refer_struct() {
+  Token *prev_tok = token;
+  Node *node = primary();
+  while (TRUE) {
+    if (consume("->")) {
+      if (node->type->ty != TY_PTR) {
+        error_at(prev_tok->str, "%.*s is not a pointer [in struct reference]", prev_tok->len, prev_tok->str);
+      }
+      Token *tok = consume_ident();
+      if (!tok) {
+        error_at(token->str, "expected an identifier but got \"%.*s\" [in struct reference]", token->len, token->str);
+      }
+      Struct *struct_ = node->type->ptr_to->struct_;
+      if (!struct_) {
+        error_at(prev_tok->str, "unknown struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
+      } else if (!struct_->size) {
+        error_at(prev_tok->str, "not initialized struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
+      }
+      LVar *var = find_struct_member(struct_, tok);
+      Node *offset_node = new_num(var->offset);
+      Node *ptr = new_binary(ND_ADD, node, offset_node);
+      Type *type = calloc(1, sizeof(Type));
+      type->ty = TY_PTR;
+      type->ptr_to = var->type;
+      ptr->type = type;
+      if (consume("[")) {
+        char *consumed_ptr_prev = consumed_ptr;
+        if (!is_ptr_or_arr(var->type)) {
+          error_at(consumed_ptr_prev, "invalid array access [in struct reference]");
+        }
+        ptr = new_add(ptr, logical(), consumed_ptr_prev);
+        expect("]", "after number", "struct reference");
+        node = new_node(ND_DEREF);
+        node->lhs = ptr;
+        node->type = var->type->ptr_to;
+      } else {
+        node = new_node(ND_DEREF);
+        node->lhs = ptr;
+        node->type = var->type;
+      }
+    } else
+      return node;
+  }
 }
 
 // primary = "(" expr ")" | num
 Node *primary() {
   Node *node;
+  Token *tok;
+  Type *type;
 
   // 括弧
   if (consume("(")) {
@@ -915,53 +918,21 @@ Node *primary() {
     node->str = str;
     node->type = calloc(1, sizeof(Type));
     node->type->ty = TY_PTR;
-    Type *type = calloc(1, sizeof(Type));
+    type = calloc(1, sizeof(Type));
     type->ty = TY_CHAR;
     node->type->ptr_to = type;
     return node;
   }
 
   // 型
-  if (is_type(token)) {
-    if (token->kind == TK_TYPE) {
-      Token *tok = token;
-      consumed_ptr = token->str;
-      token = token->next;
-      Type *type = calloc(1, sizeof(Type));
-      if (memcmp(tok->str, "int", tok->len) == 0) {
-        type->ty = TY_INT;
-      } else if (memcmp(tok->str, "char", tok->len) == 0) {
-        type->ty = TY_CHAR;
-      } else if (memcmp(tok->str, "void", tok->len) == 0) {
-        type->ty = TY_VOID;
-      } else {
-        error_at(tok->str, "expected a type but got \"%.*s\" [in primary]", tok->len, tok->str);
-      }
-      node = new_node(ND_TYPE);
-      node->type = type;
-      return node;
-    }
-
-    Token *tok = consume_ident();
-    Struct *struct_ = find_struct(tok);
-    Enum *enum_ = find_enum(tok);
-    if (struct_) {
-      node = new_node(ND_TYPE);
-      node->type = calloc(1, sizeof(Type));
-      node->type->ty = TY_STRUCT;
-      node->type->struct_ = struct_;
-      return node;
-    } else if (enum_) {
-      node = new_node(ND_TYPE);
-      node->type = calloc(1, sizeof(Type));
-      node->type->ty = TY_INT;
-      return node;
-    } else {
-      error_at(token->str, "unknown type: %.*s [in primary]", token->len, token->str);
-    }
+  type = consume_type();
+  if (type) {
+    node = new_node(ND_TYPE);
+    node->type = type;
+    return node;
   }
 
-  Token *tok = consume_ident();
+  tok = consume_ident();
   if (!tok) {
     error_at(token->str, "expected an identifier but got \"%.*s\" [in primary]", token->len, token->str);
     return NULL;

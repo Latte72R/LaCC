@@ -144,8 +144,8 @@ void gen(Node *node) {
     printf("  ret\n");
     return;
   } else if (node->kind == ND_BLOCK) {
-    for (int i = 0; (&(node->body[i]))->kind != ND_NONE; i++) {
-      gen(&(node->body[i]));
+    for (int i = 0; node->body[i]->kind != ND_NONE; i++) {
+      gen(node->body[i]);
     }
     return;
   } else if (node->kind == ND_IF) {
@@ -216,7 +216,7 @@ void gen(Node *node) {
         error("invalid type size [in ND_FUNCDEF]");
       }
     }
-    gen(node->body);
+    gen(node->lhs);
     if (node->fn->type->ty == TY_VOID) {
       printf("  mov rsp, rbp\n");
       printf("  pop rbp\n");

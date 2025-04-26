@@ -178,8 +178,8 @@ struct Node {
   Node *els;     // kindがND_IFの場合のみ使う
   Node *init;    // kindがND_FORの場合のみ使う
   Node *inc;     // kindがND_FORの場合のみ使う
-  Node *body;    // kindがND_BLOCKの場合のみ使う
-  Node *args[4]; // kindがND_FUNCALLの場合のみ使う
+  Node **body;   // kindがND_BLOCKの場合のみ使う
+  Node *args[6]; // kindがND_FUNCALLの場合のみ使う
   Function *fn;  // kindがND_FUNCDEF, ND_FUNCALLの場合のみ使う
   LVar *var;     // kindがND_LVAR, ND_GVARの場合のみ使う
   String *str;   // kindがND_STRの場合のみ使う
