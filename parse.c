@@ -14,6 +14,8 @@ extern int loop_id;
 extern LVar *globals;
 extern Struct *structs;
 extern StructTag *struct_tags;
+extern Enum *enums;
+extern LVar *enum_members;
 extern String *strings;
 
 char *consumed_ptr;
@@ -42,7 +44,24 @@ Struct *find_struct(Token *tok) {
   return NULL;
 }
 
-LVar *find_member(Struct *struct_, Token *tok) {
+// enumを名前で検索する。見つからなかった場合はNULLを返す。
+Enum *find_enum(Token *tok) {
+  for (Enum *var = enums; var; var = var->next)
+    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+      return var;
+  return NULL;
+}
+
+// enumのメンバーを名前で検索する。見つからなかった場合はNULLを返す。
+LVar *find_enum_member(Token *tok) {
+  for (LVar *var = enum_members; var; var = var->next)
+    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+      return var;
+  return NULL;
+}
+
+// structのメンバーを名前で検索する。見つからなかった場合はNULLを返す。
+LVar *find_struct_member(Struct *struct_, Token *tok) {
   for (LVar *var = struct_->var; var; var = var->next)
     if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
       return var;
@@ -90,10 +109,15 @@ Type *consume_type() {
   Type *type = calloc(1, sizeof(Type));
   if (tok->kind == TK_IDENT) {
     Struct *struct_ = find_struct(tok);
-    if (!struct_)
+    Enum *enum_ = find_enum(tok);
+    if (struct_) {
+      type->ty = TY_STRUCT;
+      type->struct_ = struct_;
+    } else if (enum_) {
+      type->ty = TY_INT;
+    } else {
       error_at(tok->str, "unknown type: %.*s", tok->len, tok->str);
-    type->ty = TY_STRUCT;
-    type->struct_ = struct_;
+    }
   } else if (tok->kind != TK_TYPE) {
     error_at(tok->str, "expected a type but got \"%.*s\" [in consume type]", token->len, token->str);
   } else if (memcmp(tok->str, "int", tok->len) == 0) {
@@ -120,6 +144,9 @@ int is_type(Token *tok) {
   if (tok->kind == TK_IDENT) {
     Struct *struct_ = find_struct(tok);
     if (struct_)
+      return TRUE;
+    Enum *enum_ = find_enum(tok);
+    if (enum_)
       return TRUE;
   }
   return FALSE;
@@ -207,16 +234,17 @@ Node *new_num(int val) {
 Node *function_definition(Token *tok, Type *type) {
   Function *fn = find_fn(tok);
   if (fn) {
-    error_at(token->str, "duplicated function name: %.*s", tok->len, tok->str);
+    // error_at(token->str, "duplicated function name: %.*s", tok->len, tok->str);
+  } else {
+    fn = calloc(1, sizeof(Function));
+    fn->next = functions;
+    functions = fn;
   }
-  fn = calloc(1, sizeof(Function));
-  fn->next = functions;
   fn->name = tok->str;
   fn->len = tok->len;
   fn->locals = calloc(1, sizeof(LVar));
   fn->locals->offset = 0;
   fn->type = type;
-  functions = fn;
   Function *prev_fn = current_fn;
   current_fn = fn;
   Node *node = new_node(ND_FUNCDEF);
@@ -432,6 +460,47 @@ Node *stmt() {
       tag->main = var;
       tag->next = struct_tags;
       struct_tags = tag;
+    } else if (token->kind == TK_ENUM) {
+      token = token->next;
+      node = new_node(ND_TYPEDEF);
+      int offset = 0;
+      expect("{", "before enum members", "enum");
+      while (token->kind != TK_EOF && !(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
+        Token *member_tok = consume_ident();
+        if (!member_tok) {
+          error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
+        }
+        LVar *member_var = calloc(1, sizeof(LVar));
+        member_var->name = member_tok->str;
+        member_var->len = member_tok->len;
+        member_var->type = calloc(1, sizeof(Type));
+        member_var->type->ty = TY_INT;
+        member_var->offset = offset;
+        offset++;
+        member_var->next = enum_members;
+        enum_members = member_var;
+        if (consume(",")) {
+          continue;
+        } else if (consume("}")) {
+          break;
+        } else {
+          error_at(token->str, "expected ',' after member declaration [in typedef]");
+        }
+      }
+      Token *tok = consume_ident();
+      if (!tok) {
+        error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
+      } else if (find_enum(tok)) {
+        error_at(tok->str, "duplicated enum name: %.*s [in typedef]", tok->len, tok->str);
+      }
+      expect(";", "after enum definition", "typedef");
+      Enum *enum_ = calloc(1, sizeof(Enum));
+      enum_->name = tok->str;
+      enum_->len = tok->len;
+      enum_->next = enums;
+      enums = enum_;
+      node->endline = TRUE;
+      return node;
     } else {
       error_at(token->str, "expected a struct but got \"%.*s\" [in typedef]", token->len, token->str);
     }
@@ -726,7 +795,7 @@ Node *refer_struct() {
     } else if (!struct_->size) {
       error_at(prev_tok->str, "not initialized struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
     }
-    LVar *var = find_member(struct_, tok);
+    LVar *var = find_struct_member(struct_, tok);
     Node *offset_node = new_num(var->offset);
     Node *ptr = new_binary(ND_ADD, node, offset_node);
     Type *type = calloc(1, sizeof(Type));
@@ -843,13 +912,19 @@ Node *primary() {
       return node;
     }
 
-    // struct
-    Struct *struct_ = find_struct(consume_ident());
+    Token *tok = consume_ident();
+    Struct *struct_ = find_struct(tok);
+    Enum *enum_ = find_enum(tok);
     if (struct_) {
       node = new_node(ND_TYPE);
       node->type = calloc(1, sizeof(Type));
       node->type->ty = TY_STRUCT;
       node->type->struct_ = struct_;
+      return node;
+    } else if (enum_) {
+      node = new_node(ND_TYPE);
+      node->type = calloc(1, sizeof(Type));
+      node->type->ty = TY_INT;
       return node;
     } else {
       error_at(token->str, "unknown type: %.*s [in primary]", token->len, token->str);
@@ -862,8 +937,15 @@ Node *primary() {
     return NULL;
   }
 
+  // enumのメンバー
+  LVar *member = find_enum_member(tok);
+  if (member) {
+    node = new_num(member->offset);
+    return node;
+  }
+
   // 変数
-  else if (!consume("(")) {
+  if (!consume("(")) {
     LVar *lvar = find_lvar(tok);
     LVar *gvar = find_gver(tok);
     if (lvar) {

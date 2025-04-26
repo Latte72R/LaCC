@@ -12,6 +12,8 @@ Function *current_fn;
 LVar *globals;
 Struct *structs;
 StructTag *struct_tags;
+Enum *enums;
+LVar *enum_members;
 String *strings;
 char *filename;
 
