@@ -31,7 +31,7 @@ typedef enum {
   TK_TYPEDEF, // typedef
   TK_ENUM,    // enum
   TK_STRUCT,  // struct
-  TK_EOF,     // 入力の終わりを表すトークン
+  TK_EOF      // 入力の終わりを表すトークン
 } TokenKind;
 
 // Token type
@@ -161,7 +161,7 @@ typedef enum {
   ND_STRUCT,   // 構造体
   ND_TYPEDEF,  // typedef
   ND_TYPE,     // 型
-  ND_NONE,     // 空のノード
+  ND_NONE      // 空のノード
 } NodeKind;
 
 // 抽象構文木のノード

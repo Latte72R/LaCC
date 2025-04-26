@@ -137,6 +137,18 @@ ENUM test24() {
 
 char test25() { return 'a'; }
 
+int test26() {
+  int a = 0;
+  int i = 0;
+  while (i < 10) {
+    i++;
+    if (i % 3 == 0)
+      continue;
+    a += i;
+  }
+  return a;
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -171,6 +183,7 @@ int main() {
   check(test23(), 23, 35);
   check(test24(), 24, 2);
   check(test25(), 25, 97);
+  check(test26(), 26, 37);
 
   if (failures == 0) {
     printf("\033[1m\033[32mAll tests passed!\033[0m\n");

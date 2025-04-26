@@ -170,8 +170,8 @@ void gen(Node *node) {
     printf("  cmp rax, 0\n");
     printf("  je .Lend%d\n", node->id);
     gen(node->then);
-    printf("  jmp .Lbegin%d\n", node->id);
     printf(".Lstep%d:\n", node->id);
+    printf("  jmp .Lbegin%d\n", node->id);
     printf(".Lend%d:\n", node->id);
     return;
   } else if (node->kind == ND_FOR) {
@@ -234,7 +234,7 @@ void gen(Node *node) {
       if (get_type_size(node->args[i]->type) == 4) {
         printf("  mov %s, eax\n", regs4(i));
       } else if (get_type_size(node->args[i]->type) == 1) {
-        printf("  mov %s, al\n", regs1(i));
+        printf("  movzx %s, al\n", regs4(i));
       } else if (get_type_size(node->args[i]->type) == 8) {
         printf("  mov %s, rax\n", regs8(i));
       } else {

@@ -417,6 +417,8 @@ Node *stmt() {
     while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
       node->body[i++] = stmt();
       node->body = realloc(node->body, sizeof(Node *) * (i + 1));
+      if (!node->body)
+        error("realloc failed");
     }
     node->body[i] = new_node(ND_NONE);
     expect("}", "after block", "block");
@@ -614,6 +616,8 @@ void program() {
   while (token->kind != TK_EOF) {
     code[i++] = stmt();
     code = realloc(code, sizeof(Node *) * (i + 1));
+    if (!code)
+      error("realloc failed");
   }
   code[i] = new_node(ND_NONE);
 }
