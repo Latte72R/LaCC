@@ -86,7 +86,7 @@ Token *tokenize() {
     }
 
     // 行コメントをスキップ
-    if (strncmp(p, "//", 2) == 0) {
+    if (startswith(p, "//")) {
       p += 2;
       while (*p != '\n' && *p != '\0')
         p++;
@@ -94,7 +94,7 @@ Token *tokenize() {
     }
 
     // ブロックコメントをスキップ
-    if (strncmp(p, "/*", 2) == 0) {
+    if (startswith(p, "/*")) {
       char *q = strstr(p + 2, "*/");
       if (!q)
         error_at(p, "unclosed block comment [in tokenize]");
@@ -118,6 +118,23 @@ Token *tokenize() {
       continue;
     }
 
+    // char
+    if (*p == '\'') {
+      char *q = p;
+      int len;
+      p++;
+      if (*p == '\\') {
+        p++;
+        len = 4;
+      } else {
+        len = 3;
+      }
+      cur = new_token(TK_NUM, cur, q, len);
+      cur->val = *p;
+      p += 2;
+      continue;
+    }
+
     // Integer literal
     if (isdigit(*p)) {
       cur = new_token(TK_NUM, cur, p, 0);
@@ -127,91 +144,91 @@ Token *tokenize() {
       continue;
     }
 
-    if (strncmp(p, "sizeof", 6) == 0 && !is_alnum(p[6])) {
+    if (startswith(p, "sizeof") && !is_alnum(p[6])) {
       cur = new_token(TK_RESERVED, cur, p, 6);
       p += 6;
       continue;
     }
 
-    if (strncmp(p, "else", 4) == 0 && !is_alnum(p[4])) {
+    if (startswith(p, "else") && !is_alnum(p[4])) {
       cur = new_token(TK_RESERVED, cur, p, 4);
       p += 4;
       continue;
     }
 
-    if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
+    if (startswith(p, "return") && !is_alnum(p[6])) {
       cur = new_token(TK_RETURN, cur, p, 6);
       p += 6;
       continue;
     }
 
-    if (strncmp(p, "extern", 6) == 0 && !is_alnum(p[6])) {
+    if (startswith(p, "extern") && !is_alnum(p[6])) {
       cur = new_token(TK_EXTERN, cur, p, 6);
       p += 6;
       continue;
     }
 
-    if (strncmp(p, "enum", 4) == 0 && !is_alnum(p[4])) {
+    if (startswith(p, "enum") && !is_alnum(p[4])) {
       cur = new_token(TK_ENUM, cur, p, 4);
       p += 4;
       continue;
     }
 
-    if (strncmp(p, "struct", 6) == 0 && !is_alnum(p[6])) {
+    if (startswith(p, "struct") && !is_alnum(p[6])) {
       cur = new_token(TK_STRUCT, cur, p, 6);
       p += 6;
       continue;
     }
 
-    if (strncmp(p, "typedef", 7) == 0 && !is_alnum(p[7])) {
+    if (startswith(p, "typedef") && !is_alnum(p[7])) {
       cur = new_token(TK_TYPEDEF, cur, p, 7);
       p += 7;
       continue;
     }
 
-    if (strncmp(p, "if", 2) == 0 && !is_alnum(p[2])) {
+    if (startswith(p, "if") && !is_alnum(p[2])) {
       cur = new_token(TK_IF, cur, p, 2);
       p += 2;
       continue;
     }
 
-    if (strncmp(p, "while", 5) == 0 && !is_alnum(p[5])) {
+    if (startswith(p, "while") && !is_alnum(p[5])) {
       cur = new_token(TK_WHILE, cur, p, 5);
       p += 5;
       continue;
     }
 
-    if (strncmp(p, "for", 3) == 0 && !is_alnum(p[3])) {
+    if (startswith(p, "for") && !is_alnum(p[3])) {
       cur = new_token(TK_FOR, cur, p, 3);
       p += 3;
       continue;
     }
 
-    if (strncmp(p, "int", 3) == 0 && !is_alnum(p[3])) {
+    if (startswith(p, "int") && !is_alnum(p[3])) {
       cur = new_token(TK_TYPE, cur, p, 3);
       p += 3;
       continue;
     }
 
-    if (strncmp(p, "char", 4) == 0 && !is_alnum(p[4])) {
+    if (startswith(p, "char") && !is_alnum(p[4])) {
       cur = new_token(TK_TYPE, cur, p, 4);
       p += 4;
       continue;
     }
 
-    if (strncmp(p, "void", 4) == 0 && !is_alnum(p[4])) {
+    if (startswith(p, "void") && !is_alnum(p[4])) {
       cur = new_token(TK_TYPE, cur, p, 4);
       p += 4;
       continue;
     }
 
-    if (strncmp(p, "break", 5) == 0 && !is_alnum(p[5])) {
+    if (startswith(p, "break") && !is_alnum(p[5])) {
       cur = new_token(TK_BREAK, cur, p, 5);
       p += 5;
       continue;
     }
 
-    if (strncmp(p, "continue", 8) == 0 && !is_alnum(p[8])) {
+    if (startswith(p, "continue") && !is_alnum(p[8])) {
       cur = new_token(TK_CONTINUE, cur, p, 8);
       p += 8;
       continue;

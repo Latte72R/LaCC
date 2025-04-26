@@ -1,6 +1,6 @@
 
 void printf();
-void calloc();
+void *calloc();
 
 int num;
 char str[2];
@@ -135,6 +135,8 @@ ENUM test24() {
   return a;
 }
 
+char test25() { return 'a'; }
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -168,6 +170,7 @@ int main() {
   check(test22(), 22, 12);
   check(test23(), 23, 35);
   check(test24(), 24, 2);
+  check(test25(), 25, 97);
 
   if (failures == 0) {
     printf("\033[1m\033[32mAll tests passed!\033[0m\n");
