@@ -5,7 +5,7 @@
 // Parser
 //
 
-extern Node *code[100];
+extern Node **code;
 extern Token *token;
 extern Function *functions;
 extern Function *current_fn;
@@ -610,9 +610,12 @@ Node *stmt() {
 
 void program() {
   int i = 0;
-  while (token->kind != TK_EOF)
+  code = calloc(1, sizeof(Node *));
+  while (token->kind != TK_EOF) {
     code[i++] = stmt();
-  code[i] = NULL;
+    code = realloc(code, sizeof(Node *) * (i + 1));
+  }
+  code[i] = new_node(ND_NONE);
 }
 
 Node *expr() { return assign(); }

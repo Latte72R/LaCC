@@ -3,7 +3,7 @@
 
 char *user_input;
 Token *token;
-Node *code[8000];
+Node **code;
 int labelseq = 1;
 int variable_cnt = 0;
 int loop_id = -1;
@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
 
   // 先頭の式から順にコード生成
   printf(".text\n");
-  for (int i = 0; code[i]; i++) {
+  for (int i = 0; code[i]->kind != ND_NONE; i++) {
     gen(code[i]);
   }
   return 0;
