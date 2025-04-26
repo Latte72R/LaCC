@@ -250,7 +250,7 @@ Node *function_definition(Token *tok, Type *type) {
   Node *node = new_node(ND_FUNCDEF);
   node->fn = fn;
   if (!consume(")")) {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 6; i++) {
       type = consume_type();
       Token *tok_lvar = consume_ident();
       if (!tok_lvar) {
@@ -344,7 +344,13 @@ Node *global_variable_declaration(Token *tok, Type *type) {
   lvar->next = globals;
   globals = lvar;
   if (consume("=")) {
-    lvar->offset = expect_number();
+    int sign = 1;
+    if (consume("-")) {
+      sign = -1;
+    } else if (consume("+")) {
+      sign = 1;
+    }
+    lvar->offset = expect_number() * sign;
   }
   expect(";", "after line", "global variable declaration");
   node->endline = TRUE;
@@ -410,7 +416,7 @@ Node *stmt() {
     while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
       node->body[i++] = *stmt();
     }
-    node->body[i].kind = ND_NONE;
+    (&node->body[i])->kind = ND_NONE;
     expect("}", "after block", "block");
   } else if (is_type(token)) {
     // 変数宣言または関数定義
@@ -687,9 +693,10 @@ Node *relational() {
 Node *new_add(Node *lhs, Node *rhs, char *ptr) {
   Node *node;
   Node *mul_node;
-  // どちらもポインタならエラー
+  // lhsがptr, rhsがptrなら
   if (is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) {
-    error_at(ptr, "invalid type: ptr + ptr [in new_add]");
+    node = new_binary(ND_SUB, lhs, rhs);
+    node->type = lhs->type;
   }
   // lhsがptr, rhsがintなら
   if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
@@ -717,7 +724,8 @@ Node *new_sub(Node *lhs, Node *rhs, char *ptr) {
 
   // lhsがptr, rhsがptrなら
   if (is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) {
-    error_at(ptr, "invalid operands to binary expression [in new_sub]");
+    node = new_binary(ND_SUB, lhs, rhs);
+    node->type = lhs->type;
   }
   // lhsがint, rhsがptrなら
   if (is_number(lhs->type) && is_ptr_or_arr(rhs->type)) {
@@ -1013,7 +1021,7 @@ Node *primary() {
     node->id = labelseq++;
     node->type = fn->type;
     if (!consume(")")) {
-      for (int i = 0; i < 4; i++) {
+      for (int i = 0; i < 6; i++) {
         node->args[i] = logical();
         if (!consume(","))
           break;

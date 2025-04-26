@@ -74,8 +74,9 @@ int is_alnum(char c) {
 // Tokenize `user_input` and returns new tokens.
 Token *tokenize() {
   char *p = user_input;
+  char *q;
   Token head;
-  head.next = NULL;
+  (&head)->next = NULL;
   Token *cur = &head;
 
   while (*p) {
@@ -95,7 +96,7 @@ Token *tokenize() {
 
     // ブロックコメントをスキップ
     if (startswith(p, "/*")) {
-      char *q = strstr(p + 2, "*/");
+      q = strstr(p + 2, "*/");
       if (!q)
         error_at(p, "unclosed block comment [in tokenize]");
       p = q + 2;
@@ -120,7 +121,7 @@ Token *tokenize() {
 
     // char
     if (*p == '\'') {
-      char *q = p;
+      q = p;
       int len;
       p++;
       if (*p == '\\') {
@@ -131,14 +132,36 @@ Token *tokenize() {
       }
       cur = new_token(TK_NUM, cur, q, len);
       cur->val = *p;
-      p += 2;
+      p++;
+      if (*p != '\'') {
+        error_at(p, "unclosed string literal [in tokenize]");
+      }
+      p++;
+      continue;
+    }
+
+    if (*p == '"') {
+      p++;
+      q = p;
+      while (*p != '"') {
+        if (*p == '\0') {
+          error_at(q - 1, "unclosed string literal [in tokenize]");
+        }
+        if (*p == '\\') {
+          p += 2;
+        } else {
+          p++;
+        }
+      }
+      cur = new_token(TK_STR, cur, q, p - q);
+      p++;
       continue;
     }
 
     // Integer literal
     if (isdigit(*p)) {
       cur = new_token(TK_NUM, cur, p, 0);
-      char *q = p;
+      q = p;
       cur->val = strtol(p, &p, 10);
       cur->len = p - q;
       continue;
@@ -234,19 +257,6 @@ Token *tokenize() {
       continue;
     }
 
-    if (*p == '"') {
-      char *q = ++p;
-      while (*p != '"') {
-        if (*p == '\0') {
-          error_at(q - 1, "unclosed string literal [in tokenize]");
-        }
-        p++;
-      }
-      cur = new_token(TK_STR, cur, q, p - q);
-      p++;
-      continue;
-    }
-
     if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z') || *p == '_') {
       int i = 0;
       while (('a' <= *(p + i) && *(p + i) <= 'z') || ('A' <= *(p + i) && *(p + i) <= 'Z') ||
@@ -262,5 +272,5 @@ Token *tokenize() {
   }
 
   new_token(TK_EOF, cur, p, 0);
-  return head.next;
+  return (&head)->next;
 }

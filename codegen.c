@@ -5,9 +5,56 @@
 // Code generator
 //
 
-char *regs1[4] = {"rdi", "rsi", "rdx", "rcx"};
-char *regs4[4] = {"edi", "esi", "edx", "ecx"};
-char *regs8[4] = {"rdi", "rsi", "rdx", "rcx"};
+char *regs1(int i) {
+  if (i == 0)
+    return "dil";
+  else if (i == 1)
+    return "sil";
+  else if (i == 2)
+    return "dl";
+  else if (i == 3)
+    return "cl";
+  else if (i == 4)
+    return "r8b";
+  else if (i == 5)
+    return "r9b";
+  else
+    return NULL;
+}
+
+char *regs4(int i) {
+  if (i == 0)
+    return "edi";
+  else if (i == 1)
+    return "esi";
+  else if (i == 2)
+    return "edx";
+  else if (i == 3)
+    return "ecx";
+  else if (i == 4)
+    return "r8d";
+  else if (i == 5)
+    return "r9d";
+  else
+    return NULL;
+}
+
+char *regs8(int i) {
+  if (i == 0)
+    return "rdi";
+  else if (i == 1)
+    return "rsi";
+  else if (i == 2)
+    return "rdx";
+  else if (i == 3)
+    return "rcx";
+  else if (i == 4)
+    return "r8";
+  else if (i == 5)
+    return "r9";
+  else
+    return NULL;
+}
 
 void gen_lval(Node *node) {
   if (node->kind == ND_LVAR || node->kind == ND_VARDEC) {
@@ -156,15 +203,15 @@ void gen(Node *node) {
       offset = node->fn->locals->offset;
     }
     printf("  sub rsp, %d\n", offset);
-    for (int i = 0; i < 4 && node->args[i]; i++) {
+    for (int i = 0; i < 6 && node->args[i]; i++) {
       gen_lval(node->args[i]);
       printf("  pop rax\n");
       if (get_type_size(node->args[i]->type) == 4) {
-        printf("  mov DWORD PTR [rax], %s\n", regs4[i]);
+        printf("  mov DWORD PTR [rax], %s\n", regs4(i));
       } else if (get_type_size(node->args[i]->type) == 1) {
-        printf("  mov BYTE PTR [rax], %s\n", regs1[i]);
+        printf("  mov BYTE PTR [rax], %s\n", regs1(i));
       } else if (get_type_size(node->args[i]->type) == 8) {
-        printf("  mov QWORD PTR [rax], %s\n", regs8[i]);
+        printf("  mov QWORD PTR [rax], %s\n", regs8(i));
       } else {
         error("invalid type size [in ND_FUNCDEF]");
       }
@@ -177,7 +224,7 @@ void gen(Node *node) {
     }
     return;
   } else if (node->kind == ND_FUNCALL) {
-    for (int i = 0; i < 4 && node->args[i]; i++) {
+    for (int i = 0; i < 6 && node->args[i]; i++) {
       gen(node->args[i]);
     }
     for (int i = 3; i >= 0; i--) {
@@ -185,11 +232,11 @@ void gen(Node *node) {
         continue;
       printf("  pop rax\n");
       if (get_type_size(node->args[i]->type) == 4) {
-        printf("  mov %s, eax\n", regs4[i]);
+        printf("  mov %s, eax\n", regs4(i));
       } else if (get_type_size(node->args[i]->type) == 1) {
-        printf("  movzx %s, al\n", regs1[i]);
+        printf("  mov %s, al\n", regs1(i));
       } else if (get_type_size(node->args[i]->type) == 8) {
-        printf("  mov %s, rax\n", regs8[i]);
+        printf("  mov %s, rax\n", regs8(i));
       } else {
         error("invalid type size [in ND_FUNCALL]");
       }
