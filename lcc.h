@@ -137,6 +137,7 @@ typedef enum {
   ND_OR,       // ||
   ND_NOT,      // !
   ND_ASSIGN,   // =
+  ND_POSTINC,  // ++ or --
   ND_LVAR,     // ローカル変数
   ND_VARDEC,   // 変数宣言
   ND_GVAR,     // グローバル変数

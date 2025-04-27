@@ -1,6 +1,5 @@
 
 #include "lcc.h"
-
 //
 // Tokenizer
 //
@@ -75,6 +74,7 @@ int is_alnum(char c) {
 Token *tokenize() {
   char *p = user_input;
   char *q;
+  int i;
   Token head;
   (&head)->next = NULL;
   Token *cur = &head;
@@ -114,7 +114,7 @@ Token *tokenize() {
     }
 
     // Single-letter punctuator
-    if (strchr("+-*/()<>={}[];&,%%!", *p)) {
+    if (strchr("+-*/()<>={}[];&,%!", *p)) {
       cur = new_token(TK_RESERVED, cur, p++, 1);
       continue;
     }
@@ -123,20 +123,49 @@ Token *tokenize() {
     if (*p == '\'') {
       q = p;
       int len;
+      char val;
       p++;
+
       if (*p == '\\') {
+        p++;
+        if (*p == 'n') {
+          val = '\n';
+        } else if (*p == 't') {
+          val = '\t';
+        } else if (*p == 'r') {
+          val = '\r';
+        } else if (*p == 'b') {
+          val = '\b';
+        } else if (*p == 'f') {
+          val = '\f';
+        } else if (*p == 'v') {
+          val = '\v';
+        } else if (*p == '\\') {
+          val = '\\';
+        } else if (*p == '\'') {
+          val = '\'';
+        } else if (*p == '\"') {
+          val = '\"';
+        } else if (*p == '0') {
+          val = '\0';
+        } else {
+          error_at(p - 1, "invalid escape sequence in character literal");
+        }
         p++;
         len = 4;
       } else {
+        val = *p;
+        p++;
         len = 3;
       }
-      cur = new_token(TK_NUM, cur, q, len);
-      cur->val = *p;
-      p++;
+
       if (*p != '\'') {
-        error_at(p, "unclosed string literal [in tokenize]");
+        error_at(p, "unclosed character literal");
       }
       p++;
+
+      cur = new_token(TK_NUM, cur, q, len);
+      cur->val = val;
       continue;
     }
 
@@ -258,7 +287,7 @@ Token *tokenize() {
     }
 
     if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z') || *p == '_') {
-      int i = 0;
+      i = 0;
       while (('a' <= *(p + i) && *(p + i) <= 'z') || ('A' <= *(p + i) && *(p + i) <= 'Z') ||
              ('0' <= *(p + i) && *(p + i) <= '9') || *(p + i) == '_') {
         i++;

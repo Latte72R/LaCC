@@ -72,6 +72,7 @@ void gen_lval(Node *node) {
 }
 
 void gen(Node *node) {
+  int i;
   if (node->kind == ND_NUM) {
     if (!node->endline)
       printf("  push %d\n", node->val);
@@ -136,6 +137,34 @@ void gen(Node *node) {
     if (!node->endline)
       printf("  push rdi\n");
     return;
+  } else if (node->kind == ND_POSTINC) {
+    gen_lval(node->lhs);
+    if (!node->endline) {
+      printf("  pop rax\n");
+      if (node->type->ty == TY_INT) {
+        printf("  mov edi, DWORD PTR [rax]\n");
+      } else if (node->type->ty == TY_CHAR) {
+        printf("  movzx edi, BYTE PTR [rax]\n");
+      } else if (node->type->ty == TY_PTR) {
+        printf("  mov rdi, QWORD PTR [rax]\n");
+      }
+      printf("  push rdi\n");
+      printf("  push rax\n");
+    }
+    gen(node->rhs);
+
+    printf("  pop rdi\n");
+    printf("  pop rax\n");
+    if (get_type_size(node->lhs->type) == 4) {
+      printf("  mov DWORD PTR [rax], edi\n");
+    } else if (get_type_size(node->lhs->type) == 1) {
+      printf("  mov BYTE PTR [rax], dil\n");
+    } else if (get_type_size(node->lhs->type) == 8) {
+      printf("  mov QWORD PTR [rax], rdi\n");
+    } else {
+      error("invalid type size [in ND_ASSIGN]");
+    }
+    return;
   } else if (node->kind == ND_RETURN) {
     gen(node->rhs);
     printf("  pop rax\n");
@@ -144,7 +173,7 @@ void gen(Node *node) {
     printf("  ret\n");
     return;
   } else if (node->kind == ND_BLOCK) {
-    for (int i = 0; node->body[i]->kind != ND_NONE; i++) {
+    for (i = 0; node->body[i]->kind != ND_NONE; i++) {
       gen(node->body[i]);
     }
     return;
@@ -203,7 +232,7 @@ void gen(Node *node) {
       offset = node->fn->locals->offset;
     }
     printf("  sub rsp, %d\n", offset);
-    for (int i = 0; i < 6 && node->args[i]; i++) {
+    for (i = 0; i < 6 && node->args[i]; i++) {
       gen_lval(node->args[i]);
       printf("  pop rax\n");
       if (get_type_size(node->args[i]->type) == 4) {
@@ -224,10 +253,10 @@ void gen(Node *node) {
     }
     return;
   } else if (node->kind == ND_FUNCALL) {
-    for (int i = 0; i < 6 && node->args[i]; i++) {
+    for (i = 0; i < 6 && node->args[i]; i++) {
       gen(node->args[i]);
     }
-    for (int i = 3; i >= 0; i--) {
+    for (i = 3; i >= 0; i--) {
       if (!node->args[i])
         continue;
       printf("  pop rax\n");

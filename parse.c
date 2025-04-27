@@ -599,8 +599,12 @@ Node *stmt() {
   } else if (token->kind == TK_RETURN) {
     token = token->next;
     node = new_node(ND_RETURN);
-    node->rhs = logical();
-    expect(";", "after line", "return");
+    if (consume(";")) {
+      node->rhs = new_num(0);
+    } else {
+      node->rhs = logical();
+      expect(";", "after line", "return");
+    }
     node->endline = TRUE;
   } else {
     node = expr();
@@ -981,9 +985,9 @@ Node *primary() {
       node->type = node->lhs->type->ptr_to;
     }
     if (consume("++")) {
-      node = new_binary(ND_ASSIGN, node, new_add(node, new_num(1), consumed_ptr));
+      node = new_binary(ND_POSTINC, node, new_add(node, new_num(1), consumed_ptr));
     } else if (consume("--")) {
-      node = new_binary(ND_ASSIGN, node, new_sub(node, new_num(1), consumed_ptr));
+      node = new_binary(ND_POSTINC, node, new_sub(node, new_num(1), consumed_ptr));
     }
     return node;
   }

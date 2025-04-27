@@ -1,4 +1,6 @@
 
+// This is a comment.
+
 void printf();
 void *calloc();
 
@@ -149,6 +151,13 @@ int test26() {
   return a;
 }
 
+int test27() {
+  int a = 2;
+  int b = a++;
+  a++;
+  return a * b;
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -184,11 +193,12 @@ int main() {
   check(test24(), 24, 2);
   check(test25(), 25, 97);
   check(test26(), 26, 37);
+  check(test27(), 27, 8);
 
   if (failures == 0) {
-    printf("\033[1m\033[32mAll tests passed!\033[0m\n");
+    printf("\033[1;32mAll tests passed!\033[0m\n");
   } else {
-    printf("\033[1m\033[31m %d tests failed\033[0m\n", failures);
+    printf("\033[1;31m %d tests failed\033[0m\n", failures);
   }
   return failures;
 }
