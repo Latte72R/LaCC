@@ -86,9 +86,9 @@ void gen(Node *node) {
     gen_lval(node);
     printf("  pop rax\n");
     if (node->type->ty == TY_INT) {
-      printf("  mov eax, DWORD PTR [rax]\n");
+      printf("  movsxd rax, DWORD PTR [rax]\n");
     } else if (node->type->ty == TY_CHAR) {
-      printf("  movzx eax, BYTE PTR [rax]\n");
+      printf("  movzx rax, BYTE PTR [rax]\n");
     } else if (node->type->ty == TY_PTR) {
       printf("  mov rax, QWORD PTR [rax]\n");
     }
@@ -102,9 +102,9 @@ void gen(Node *node) {
     gen(node->lhs);
     printf("  pop rax\n");
     if (node->type->ty == TY_INT) {
-      printf("  mov eax, DWORD PTR [rax]\n");
+      printf("  movsxd rax, DWORD PTR [rax]\n");
     } else if (node->type->ty == TY_CHAR) {
-      printf("  movzx eax, BYTE PTR [rax]\n");
+      printf("  movzx rax, BYTE PTR [rax]\n");
     } else if (node->type->ty == TY_PTR) {
       printf("  mov rax, QWORD PTR [rax]\n");
     }
@@ -116,6 +116,7 @@ void gen(Node *node) {
     printf("  pop rax\n");
     printf("  cmp rax, 0\n");
     printf("  sete al\n");
+    printf("  movzx rax, al\n");
     if (!node->endline)
       printf("  push rax\n");
     return;
@@ -256,7 +257,7 @@ void gen(Node *node) {
     for (i = 0; i < 6 && node->args[i]; i++) {
       gen(node->args[i]);
     }
-    for (i = 3; i >= 0; i--) {
+    for (i = 5; i >= 0; i--) {
       if (!node->args[i])
         continue;
       printf("  pop rax\n");
@@ -335,12 +336,14 @@ void gen(Node *node) {
     printf("  test rdi, rdi\n");
     printf("  setne dl\n");
     printf("  and al, dl\n");
+    printf("  movzx rax, al\n");
   } else if (node->kind == ND_OR) {
     printf("  test rax, rax\n");
     printf("  setne al\n");
     printf("  test rdi, rdi\n");
     printf("  setne dl\n");
     printf("  or al, dl\n");
+    printf("  movzx rax, al\n");
   } else {
     error("invalid node kind");
   }

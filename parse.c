@@ -254,8 +254,7 @@ Node *function_definition(Token *tok, Type *type) {
       type = consume_type();
       Token *tok_lvar = consume_ident();
       if (!tok_lvar) {
-        error_at(token->str, "expected an identifier but got \"%.*s\" [in function definition]", token->len,
-                 token->str);
+        error_at(consumed_ptr, "expected an identifier [in variable declaration]");
       }
       Node *nd_lvar = new_node(ND_LVAR);
       node->args[i] = nd_lvar;
@@ -386,9 +385,15 @@ Node *new_struct(Token *tok) {
     member_var->type = type;
     member_var->next = struct_->var;
     struct_->var = member_var;
-    int type_size = get_type_size(type);
-    if (offset % type_size != 0) {
-      offset += type_size - (offset % type_size);
+    int type_size = get_sizeof(type);
+    int single_size;
+    if (type->ty == TY_ARR) {
+      single_size = get_type_size(type->ptr_to);
+    } else {
+      single_size = type_size;
+    }
+    if (offset % single_size != 0) {
+      offset += single_size - (offset % single_size);
     }
     member_var->offset = offset;
     offset += type_size;
