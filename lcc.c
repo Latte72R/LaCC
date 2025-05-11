@@ -1600,8 +1600,6 @@ void gen(Node *node) {
     } else if (node->type->ty == TY_PTR) {
       printf("  mov rax, QWORD PTR [rax]\n");
     } else if (node->type->ty == TY_ARR) {
-    } else if (node->type->ty == TY_STRUCT) {
-      error("invalid type [in ND_LVAR]");
     } else {
       error("invalid type [in ND_LVAR]");
     }
