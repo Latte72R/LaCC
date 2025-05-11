@@ -4,6 +4,7 @@
 //
 
 typedef enum {
+  TK_EOF,      // 入力の終わりを表すトークン
   TK_RESERVED, // 記号
   TK_IDENT,    // 識別子
   TK_TYPE,     // 型
@@ -18,8 +19,7 @@ typedef enum {
   TK_STR,     // 文字列
   TK_TYPEDEF, // typedef
   TK_ENUM,    // enum
-  TK_STRUCT,  // struct
-  TK_EOF      // 入力の終わりを表すトークン
+  TK_STRUCT   // struct
 } TokenKind;
 
 // Token type
@@ -32,15 +32,6 @@ struct Token {
   int len;        // Token length
 };
 
-// Reports an error and exit.
-int consume(char *op);
-void expect(char *op, char *err, char *st);
-int expect_number();
-int at_eof();
-Token *new_token(TokenKind kind, Token *cur, char *str, int len);
-int startswith(char *p, char *q);
-Token *tokenize();
-
 // ローカル変数の型
 
 typedef struct String String;
@@ -51,7 +42,7 @@ struct String {
   int label;
 };
 
-typedef enum { TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_VOID, TY_STRUCT } TypeKind;
+typedef enum { TY_NONE, TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_VOID, TY_STRUCT } TypeKind;
 
 typedef struct Type Type;
 
@@ -110,6 +101,7 @@ struct Function {
 //
 
 typedef enum {
+  ND_NONE,     // 空のノード
   ND_ADD,      // +
   ND_SUB,      // -
   ND_MUL,      // *
@@ -147,8 +139,7 @@ typedef enum {
   ND_ENUM,     // 列挙体
   ND_STRUCT,   // 構造体
   ND_TYPEDEF,  // typedef
-  ND_TYPE,     // 型
-  ND_NONE      // 空のノード
+  ND_TYPE      // 型
 } NodeKind;
 
 // 抽象構文木のノード
@@ -172,11 +163,6 @@ struct Node {
   String *str;   // kindがND_STRの場合のみ使う
   Type *type;
 };
-
-Node *new_node(NodeKind kind);
-Node *new_binary(NodeKind kind, Node *lhs, Node *rhs);
-Node *new_num(int val);
-int get_type_size(Type *type);
 
 Node *stmt();
 Node *assign();
@@ -217,13 +203,14 @@ char *strstr();
 char *strchr();
 
 // stdlib.h
-void *calloc();
+void *malloc();
 void *realloc();
 
 char *user_input;
 Token *token;
 Node **code;
-int labelseq = 1;
+int label_cnt = 0;
+int loop_cnt = 0;
 int variable_cnt = 0;
 int loop_id = -1;
 Function *functions;
@@ -243,7 +230,7 @@ void *NULL = 0;
 
 // Create a new token and add it as the next token of `cur`.
 Token *new_token(TokenKind kind, Token *cur, char *str, int len) {
-  Token *tok = calloc(1, sizeof(Token));
+  Token *tok = malloc(sizeof(Token));
   tok->kind = kind;
   tok->str = str;
   tok->len = len;
@@ -493,7 +480,7 @@ Token *tokenize() {
 
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_lvar(Token *tok) {
-  for (LVar *var = current_fn->locals; var; var = var->next)
+  for (LVar *var = current_fn->locals; var->next; var = var->next)
     if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
       return var;
   return NULL;
@@ -501,7 +488,7 @@ LVar *find_lvar(Token *tok) {
 
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_gver(Token *tok) {
-  for (LVar *var = globals; var; var = var->next)
+  for (LVar *var = globals; var->next; var = var->next)
     if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
       return var;
   return NULL;
@@ -509,7 +496,7 @@ LVar *find_gver(Token *tok) {
 
 // structを名前で検索する。見つからなかった場合はNULLを返す。
 Struct *find_struct(Token *tok) {
-  for (Struct *var = structs; var; var = var->next)
+  for (Struct *var = structs; var->next; var = var->next)
     if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
       return var;
   return NULL;
@@ -517,7 +504,7 @@ Struct *find_struct(Token *tok) {
 
 // enumを名前で検索する。見つからなかった場合はNULLを返す。
 Enum *find_enum(Token *tok) {
-  for (Enum *var = enums; var; var = var->next)
+  for (Enum *var = enums; var->next; var = var->next)
     if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
       return var;
   return NULL;
@@ -525,7 +512,7 @@ Enum *find_enum(Token *tok) {
 
 // enumのメンバーを名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_enum_member(Token *tok) {
-  for (LVar *var = enum_members; var; var = var->next)
+  for (LVar *var = enum_members; var->next; var = var->next)
     if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
       return var;
   return NULL;
@@ -533,7 +520,7 @@ LVar *find_enum_member(Token *tok) {
 
 // structのメンバーを名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_struct_member(Struct *struct_, Token *tok) {
-  for (LVar *var = struct_->var; var; var = var->next)
+  for (LVar *var = struct_->var; var->next; var = var->next)
     if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
       return var;
   return NULL;
@@ -541,7 +528,7 @@ LVar *find_struct_member(Struct *struct_, Token *tok) {
 
 // struct_tagを名前で検索する。見つからなかった場合はNULLを返す。
 StructTag *find_struct_tag(Token *tok) {
-  for (StructTag *var = struct_tags; var; var = var->next)
+  for (StructTag *var = struct_tags; var->next; var = var->next)
     if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
       return var;
   return NULL;
@@ -549,7 +536,7 @@ StructTag *find_struct_tag(Token *tok) {
 
 // 関数を名前で検索する。見つからなかった場合はNULLを返す。
 Function *find_fn(Token *tok) {
-  for (Function *fn = functions; fn; fn = fn->next)
+  for (Function *fn = functions; fn->next; fn = fn->next)
     if (fn->len == tok->len && !memcmp(tok->str, fn->name, fn->len))
       return fn;
   return NULL;
@@ -575,7 +562,7 @@ Token *consume_ident() {
 
 Type *consume_type() {
   Token *tok = token;
-  Type *type = calloc(1, sizeof(Type));
+  Type *type = malloc(sizeof(Type));
   if (tok->kind == TK_IDENT) {
     Struct *struct_ = find_struct(tok);
     Enum *enum_ = find_enum(tok);
@@ -601,7 +588,7 @@ Type *consume_type() {
   consumed_ptr = token->str;
   token = token->next;
   while (consume("*")) {
-    Type *ptr = calloc(1, sizeof(Type));
+    Type *ptr = malloc(sizeof(Type));
     ptr->ty = TY_PTR;
     ptr->ptr_to = type;
     type = ptr;
@@ -674,10 +661,45 @@ int get_sizeof(Type *type) {
   }
 }
 
+Type *new_type(TypeKind ty) {
+  Type *type = malloc(sizeof(Type));
+  type->ty = ty;
+  return type;
+}
+
+Type *new_type_ptr(Type *ptr_to) {
+  Type *type = malloc(sizeof(Type));
+  type->ty = TY_PTR;
+  type->ptr_to = ptr_to;
+  return type;
+}
+
+Type *new_type_arr(Type *ptr_to, int array_size) {
+  Type *type = malloc(sizeof(Type));
+  type->ty = TY_ARR;
+  type->ptr_to = ptr_to;
+  type->array_size = array_size;
+  return type;
+}
+
+Type *new_type_struct(Struct *struct_) {
+  Type *type = malloc(sizeof(Type));
+  type->ty = TY_STRUCT;
+  type->struct_ = struct_;
+  return type;
+}
+
 Node *new_node(NodeKind kind) {
-  Node *node = calloc(1, sizeof(Node));
+  Node *node = malloc(sizeof(Node));
   node->kind = kind;
   node->endline = FALSE;
+  return node;
+}
+
+Node *new_num(int val) {
+  Node *node = new_node(ND_NUM);
+  node->val = val;
+  node->type = new_type(TY_INT);
   return node;
 }
 
@@ -689,48 +711,38 @@ Node *new_binary(NodeKind kind, Node *lhs, Node *rhs) {
   return node;
 }
 
-Type *new_type_int() {
-  Type *type = calloc(1, sizeof(Type));
-  type->ty = TY_INT;
-  return type;
-}
-
-Node *new_num(int val) {
-  Node *node = new_node(ND_NUM);
-  node->val = val;
-  node->type = new_type_int();
-  return node;
-}
-
 Node *function_definition(Token *tok, Type *type) {
+  int i;
   Function *fn = find_fn(tok);
   if (fn) {
     // error_at(token->str, "duplicated function name: %.*s", tok->len, tok->str);
   } else {
-    fn = calloc(1, sizeof(Function));
+    fn = malloc(sizeof(Function));
     fn->next = functions;
     functions = fn;
   }
   fn->name = tok->str;
   fn->len = tok->len;
-  fn->locals = calloc(1, sizeof(LVar));
+  fn->locals = malloc(sizeof(LVar));
   fn->locals->offset = 0;
+  fn->locals->type = new_type(TY_NONE);
+  fn->locals->next = NULL;
   fn->type = type;
   Function *prev_fn = current_fn;
   current_fn = fn;
   Node *node = new_node(ND_FUNCDEF);
   node->fn = fn;
   if (!consume(")")) {
-    for (int i = 0; i < 4; i++) {
+    int n = 0;
+    for (i = 0; i < 6; i++) {
       type = consume_type();
       Token *tok_lvar = consume_ident();
       if (!tok_lvar) {
-        error_at(token->str, "expected an identifier but got \"%.*s\" [in function definition]", token->len,
-                 token->str);
+        error_at(consumed_ptr, "expected an identifier [in variable declaration]");
       }
       Node *nd_lvar = new_node(ND_LVAR);
       node->args[i] = nd_lvar;
-      LVar *lvar = calloc(1, sizeof(LVar));
+      LVar *lvar = malloc(sizeof(LVar));
       lvar->next = fn->locals;
       lvar->name = tok_lvar->str;
       lvar->len = tok_lvar->len;
@@ -739,10 +751,14 @@ Node *function_definition(Token *tok, Type *type) {
       nd_lvar->var = lvar;
       nd_lvar->type = type;
       fn->locals = lvar;
+      n += 1;
       if (!consume(","))
         break;
     }
+    node->val = n;
     expect(")", "after arguments", "function definition");
+  } else {
+    node->val = 0;
   }
   if (!(token->kind == TK_RESERVED && !memcmp(token->str, "{", token->len))) {
     node->kind = ND_EXTERN;
@@ -760,15 +776,11 @@ Node *local_variable_declaration(Token *tok, Type *type) {
     error_at(tok->str, "duplicated variable name: %.*s [in variable declaration]", tok->len, tok->str);
   }
   Node *node = new_node(ND_VARDEC);
-  lvar = calloc(1, sizeof(LVar));
+  lvar = malloc(sizeof(LVar));
   lvar->name = tok->str;
   lvar->len = tok->len;
   if (consume("[")) {
-    Type *arr_type = calloc(1, sizeof(Type));
-    arr_type->ty = TY_ARR;
-    arr_type->ptr_to = type;
-    arr_type->array_size = expect_number();
-    type = arr_type;
+    type = new_type_arr(type, expect_number());
     expect("]", "after number", "array declaration");
     lvar->offset = current_fn->locals->offset + get_sizeof(type);
   } else {
@@ -794,15 +806,11 @@ Node *global_variable_declaration(Token *tok, Type *type) {
     error_at(token->str, "duplicated variable name: %.*s [in global variable declaration]", tok->len, tok->str);
   }
   Node *node = new_node(ND_GLBDEC);
-  lvar = calloc(1, sizeof(LVar));
+  lvar = malloc(sizeof(LVar));
   lvar->name = tok->str;
   lvar->len = tok->len;
   if (consume("[")) {
-    Type *arr_type = calloc(1, sizeof(Type));
-    arr_type->ty = TY_ARR;
-    arr_type->ptr_to = type;
-    arr_type->array_size = expect_number();
-    type = arr_type;
+    type = new_type_arr(type, expect_number());
     expect("]", "after number", "array declaration");
   } else {
     type->array_size = 1;
@@ -833,6 +841,9 @@ Node *new_struct(Token *tok) {
     error_at(tok->str, "unknown tag: %.*s [in struct declaration]", tok->len, tok->str);
   }
   Struct *struct_ = struct_tag->main;
+  struct_->var = malloc(sizeof(LVar));
+  struct_->var->next = NULL;
+  struct_->var->type = new_type(TY_NONE);
   int offset = 0;
   expect("{", "before struct members", "struct");
   while (token->kind != TK_EOF && !(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
@@ -842,24 +853,26 @@ Node *new_struct(Token *tok) {
       error_at(token->str, "expected an identifier but got \"%.*s\" [in struct declaration]", token->len, token->str);
     }
     if (consume("[")) {
-      Type *arr_type = calloc(1, sizeof(Type));
-      arr_type->ty = TY_ARR;
-      arr_type->ptr_to = type;
-      arr_type->array_size = expect_number();
-      type = arr_type;
+      type = new_type_arr(type, expect_number());
       expect("]", "after number", "struct");
     } else {
       type->array_size = 1;
     }
-    LVar *member_var = calloc(1, sizeof(LVar));
+    LVar *member_var = malloc(sizeof(LVar));
     member_var->name = member_tok->str;
     member_var->len = member_tok->len;
     member_var->type = type;
     member_var->next = struct_->var;
     struct_->var = member_var;
-    int type_size = get_type_size(type);
-    if (offset % type_size != 0) {
-      offset += type_size - (offset % type_size);
+    int type_size = get_sizeof(type);
+    int single_size;
+    if (type->ty == TY_ARR) {
+      single_size = get_type_size(type->ptr_to);
+    } else {
+      single_size = type_size;
+    }
+    if (offset % single_size != 0) {
+      offset += single_size - (offset % single_size);
     }
     member_var->offset = offset;
     offset += type_size;
@@ -872,6 +885,7 @@ Node *new_struct(Token *tok) {
   struct_->size = offset;
   expect("}", "after struct members", "struct");
   expect(";", "after struct definition", "struct");
+  node->type = new_type_struct(struct_);
   node->endline = TRUE;
   return node;
 }
@@ -883,7 +897,7 @@ Node *stmt() {
   int loop_id_prev;
   if (consume("{")) {
     node = new_node(ND_BLOCK);
-    node->body = calloc(1, sizeof(Node *));
+    node->body = malloc(sizeof(Node *) * 1);
     int i = 0;
     while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
       node->body[i++] = stmt();
@@ -902,11 +916,11 @@ Node *stmt() {
     }
     if (consume("(")) {
       // 関数定義
-      if (current_fn) {
+      if (current_fn->next) {
         error_at(token->str, "nested function is not supported [in function definition]");
       }
       node = function_definition(tok, type);
-    } else if (current_fn) {
+    } else if (current_fn->next) {
       // ローカル変数宣言
       node = local_variable_declaration(tok, type);
     } else {
@@ -939,12 +953,12 @@ Node *stmt() {
       if (find_struct(tok2)) {
         error_at(tok2->str, "duplicated struct name: %.*s [in typedef]", tok2->len, tok2->str);
       }
-      Struct *var = calloc(1, sizeof(Struct));
+      Struct *var = malloc(sizeof(Struct));
       var->name = tok2->str;
       var->len = tok2->len;
       var->next = structs;
       structs = var;
-      StructTag *tag = calloc(1, sizeof(StructTag));
+      StructTag *tag = malloc(sizeof(StructTag));
       tag->name = tok1->str;
       tag->len = tok1->len;
       tag->main = var;
@@ -960,11 +974,10 @@ Node *stmt() {
         if (!member_tok) {
           error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
         }
-        LVar *member_var = calloc(1, sizeof(LVar));
+        LVar *member_var = malloc(sizeof(LVar));
         member_var->name = member_tok->str;
         member_var->len = member_tok->len;
-        member_var->type = calloc(1, sizeof(Type));
-        member_var->type->ty = TY_INT;
+        member_var->type = new_type(TY_INT);
         member_var->offset = offset;
         offset++;
         member_var->next = enum_members;
@@ -983,14 +996,11 @@ Node *stmt() {
       } else if (find_enum(tok)) {
         error_at(tok->str, "duplicated enum name: %.*s [in typedef]", tok->len, tok->str);
       }
-      expect(";", "after enum definition", "typedef");
-      Enum *enum_ = calloc(1, sizeof(Enum));
+      Enum *enum_ = malloc(sizeof(Enum));
       enum_->name = tok->str;
       enum_->len = tok->len;
       enum_->next = enums;
       enums = enum_;
-      node->endline = TRUE;
-      return node;
     } else {
       error_at(token->str, "expected a struct but got \"%.*s\" [in typedef]", token->len, token->str);
     }
@@ -999,10 +1009,10 @@ Node *stmt() {
   } else if (token->kind == TK_IF) {
     token = token->next;
     node = new_node(ND_IF);
-    node->id = labelseq++;
+    node->id = loop_cnt++;
     expect("(", "before condition", "if");
     node->cond = logical();
-    node->cond->endline = TRUE;
+    node->cond->endline = FALSE;
     expect(")", "after equality", "if");
     node->then = stmt();
     if (consume("else")) {
@@ -1014,9 +1024,9 @@ Node *stmt() {
     token = token->next;
     expect("(", "before condition", "while");
     node = new_node(ND_WHILE);
-    node->id = labelseq++;
+    node->id = loop_cnt++;
     node->cond = logical();
-    node->cond->endline = TRUE;
+    node->cond->endline = FALSE;
     expect(")", "after equality", "while");
     loop_id_prev = loop_id;
     loop_id = node->id;
@@ -1026,7 +1036,7 @@ Node *stmt() {
     token = token->next;
     expect("(", "before initialization", "for");
     node = new_node(ND_FOR);
-    node->id = labelseq++;
+    node->id = loop_cnt++;
     if (is_type(token)) {
       type = consume_type();
       tok = consume_ident();
@@ -1040,7 +1050,7 @@ Node *stmt() {
       expect(";", "after initialization", "for");
     }
     node->cond = logical();
-    node->cond->endline = TRUE;
+    node->cond->endline = FALSE;
     expect(";", "after condition", "for");
     node->inc = expr();
     node->inc->endline = TRUE;
@@ -1087,7 +1097,7 @@ Node *stmt() {
 
 void program() {
   int i = 0;
-  code = calloc(1, sizeof(Node *));
+  code = malloc(sizeof(Node *));
   while (token->kind != TK_EOF) {
     code[i++] = stmt();
     code = realloc(code, sizeof(Node *) * (i + 1));
@@ -1126,9 +1136,10 @@ Node *logical() {
     } else if (consume("||")) {
       node = new_binary(ND_OR, node, equality());
     } else {
-      return node;
+      break;
     }
   }
+  return node;
 }
 
 // equality = relational ("==" relational | "!=" relational)*
@@ -1138,14 +1149,15 @@ Node *equality() {
   while (TRUE) {
     if (consume("==")) {
       node = new_binary(ND_EQ, node, relational());
-      node->type = new_type_int();
+      node->type = new_type(TY_INT);
     } else if (consume("!=")) {
       node = new_binary(ND_NE, node, relational());
-      node->type = new_type_int();
+      node->type = new_type(TY_INT);
     } else {
-      return node;
+      break;
     }
   }
+  return node;
 }
 
 // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
@@ -1155,20 +1167,21 @@ Node *relational() {
   while (TRUE) {
     if (consume("<")) {
       node = new_binary(ND_LT, node, add());
-      node->type = new_type_int();
+      node->type = new_type(TY_INT);
     } else if (consume("<=")) {
       node = new_binary(ND_LE, node, add());
-      node->type = new_type_int();
+      node->type = new_type(TY_INT);
     } else if (consume(">")) {
       node = new_binary(ND_LT, add(), node);
-      node->type = new_type_int();
+      node->type = new_type(TY_INT);
     } else if (consume(">=")) {
       node = new_binary(ND_LE, add(), node);
-      node->type = new_type_int();
+      node->type = new_type(TY_INT);
     } else {
-      return node;
+      break;
     }
   }
+  return node;
 }
 
 // ポインタ + 整数 または 整数 + ポインタ の場合に
@@ -1178,8 +1191,7 @@ Node *new_add(Node *lhs, Node *rhs, char *ptr) {
   Node *mul_node;
   // lhsがptr, rhsがptrなら
   if (is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) {
-    node = new_binary(ND_SUB, lhs, rhs);
-    node->type = lhs->type;
+    error_at(ptr, "invalid operands to binary expression [in new_add]");
   }
   // lhsがptr, rhsがintなら
   if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
@@ -1196,7 +1208,7 @@ Node *new_add(Node *lhs, Node *rhs, char *ptr) {
   // それ以外は普通に演算
   else {
     node = new_binary(ND_ADD, lhs, rhs);
-    node->type = new_type_int();
+    node->type = new_type(TY_INT);
   }
   return node;
 }
@@ -1208,7 +1220,7 @@ Node *new_sub(Node *lhs, Node *rhs, char *ptr) {
   // lhsがptr, rhsがptrなら
   if (is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) {
     node = new_binary(ND_SUB, lhs, rhs);
-    node->type = lhs->type;
+    node->type = new_type(TY_INT);
   }
   // lhsがint, rhsがptrなら
   if (is_number(lhs->type) && is_ptr_or_arr(rhs->type)) {
@@ -1223,7 +1235,7 @@ Node *new_sub(Node *lhs, Node *rhs, char *ptr) {
   // それ以外は普通に演算
   else {
     node = new_binary(ND_SUB, lhs, rhs);
-    node->type = new_type_int();
+    node->type = new_type(TY_INT);
   }
   return node;
 }
@@ -1241,14 +1253,15 @@ Node *add() {
       consumed_ptr_prev = consumed_ptr;
       node = new_sub(node, mul(), consumed_ptr_prev);
     } else {
-      return node;
+      break;
     }
   }
+  return node;
 }
 
 Type *resolve_type_mul(Type *left, Type *right, char *ptr) {
   if (is_number(left) && is_number(right)) {
-    return new_type_int();
+    return new_type(TY_INT);
   }
   error_at(ptr, "invalid operands to binary expression [in resolve_type_mul]");
   return NULL;
@@ -1272,9 +1285,10 @@ Node *mul() {
       node = new_binary(ND_MOD, node, unary());
       node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
     } else {
-      return node;
+      break;
     }
   }
+  return node;
 }
 
 // unary = ("+" | "-")? unary
@@ -1294,9 +1308,7 @@ Node *unary() {
   if (consume("&")) {
     node = new_node(ND_ADDR);
     node->lhs = unary();
-    node->type = calloc(1, sizeof(Type));
-    node->type->ty = TY_PTR;
-    node->type->ptr_to = node->lhs->type;
+    node->type = new_type_ptr(node->lhs->type);
     return node;
   }
   if (consume("*")) {
@@ -1312,7 +1324,7 @@ Node *unary() {
   if (consume("!")) {
     node = new_node(ND_NOT);
     node->lhs = unary();
-    node->type = new_type_int();
+    node->type = new_type(TY_INT);
     return node;
   }
   return refer_struct();
@@ -1320,12 +1332,17 @@ Node *unary() {
 
 // Structure Reference
 Node *refer_struct() {
+  Node *ptr;
+  Type *type;
   Token *prev_tok = token;
   Node *node = primary();
   while (TRUE) {
     if (consume("->")) {
       if (node->type->ty != TY_PTR) {
         error_at(prev_tok->str, "%.*s is not a pointer [in struct reference]", prev_tok->len, prev_tok->str);
+      }
+      if (node->type->ptr_to->ty != TY_STRUCT) {
+        error_at(prev_tok->str, "%.*s is not a struct [in struct reference]", prev_tok->len, prev_tok->str);
       }
       Token *tok = consume_ident();
       if (!tok) {
@@ -1339,33 +1356,39 @@ Node *refer_struct() {
       }
       LVar *var = find_struct_member(struct_, tok);
       Node *offset_node = new_num(var->offset);
-      Node *ptr = new_binary(ND_ADD, node, offset_node);
-      Type *type = calloc(1, sizeof(Type));
-      type->ty = TY_PTR;
-      type->ptr_to = var->type;
-      ptr->type = type;
       if (consume("[")) {
         char *consumed_ptr_prev = consumed_ptr;
         if (!is_ptr_or_arr(var->type)) {
           error_at(consumed_ptr_prev, "invalid array access [in struct reference]");
         }
-        ptr = new_add(ptr, logical(), consumed_ptr_prev);
+        ptr = new_binary(ND_ADD, node, offset_node);
+        type = new_type_ptr(var->type);
+        ptr->type = type;
+        node = new_node(ND_DEREF);
+        node->lhs = ptr;
+        node->type = var->type;
+        ptr = new_add(node, logical(), consumed_ptr_prev);
         expect("]", "after number", "struct reference");
         node = new_node(ND_DEREF);
         node->lhs = ptr;
         node->type = var->type->ptr_to;
       } else {
+        ptr = new_binary(ND_ADD, node, offset_node);
+        type = new_type_ptr(var->type);
+        ptr->type = type;
         node = new_node(ND_DEREF);
         node->lhs = ptr;
         node->type = var->type;
       }
     } else
-      return node;
+      break;
   }
+  return node;
 }
 
 // primary = "(" expr ")" | num
 Node *primary() {
+  int i;
   Node *node;
   Token *tok;
   Type *type;
@@ -1389,20 +1412,16 @@ Node *primary() {
 
   // 文字列
   if (token->kind == TK_STR) {
-    String *str = calloc(1, sizeof(String));
+    String *str = malloc(sizeof(String));
     str->text = token->str;
     str->len = token->len;
-    str->label = labelseq++;
+    str->label = label_cnt++;
     str->next = strings;
     strings = str;
     token = token->next;
     node = new_node(ND_STR);
     node->str = str;
-    node->type = calloc(1, sizeof(Type));
-    node->type->ty = TY_PTR;
-    type = calloc(1, sizeof(Type));
-    type->ty = TY_CHAR;
-    node->type->ptr_to = type;
+    node->type = new_type_ptr(new_type(TY_CHAR));
     return node;
   }
 
@@ -1471,15 +1490,20 @@ Node *primary() {
     }
     node = new_node(ND_FUNCALL);
     node->fn = fn;
-    node->id = labelseq++;
+    node->id = loop_cnt++;
     node->type = fn->type;
     if (!consume(")")) {
-      for (int i = 0; i < 6; i++) {
+      int n = 0;
+      for (i = 0; i < 6; i++) {
         node->args[i] = logical();
+        n += 1;
         if (!consume(","))
           break;
       }
+      node->val = n;
       expect(")", "after arguments", "function call");
+    } else {
+      node->val = 0;
     }
     return node;
   }
@@ -1551,7 +1575,7 @@ void gen_lval(Node *node) {
   } else if (node->kind == ND_DEREF) {
     gen(node->lhs);
   } else {
-    error("invalid lvalue");
+    error("invalid lvalue, node->kind: %d\n", node->kind);
   }
 }
 
@@ -1570,11 +1594,16 @@ void gen(Node *node) {
     gen_lval(node);
     printf("  pop rax\n");
     if (node->type->ty == TY_INT) {
-      printf("  mov eax, DWORD PTR [rax]\n");
+      printf("  movsxd rax, DWORD PTR [rax]\n");
     } else if (node->type->ty == TY_CHAR) {
-      printf("  movzx eax, BYTE PTR [rax]\n");
+      printf("  movzx rax, BYTE PTR [rax]\n");
     } else if (node->type->ty == TY_PTR) {
       printf("  mov rax, QWORD PTR [rax]\n");
+    } else if (node->type->ty == TY_ARR) {
+    } else if (node->type->ty == TY_STRUCT) {
+      error("invalid type [in ND_LVAR]");
+    } else {
+      error("invalid type [in ND_LVAR]");
     }
     if (!node->endline)
       printf("  push rax\n");
@@ -1586,11 +1615,14 @@ void gen(Node *node) {
     gen(node->lhs);
     printf("  pop rax\n");
     if (node->type->ty == TY_INT) {
-      printf("  mov eax, DWORD PTR [rax]\n");
+      printf("  movsxd rax, DWORD PTR [rax]\n");
     } else if (node->type->ty == TY_CHAR) {
-      printf("  movzx eax, BYTE PTR [rax]\n");
+      printf("  movzx rax, BYTE PTR [rax]\n");
     } else if (node->type->ty == TY_PTR) {
       printf("  mov rax, QWORD PTR [rax]\n");
+    } else if (node->type->ty == TY_ARR) {
+    } else {
+      error("invalid type [in ND_DEREF]");
     }
     if (!node->endline)
       printf("  push rax\n");
@@ -1600,6 +1632,7 @@ void gen(Node *node) {
     printf("  pop rax\n");
     printf("  cmp rax, 0\n");
     printf("  sete al\n");
+    printf("  movzx rax, al\n");
     if (!node->endline)
       printf("  push rax\n");
     return;
@@ -1609,14 +1642,14 @@ void gen(Node *node) {
 
     printf("  pop rdi\n");
     printf("  pop rax\n");
-    if (get_type_size(node->lhs->type) == 4) {
+    if (node->lhs->type->ty == TY_INT) {
       printf("  mov DWORD PTR [rax], edi\n");
-    } else if (get_type_size(node->lhs->type) == 1) {
+    } else if (node->lhs->type->ty == TY_CHAR) {
       printf("  mov BYTE PTR [rax], dil\n");
-    } else if (get_type_size(node->lhs->type) == 8) {
+    } else if (node->lhs->type->ty == TY_PTR) {
       printf("  mov QWORD PTR [rax], rdi\n");
     } else {
-      error("invalid type size [in ND_ASSIGN]");
+      error("invalid type [in ND_ASSIGN]");
     }
     if (!node->endline)
       printf("  push rdi\n");
@@ -1626,11 +1659,13 @@ void gen(Node *node) {
     if (!node->endline) {
       printf("  pop rax\n");
       if (node->type->ty == TY_INT) {
-        printf("  mov edi, DWORD PTR [rax]\n");
+        printf("  movsxd rdi, DWORD PTR [rax]\n");
       } else if (node->type->ty == TY_CHAR) {
-        printf("  movzx edi, BYTE PTR [rax]\n");
+        printf("  movzx rdi, BYTE PTR [rax]\n");
       } else if (node->type->ty == TY_PTR) {
         printf("  mov rdi, QWORD PTR [rax]\n");
+      } else {
+        error("invalid type [in ND_POSTINC]");
       }
       printf("  push rdi\n");
       printf("  push rax\n");
@@ -1639,14 +1674,14 @@ void gen(Node *node) {
 
     printf("  pop rdi\n");
     printf("  pop rax\n");
-    if (get_type_size(node->lhs->type) == 4) {
+    if (node->lhs->type->ty == TY_INT) {
       printf("  mov DWORD PTR [rax], edi\n");
-    } else if (get_type_size(node->lhs->type) == 1) {
+    } else if (node->lhs->type->ty == TY_CHAR) {
       printf("  mov BYTE PTR [rax], dil\n");
-    } else if (get_type_size(node->lhs->type) == 8) {
+    } else if (node->lhs->type->ty == TY_PTR) {
       printf("  mov QWORD PTR [rax], rdi\n");
     } else {
-      error("invalid type size [in ND_ASSIGN]");
+      error("invalid type [in ND_ASSIGN]");
     }
     return;
   } else if (node->kind == ND_RETURN) {
@@ -1663,6 +1698,7 @@ void gen(Node *node) {
     return;
   } else if (node->kind == ND_IF) {
     gen(node->cond);
+    printf("  pop rax\n");
     printf("  cmp rax, 0\n");
     if (node->els) {
       printf("  je .Lelse%d\n", node->id);
@@ -1680,6 +1716,7 @@ void gen(Node *node) {
   } else if (node->kind == ND_WHILE) {
     printf(".Lbegin%d:\n", node->id);
     gen(node->cond);
+    printf("  pop rax\n");
     printf("  cmp rax, 0\n");
     printf("  je .Lend%d\n", node->id);
     gen(node->then);
@@ -1691,6 +1728,7 @@ void gen(Node *node) {
     gen(node->init);
     printf(".Lbegin%d:\n", node->id);
     gen(node->cond);
+    printf("  pop rax\n");
     printf("  cmp rax, 0\n");
     printf("  je .Lend%d\n", node->id);
     gen(node->then);
@@ -1716,17 +1754,17 @@ void gen(Node *node) {
       offset = node->fn->locals->offset;
     }
     printf("  sub rsp, %d\n", offset);
-    for (i = 0; i < 6 && node->args[i]; i++) {
+    for (i = 0; i < node->val; i++) {
       gen_lval(node->args[i]);
       printf("  pop rax\n");
-      if (get_type_size(node->args[i]->type) == 4) {
+      if (node->args[i]->type->ty == TY_INT) {
         printf("  mov DWORD PTR [rax], %s\n", regs4(i));
-      } else if (get_type_size(node->args[i]->type) == 1) {
+      } else if (node->args[i]->type->ty == TY_CHAR) {
         printf("  mov BYTE PTR [rax], %s\n", regs1(i));
-      } else if (get_type_size(node->args[i]->type) == 8) {
+      } else if (node->args[i]->type->ty == TY_PTR) {
         printf("  mov QWORD PTR [rax], %s\n", regs8(i));
       } else {
-        error("invalid type size [in ND_FUNCDEF]");
+        error("invalid type [in ND_FUNCDEF]");
       }
     }
     gen(node->lhs);
@@ -1737,21 +1775,19 @@ void gen(Node *node) {
     }
     return;
   } else if (node->kind == ND_FUNCALL) {
-    for (i = 0; i < 6 && node->args[i]; i++) {
+    for (i = 0; i < node->val; i++) {
       gen(node->args[i]);
     }
-    for (i = 3; i >= 0; i--) {
-      if (!node->args[i])
-        continue;
+    for (i = node->val - 1; i >= 0; i--) {
       printf("  pop rax\n");
-      if (get_type_size(node->args[i]->type) == 4) {
+      if (node->args[i]->type->ty == TY_INT) {
         printf("  mov %s, eax\n", regs4(i));
-      } else if (get_type_size(node->args[i]->type) == 1) {
+      } else if (node->args[i]->type->ty == TY_CHAR) {
         printf("  movzx %s, al\n", regs4(i));
-      } else if (get_type_size(node->args[i]->type) == 8) {
+      } else if (is_ptr_or_arr(node->args[i]->type)) {
         printf("  mov %s, rax\n", regs8(i));
       } else {
-        error("invalid type size [in ND_FUNCALL]");
+        error("invalid type [in ND_FUNCALL]");
       }
     }
     // Align stack
@@ -1819,18 +1855,49 @@ void gen(Node *node) {
     printf("  test rdi, rdi\n");
     printf("  setne dl\n");
     printf("  and al, dl\n");
+    printf("  movzx rax, al\n");
   } else if (node->kind == ND_OR) {
     printf("  test rax, rax\n");
     printf("  setne al\n");
     printf("  test rdi, rdi\n");
     printf("  setne dl\n");
     printf("  or al, dl\n");
+    printf("  movzx rax, al\n");
   } else {
     error("invalid node kind");
   }
 
   if (!node->endline)
     printf("  push rax\n");
+}
+
+void init_global_variables() {
+  // functionの初期化
+  functions = malloc(sizeof(Function));
+  functions->next = NULL;
+  current_fn = functions;
+
+  // enumの初期化
+  enums = malloc(sizeof(Enum));
+  enums->next = NULL;
+  enum_members = malloc(sizeof(LVar));
+  enum_members->next = NULL;
+  enum_members->type = new_type(TY_NONE);
+
+  // 構造体の初期化
+  structs = malloc(sizeof(Struct));
+  structs->next = NULL;
+  struct_tags = malloc(sizeof(StructTag));
+  struct_tags->next = NULL;
+
+  // グローバル変数の初期化
+  globals = malloc(sizeof(LVar));
+  globals->next = NULL;
+  globals->type = new_type(TY_NONE);
+
+  // 文字列リテラルの初期化
+  strings = malloc(sizeof(String));
+  strings->next = NULL;
 }
 
 int main(int argc, char **argv) {
@@ -1844,16 +1911,11 @@ int main(int argc, char **argv) {
   filename = argv[1];
   user_input = read_file(filename);
   init(user_input, filename);
-
-  printf("File Loaded Successfully !\n");
+  init_global_variables();
 
   token = tokenize();
 
-  printf("Tokenized Successfully !\n");
-
   program();
-
-  printf("Parsed Successfully !\n");
 
   // アセンブリの前半部分を出力
   printf(".intel_syntax noprefix\n");
@@ -1861,7 +1923,7 @@ int main(int argc, char **argv) {
 
   // グローバル変数の定義
   printf(".data\n");
-  for (LVar *var = globals; var; var = var->next) {
+  for (LVar *var = globals; var->next; var = var->next) {
     printf("%.*s:\n", var->len, var->name);
     if (var->offset) {
       printf("  .long %d\n", var->offset);
@@ -1871,7 +1933,7 @@ int main(int argc, char **argv) {
   }
 
   // 文字列リテラル
-  for (String *str = strings; str; str = str->next) {
+  for (String *str = strings; str->next; str = str->next) {
     printf(".L.str%d:\n", str->label);
     printf("  .string \"%.*s\"\n", str->len, str->text);
   }
