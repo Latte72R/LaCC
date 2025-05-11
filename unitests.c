@@ -17,12 +17,15 @@ struct STRUCT {
 
 typedef enum { A, B, C } ENUM;
 
+<<<<<<< HEAD
+=======
 typedef struct ST28 ST28;
 struct ST28 {
   ST28 *next;
   char ch;
 };
 
+>>>>>>> cdb0c1a (Mission Accomplished)
 int foo_test11(int n) { return n * 4; }
 int foo_test14(int *n) {
   *n = *n * 5;
