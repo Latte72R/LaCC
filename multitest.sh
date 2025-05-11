@@ -1,10 +1,10 @@
 #!/bin/bash
 
 echo \[unitests.c\]
-./rf.sh $1 ./unitests.c
+./rf.sh ./unitests.c
 
 echo \[prime.c\]
-./rf.sh $1 ./prime.c
+./rf.sh ./prime.c
 
 echo \[fizzbuzz.c\]
-./rf.sh $1 ./fizzbuzz.c
+./rf.sh ./fizzbuzz.c

@@ -1,3 +1,3 @@
-$1 $2 > ./tmp.s
+./lcc $1 > ./tmp.s
 cc -o ./tmp ./tmp.s
 ./tmp
