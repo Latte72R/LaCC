@@ -13,9 +13,13 @@ LCC is a minimalist C compiler that implements only the core language features y
 ### 2. Functions
 
 - **Definition**: specify parameter and return types  
-- **Declaration & Invocation**: define and call functions; use `return` to send back a value  
+- **Declaration & Invocation**: define and call functions; use `return` to send back a value
 
-### 3. Control Flow
+### 3. Global & Local Variables
+
+Both global and local (stack) variable declarations are supported.
+
+### 4. Control Flow
 
 - **Conditional Branching**  
   - `if (condition) { … }`  
@@ -26,8 +30,6 @@ LCC is a minimalist C compiler that implements only the core language features y
 - **Loop Control**  
   - `break` exits a loop  
   - `continue` skips to the next iteration  
-
----
 
 ## Unsupported Constructs
 
@@ -45,3 +47,12 @@ LCC does **not** support the following:
 - Preprocessor directives: `#include`, `#define`, `#ifdef`, etc.  
 - Direct struct initialization syntax (e.g., `struct point p = {1, 2};`)  
 - Variadic functions (functions with `...` parameters)  
+
+
+## Limitations
+
+### Single‐Unit Compilation
+LCC only handles one .c file at a time — there’s no support for separate compilation or linking multiple translation units.
+
+### No Optimizations
+There are no code-generation optimizations beyond what’s needed to make it work.
