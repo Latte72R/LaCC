@@ -17,6 +17,12 @@ struct STRUCT {
 
 typedef enum { A, B, C } ENUM;
 
+typedef struct ST28 ST28;
+struct ST28 {
+  ST28 *next;
+  char ch;
+};
+
 int foo_test11(int n) { return n * 4; }
 int foo_test14(int *n) {
   *n = *n * 5;
@@ -125,7 +131,11 @@ int test22() {
 }
 
 int test23() {
+<<<<<<< HEAD
+  STRUCT *c = calloc(1, sizeof(STRUCT));
+=======
   STRUCT *c = calloc(1, sizeof(B));
+>>>>>>> main
   c->a = 5;
   c->b[0] = 1;
   c->b[1] = 6;
@@ -158,6 +168,19 @@ int test27() {
   return a * b;
 }
 
+<<<<<<< HEAD
+int test28() {
+  ST28 *a = calloc(1, sizeof(ST28));
+  ST28 *b = calloc(1, sizeof(ST28));
+  ST28 *c = calloc(1, sizeof(ST28));
+  c->ch = 'C';
+  a->next = b;
+  b->next = c;
+  return a->next->next->ch;
+}
+
+=======
+>>>>>>> main
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -194,6 +217,10 @@ int main() {
   check(test25(), 25, 97);
   check(test26(), 26, 37);
   check(test27(), 27, 8);
+<<<<<<< HEAD
+  check(test28(), 28, 67);
+=======
+>>>>>>> main
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");

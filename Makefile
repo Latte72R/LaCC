@@ -1,16 +1,20 @@
-CFLAGS=-std=c11 -g -static
-SRCS=codegen.c main.c parse.c tokenizer.c
-OBJS=$(SRCS:.c=.o)
+CFLAGS=-std=c11 -g -static -Wno-incompatible-library-redeclaration
+SRCS=lcc.c extention.c
 
-lcc: $(OBJS)
-	$(CC) -o lcc $(OBJS) $(LDFLAGS)
+lcc: $(SRCS)
+	$(CC) -o lcc $(SRCS) $(CFLAGS)
 
-$(OBJS): lcc.h
-
-test: lcc
-	./multitest.sh
+lccs: lcc
+	./lcc ./lcc.c > tmp.s
+	$(CC) -o lccs tmp.s extention.c $(LDFLAGS)
 
 clean:
 	rm -f lcc *.o *~ tmp*
+
+test: lcc
+	./multitest.sh ./lcc
+
+self: lccs
+	./multitest.sh ./lccs
 
 .PHONY: test clean
