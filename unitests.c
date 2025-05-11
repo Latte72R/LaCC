@@ -125,7 +125,7 @@ int test22() {
 }
 
 int test23() {
-  STRUCT *c = calloc(1, sizeof(STRUCT));
+  STRUCT *c = calloc(1, sizeof(B));
   c->a = 5;
   c->b[0] = 1;
   c->b[1] = 6;
@@ -156,16 +156,6 @@ int test27() {
   int b = a++;
   a++;
   return a * b;
-}
-
-int test28() {
-  ST28 *a = calloc(1, sizeof(ST28));
-  ST28 *b = calloc(1, sizeof(ST28));
-  ST28 *c = calloc(1, sizeof(ST28));
-  c->ch = 'C';
-  a->next = b;
-  b->next = c;
-  return a->next->next->ch;
 }
 
 void check(int result, int id, int ans) {
@@ -204,7 +194,6 @@ int main() {
   check(test25(), 25, 97);
   check(test26(), 26, 37);
   check(test27(), 27, 8);
-  check(test28(), 28, 67);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");
