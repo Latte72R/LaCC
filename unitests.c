@@ -17,12 +17,6 @@ struct STRUCT {
 
 typedef enum { A, B, C } ENUM;
 
-typedef struct ST28 ST28;
-struct ST28 {
-  ST28 *next;
-  char ch;
-};
-
 int foo_test11(int n) { return n * 4; }
 int foo_test14(int *n) {
   *n = *n * 5;
@@ -173,6 +167,7 @@ int test28() {
   b->next = c;
   return a->next->next->ch;
 }
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
