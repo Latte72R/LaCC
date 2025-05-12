@@ -44,6 +44,7 @@ LCC does **not** support the following:
 
 - Nested functions (functions defined within other functions)  
 - `switch` statements and `case`/`default` labels  
+- `goto` statement  
 - `do-while` loops  
 - Ternary conditional operator (`?:`)  
 - `union` types  
@@ -58,7 +59,7 @@ LCC does **not** support the following:
 ## Limitations
 
 ### Single‐Unit Compilation
-LCC only handles one .c file at a time — there’s no support for separate compilation or linking multiple translation units.
+LCC only handles one .c file at a time — there's no support for separate compilation or linking multiple translation units.
 
 ### No Optimizations
-There are no code-generation optimizations beyond what’s needed to make it work.
+There are no code-generation optimizations beyond what's needed to make it work.
