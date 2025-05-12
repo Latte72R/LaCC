@@ -290,6 +290,11 @@ int test44() {
   return n;
 }
 
+int test45() {
+  int a = 2, b = 3, c = 5;
+  return a * b + c;
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -343,6 +348,7 @@ int main() {
   check(test42(), 42, -2);
   check(test43(), 43, 1);
   check(test44(), 44, 36);
+  check(test45(), 45, 11);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");

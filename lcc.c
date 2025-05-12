@@ -256,7 +256,6 @@ int is_alnum(char c) {
 Token *tokenize() {
   char *p = user_input;
   char *q;
-  int i;
   Token head;
   (&head)->next = NULL;
   Token *cur = &head;
@@ -469,7 +468,7 @@ Token *tokenize() {
     }
 
     if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z') || *p == '_') {
-      i = 0;
+      int i = 0;
       while (('a' <= *(p + i) && *(p + i) <= 'z') || ('A' <= *(p + i) && *(p + i) <= 'Z') ||
              ('0' <= *(p + i) && *(p + i) <= '9') || *(p + i) == '_') {
         i++;
@@ -720,7 +719,6 @@ Node *new_binary(NodeKind kind, Node *lhs, Node *rhs) {
 }
 
 Node *function_definition(Token *tok, Type *type) {
-  int i;
   Function *fn = find_fn(tok);
   if (fn) {
     // error_at(token->str, "duplicated function name: %.*s", tok->len, tok->str);
@@ -743,7 +741,7 @@ Node *function_definition(Token *tok, Type *type) {
   node->fn = fn;
   if (!consume(")")) {
     int n = 0;
-    for (i = 0; i < 6; i++) {
+    for (int i = 0; i < 6; i++) {
       type = consume_type();
       Token *tok_lvar = consume_ident();
       if (!tok_lvar) {
@@ -808,7 +806,6 @@ Node *local_variable_declaration(Token *tok, Type *type) {
   if (consume("=")) {
     node = new_binary(ND_ASSIGN, node, logical());
   }
-  expect(";", "after line", "variable declaration");
   node->endline = TRUE;
   return node;
 }
@@ -910,7 +907,7 @@ Node *stmt() {
   int loop_id_prev;
   if (consume("{")) {
     node = new_node(ND_BLOCK);
-    // LVar *var = current_fn->locals;
+    LVar *var = current_fn->locals;
     node->body = malloc(sizeof(Node *));
     int i = 0;
     while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
@@ -920,7 +917,7 @@ Node *stmt() {
         error("realloc failed");
     }
     node->body[i] = new_node(ND_NONE);
-    // current_fn->locals = var;
+    current_fn->locals = var;
     expect("}", "after block", "block");
   } else if (is_type(token)) {
     // 変数宣言または関数定義
@@ -937,7 +934,23 @@ Node *stmt() {
       node = function_definition(tok, type);
     } else if (current_fn->next) {
       // ローカル変数宣言
-      node = local_variable_declaration(tok, type);
+      node = new_node(ND_BLOCK);
+      node->body = malloc(sizeof(Node *));
+      int i = 0;
+      node->body[i++] = local_variable_declaration(tok, type);
+      while (consume(",")) {
+        tok = consume_ident();
+        if (!tok) {
+          error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len,
+                   token->str);
+        }
+        node->body[i++] = local_variable_declaration(tok, type);
+        node->body = realloc(node->body, sizeof(Node *) * (i + 1));
+        if (!node->body)
+          error("realloc failed");
+      }
+      node->body[i] = new_node(ND_NONE);
+      expect(";", "after line", "variable declaration");
     } else {
       // グローバル変数宣言
       node = global_variable_declaration(tok, type);
@@ -1065,6 +1078,7 @@ Node *stmt() {
                  token->str);
       }
       node->init = local_variable_declaration(tok, type);
+      expect(";", "after initialization", "for");
       node->init->endline = TRUE;
       init = TRUE;
     } else {
@@ -1505,7 +1519,6 @@ Node *access_member() {
 
 // primary = "(" expr ")" | num
 Node *primary() {
-  int i;
   Node *node;
   Token *tok;
   Type *type;
@@ -1594,7 +1607,7 @@ Node *primary() {
     node->type = fn->type;
     if (!consume(")")) {
       int n = 0;
-      for (i = 0; i < 6; i++) {
+      for (int i = 0; i < 6; i++) {
         node->args[i] = logical();
         n += 1;
         if (!consume(","))
@@ -1680,10 +1693,7 @@ void gen_lval(Node *node) {
 }
 
 void gen(Node *node) {
-  int i;
-  if (node->kind == ND_NONE) {
-    return;
-  } else if (node->kind == ND_NUM) {
+  if (node->kind == ND_NUM) {
     if (!node->endline)
       printf("  push %d\n", node->val);
     return;
@@ -1799,7 +1809,7 @@ void gen(Node *node) {
     printf("  ret\n");
     return;
   } else if (node->kind == ND_BLOCK) {
-    for (i = 0; node->body[i]->kind != ND_NONE; i++) {
+    for (int i = 0; node->body[i]->kind != ND_NONE; i++) {
       gen(node->body[i]);
     }
     return;
@@ -1863,7 +1873,7 @@ void gen(Node *node) {
       offset = node->fn->offset;
     }
     printf("  sub rsp, %d\n", offset);
-    for (i = 0; i < node->val; i++) {
+    for (int i = 0; i < node->val; i++) {
       gen_lval(node->args[i]);
       printf("  pop rax\n");
       if (node->args[i]->type->ty == TY_INT) {
@@ -1884,10 +1894,10 @@ void gen(Node *node) {
     }
     return;
   } else if (node->kind == ND_FUNCALL) {
-    for (i = 0; i < node->val; i++) {
+    for (int i = 0; i < node->val; i++) {
       gen(node->args[i]);
     }
-    for (i = node->val - 1; i >= 0; i--) {
+    for (int i = node->val - 1; i >= 0; i--) {
       printf("  pop rax\n");
       if (node->args[i]->type->ty == TY_INT) {
         printf("  mov %s, eax\n", regs4(i));
@@ -1919,7 +1929,7 @@ void gen(Node *node) {
     return;
   } else if ((node->kind == ND_GLBDEC) || (node->kind == ND_VARDEC) || (node->kind == ND_EXTERN) ||
              (node->kind == ND_TYPEDEF) || (node->kind == ND_ENUM) || (node->kind == ND_STRUCT) ||
-             (node->kind == ND_TYPE)) {
+             (node->kind == ND_TYPE || node->kind == ND_NONE)) {
     return;
   }
 

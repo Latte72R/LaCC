@@ -50,6 +50,7 @@ LCC does **not** support the following:
 - `union` types  
 - Extended primitive types: `unsigned`, `long`, `float`, `double`, etc.  
 - Type qualifiers & storage-class specifiers: `const`, `volatile`, `static`, `register`, `auto`, etc.  
+- No initializer lists for arrays or structs (e.g., `int arr[] = {2, 4, 6};` or `struct AB p = {.a = 1, .b = 2};`)  
 - Inline assembly  
 - Preprocessor directives: `#include`, `#define`, `#ifdef`, etc.  
 - Direct struct initialization syntax (e.g., `struct point p = {1, 2};`)  
