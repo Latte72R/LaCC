@@ -174,6 +174,7 @@ Node *new_add(Node *lhs, Node *rhs, char *consumed_ptr);
 Node *new_sub(Node *lhs, Node *rhs, char *consumed_ptr);
 Node *add();
 Node *mul();
+Node *increment_decrement();
 Node *refer_struct();
 Node *unary();
 Node *primary();
@@ -1299,9 +1300,9 @@ Node *unary() {
     return new_num(get_sizeof(unary()->type));
   }
   if (consume("+"))
-    return refer_struct();
+    return increment_decrement();
   if (consume("-")) {
-    node = new_binary(ND_SUB, new_num(0), refer_struct());
+    node = new_binary(ND_SUB, new_num(0), increment_decrement());
     node->type = node->rhs->type;
     return node;
   }
@@ -1327,7 +1328,24 @@ Node *unary() {
     node->type = new_type(TY_INT);
     return node;
   }
-  return refer_struct();
+  return increment_decrement();
+}
+
+Node *increment_decrement() {
+  Node *node;
+  if (consume("++")) {
+    node = refer_struct();
+    return new_binary(ND_ASSIGN, node, new_add(node, new_num(1), consumed_ptr));
+  } else if (consume("--")) {
+    return new_binary(ND_ASSIGN, node, new_sub(node, new_num(1), consumed_ptr));
+  }
+  node = refer_struct();
+  if (consume("++")) {
+    node = new_binary(ND_POSTINC, node, new_add(node, new_num(1), consumed_ptr));
+  } else if (consume("--")) {
+    node = new_binary(ND_POSTINC, node, new_sub(node, new_num(1), consumed_ptr));
+  }
+  return node;
 }
 
 // Structure Reference
@@ -1473,11 +1491,6 @@ Node *primary() {
       nd_deref->lhs = node;
       node = nd_deref;
       node->type = node->lhs->type->ptr_to;
-    }
-    if (consume("++")) {
-      node = new_binary(ND_POSTINC, node, new_add(node, new_num(1), consumed_ptr));
-    } else if (consume("--")) {
-      node = new_binary(ND_POSTINC, node, new_sub(node, new_num(1), consumed_ptr));
     }
     return node;
   }
