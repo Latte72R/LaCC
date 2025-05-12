@@ -1,13 +1,11 @@
 
 
-#include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
-char *user_input_;
-char *filename_;
+extern char *user_input;
+extern char *filename;
 
 // Reports an error and exit.
 void error(char *fmt, ...) {
@@ -26,7 +24,7 @@ void error_at(char *loc, char *fmt, ...) {
 
   // locが含まれている行の開始地点と終了地点を取得
   char *line = loc;
-  while (user_input_ < line && line[-1] != '\n')
+  while (user_input < line && line[-1] != '\n')
     line--;
 
   char *end = loc;
@@ -39,12 +37,12 @@ void error_at(char *loc, char *fmt, ...) {
 
   // 見つかった行が全体の何行目なのかを調べる
   int line_num = 1;
-  for (char *p = user_input_; p < line; p++)
+  for (char *p = user_input; p < line; p++)
     if (*p == '\n')
       line_num++;
 
   // 見つかった行を、ファイル名と行番号と一緒に表示
-  int indent = fprintf(stderr, "\033[1m\033[32m %s:%d\033[0m: ", filename_, line_num) - 13;
+  int indent = fprintf(stderr, "\033[1m\033[32m %s:%d\033[0m: ", filename, line_num) - 13;
   fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
   // エラー箇所を"^"で指し示して、エラーメッセージを表示
@@ -80,9 +78,4 @@ char *read_file(char *path) {
   buf[size] = '\0';
   fclose(fp);
   return buf;
-}
-
-void init(char *user_input, char *filename) {
-  user_input_ = user_input;
-  filename_ = filename;
 }

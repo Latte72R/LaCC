@@ -1600,8 +1600,6 @@ void gen(Node *node) {
     } else if (node->type->ty == TY_PTR) {
       printf("  mov rax, QWORD PTR [rax]\n");
     } else if (node->type->ty == TY_ARR) {
-    } else if (node->type->ty == TY_STRUCT) {
-      error("invalid type [in ND_LVAR]");
     } else {
       error("invalid type [in ND_LVAR]");
     }
@@ -1744,6 +1742,8 @@ void gen(Node *node) {
     printf("  jmp .Lstep%d\n", node->id);
     return;
   } else if (node->kind == ND_FUNCDEF) {
+    printf("  .globl %.*s\n", node->fn->len, node->fn->name);
+    printf("  .p2align 4\n");
     printf("%.*s:\n", node->fn->len, node->fn->name);
     printf("  push rbp\n");
     printf("  mov rbp, rsp\n");
@@ -1910,7 +1910,6 @@ int main(int argc, char **argv) {
   // 結果はcodeに保存される
   filename = argv[1];
   user_input = read_file(filename);
-  init(user_input, filename);
   init_global_variables();
 
   token = tokenize();
@@ -1918,28 +1917,31 @@ int main(int argc, char **argv) {
   program();
 
   // アセンブリの前半部分を出力
-  printf(".intel_syntax noprefix\n");
-  printf(".globl main\n");
+  printf(".intel_syntax noprefix\n\n");
 
   // グローバル変数の定義
-  printf(".data\n");
+  printf("  .section .data\n\n");
   for (LVar *var = globals; var->next; var = var->next) {
+    printf("  .globl %.*s\n", var->len, var->name);
+    printf("  .p2align 3\n");
     printf("%.*s:\n", var->len, var->name);
     if (var->offset) {
       printf("  .long %d\n", var->offset);
     } else {
       printf("  .zero %d\n", get_type_size(var->type));
     }
+    printf("\n");
   }
 
   // 文字列リテラル
   for (String *str = strings; str->next; str = str->next) {
+    printf("  .section .rodata\n");
     printf(".L.str%d:\n", str->label);
     printf("  .string \"%.*s\"\n", str->len, str->text);
   }
 
   // 先頭の式から順にコード生成
-  printf(".text\n");
+  printf("  .section .text\n");
   for (int i = 0; code[i]->kind != ND_NONE; i++) {
     gen(code[i]);
   }
