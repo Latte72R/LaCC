@@ -24,10 +24,12 @@ struct ST28 {
 };
 
 int foo_test11(int n) { return n * 4; }
+
 int foo_test14(int *n) {
   *n = *n * 5;
   return 0;
 }
+
 int fibo_test18(int n) {
   if (n < 2)
     return n;
@@ -36,16 +38,23 @@ int fibo_test18(int n) {
 }
 
 int test1() { return 5 * 3 - 12 / (2 + 4); }
+
 int test2() { return -8 + 20 + 2 * (-5); }
+
 int test3() { return 5 + 35 % 9; }
+
 int test4() { return 1 == (3 - 2); }
+
 int test5() {
   int a = 5;
   int b = 2;
   return a < b;
 }
+
 int test6() { return (1 == 2) || (8 > 4); }
+
 int test7() { return (1 != 2) && !(8 > 4); }
+
 int test8() {
   int a = 5;
   int i;
@@ -53,12 +62,14 @@ int test8() {
     a++;
   return a;
 }
+
 int test9() {
   int a = 0;
   while (a < 10)
     a++;
   return a;
 }
+
 int test10() {
   int a = 0;
   if (a < 1)
@@ -66,23 +77,29 @@ int test10() {
   else
     return 3;
 }
+
 int test11() { return foo_test11(3); }
+
 int test12() {
   int a = 3;
   return *(&a);
 }
+
 int test13() {
   int a = 3;
   int *b = &a;
   *b += 2;
   return a;
 }
+
 int test14() {
   int a = 5;
   foo_test14(&a);
   return a;
 }
+
 int test15() { return sizeof(num); }
+
 int test16() {
   int a[2];
   *a = 7;
@@ -90,6 +107,7 @@ int test16() {
   int *p = &a;
   return *p * *(p + 1);
 }
+
 int test17() {
   int a[2];
   a[0] = 3;
@@ -97,7 +115,9 @@ int test17() {
   a[0] *= 3;
   return a[0] - a[1];
 }
+
 int test18() { return fibo_test18(9); }
+
 int test19() {
   int a = 0;
   for (int i = 0; i < 10; i++) {
@@ -117,11 +137,9 @@ int test20() {
   return a;
 }
 
-int test21_sub() { return num; }
-
 int test21() {
-  num = 5;
-  return test21_sub();
+  char *s = "hello";
+  return s[0];
 }
 
 int test22() {
@@ -191,6 +209,41 @@ int test30() {
   return a;
 }
 
+int test31() {
+  int a;
+  return (a = 7);
+}
+
+int test32() {
+  // ビットAND
+  return 6 & 3; // 0b110 & 0b011 = 0b010 = 2
+}
+
+int test33() {
+  // ビットOR
+  return 6 | 3; // 0b110 | 0b011 = 0b111 = 7
+}
+
+int test34() {
+  // ビットXOR
+  return 6 ^ 3; // 0b110 ^ 0b011 = 0b101 = 5
+}
+
+int test35() {
+  // ビットNOT
+  return ~5; // ~0b0101 = ...11111010 = -6
+}
+
+int test36() {
+  // 左シフト
+  return 1 << 4; // 0b1 << 4 = 0b10000 = 16
+}
+
+int test37() {
+  // 右シフト
+  return 16 >> 2; // 0b10000 >> 2 = 0b100 = 4
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -220,7 +273,7 @@ int main() {
   check(test18(), 18, 34);
   check(test19(), 19, 27);
   check(test20(), 20, 7);
-  check(test21(), 21, 5);
+  check(test21(), 21, 104);
   check(test22(), 22, 12);
   check(test23(), 23, 35);
   check(test24(), 24, 2);
@@ -230,6 +283,13 @@ int main() {
   check(test28(), 28, 67);
   check(test29(), 29, 12);
   check(test30(), 30, 7);
+  check(test31(), 31, 7);
+  check(test32(), 32, 2);
+  check(test33(), 33, 7);
+  check(test34(), 34, 5);
+  check(test35(), 35, -6);
+  check(test36(), 36, 16);
+  check(test37(), 37, 4);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");

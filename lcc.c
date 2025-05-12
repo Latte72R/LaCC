@@ -114,6 +114,12 @@ typedef enum {
   ND_AND,      // &&
   ND_OR,       // ||
   ND_NOT,      // !
+  ND_BITNOT,   // ~
+  ND_BITAND,   // &
+  ND_BITOR,    // |
+  ND_BITXOR,   // ^
+  ND_SHL,      // <<
+  ND_SHR,      // >>
   ND_ASSIGN,   // =
   ND_POSTINC,  // ++ or --
   ND_LVAR,     // ローカル変数
@@ -282,14 +288,14 @@ Token *tokenize() {
     if (startswith(p, "==") || startswith(p, "!=") || startswith(p, "<=") || startswith(p, ">=") ||
         startswith(p, "&&") || startswith(p, "||") || startswith(p, "++") || startswith(p, "--") ||
         startswith(p, "+=") || startswith(p, "-=") || startswith(p, "*=") || startswith(p, "/=") ||
-        startswith(p, "%=") || startswith(p, "->")) {
+        startswith(p, "%=") || startswith(p, "->") || startswith(p, "<<") || startswith(p, ">>")) {
       cur = new_token(TK_RESERVED, cur, p, 2);
       p += 2;
       continue;
     }
 
     // Single-letter punctuator
-    if (strchr("+-*/()<>={}[];&,%!", *p)) {
+    if (strchr("+-*/()<>={}[];&|^~,%!", *p)) {
       cur = new_token(TK_RESERVED, cur, p++, 1);
       continue;
     }
@@ -1139,8 +1145,25 @@ Node *logical() {
   while (TRUE) {
     if (consume("&&")) {
       node = new_binary(ND_AND, node, equality());
+      node->type = node->lhs->type;
     } else if (consume("||")) {
       node = new_binary(ND_OR, node, equality());
+      node->type = node->lhs->type;
+    } else if (consume("&")) {
+      node = new_binary(ND_BITAND, node, equality());
+      node->type = node->lhs->type;
+    } else if (consume("|")) {
+      node = new_binary(ND_BITOR, node, equality());
+      node->type = node->lhs->type;
+    } else if (consume("^")) {
+      node = new_binary(ND_BITXOR, node, equality());
+      node->type = node->lhs->type;
+    } else if (consume("<<")) {
+      node = new_binary(ND_SHL, node, equality());
+      node->type = node->lhs->type;
+    } else if (consume(">>")) {
+      node = new_binary(ND_SHR, node, equality());
+      node->type = node->lhs->type;
     } else {
       break;
     }
@@ -1272,6 +1295,7 @@ Type *resolve_type_mul(Type *left, Type *right, char *ptr) {
   error_at(ptr, "invalid operands to binary expression [in resolve_type_mul]");
   return NULL;
 }
+
 // mul = unary ("*" unary | "/" unary)*
 Node *mul() {
   char *consumed_ptr_prev;
@@ -1330,7 +1354,13 @@ Node *unary() {
   if (consume("!")) {
     node = new_node(ND_NOT);
     node->lhs = unary();
-    node->type = new_type(TY_INT);
+    node->type = node->lhs->type;
+    return node;
+  }
+  if (consume("~")) {
+    node = new_node(ND_BITNOT);
+    node->lhs = unary();
+    node->type = node->lhs->type;
     return node;
   }
   return increment_decrement();
@@ -1418,7 +1448,7 @@ Node *primary() {
 
   // 括弧
   if (consume("(")) {
-    node = logical();
+    node = expr();
     expect(")", "after expression", "primary");
     if (consume("++")) {
       node = new_binary(ND_ASSIGN, node, new_add(node, new_num(1), consumed_ptr));
@@ -1654,6 +1684,13 @@ void gen(Node *node) {
     if (!node->endline)
       printf("  push rax\n");
     return;
+  } else if (node->kind == ND_BITNOT) {
+    gen(node->lhs);
+    printf("  pop rax\n");
+    printf("  not rax\n");
+    if (!node->endline)
+      printf("  push rax\n");
+    return;
   } else if (node->kind == ND_ASSIGN) {
     gen_lval(node->lhs);
     gen(node->rhs);
@@ -1883,6 +1920,20 @@ void gen(Node *node) {
     printf("  setne dl\n");
     printf("  or al, dl\n");
     printf("  movzx rax, al\n");
+  } else if (node->kind == ND_BITAND) {
+    printf("  and rax, rdi\n");
+  } else if (node->kind == ND_BITOR) {
+    printf("  or rax, rdi\n");
+  } else if (node->kind == ND_BITXOR) {
+    printf("  xor rax, rdi\n");
+  } else if (node->kind == ND_SHL) {
+    // シフト量は CL レジスタで指定する
+    printf("  mov rcx, rdi\n");
+    printf("  shl rax, cl\n");
+  } else if (node->kind == ND_SHR) {
+    // シフト量は CL レジスタで指定する
+    printf("  mov rcx, rdi\n");
+    printf("  sar rax, cl\n");
   } else {
     error("invalid node kind");
   }
