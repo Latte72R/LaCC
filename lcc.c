@@ -93,6 +93,7 @@ struct Function {
   LVar *locals;   // ローカル変数
   char *name;     // 変数の名前
   int len;        // 名前の長さ
+  int offset;     // RBPからのオフセット
   Type *type;     // 関数の型
 };
 
@@ -735,6 +736,7 @@ Node *function_definition(Token *tok, Type *type) {
   fn->locals->type = new_type(TY_NONE);
   fn->locals->next = NULL;
   fn->type = type;
+  fn->offset = 0;
   Function *prev_fn = current_fn;
   current_fn = fn;
   Node *node = new_node(ND_FUNCDEF);
@@ -754,6 +756,7 @@ Node *function_definition(Token *tok, Type *type) {
       lvar->name = tok_lvar->str;
       lvar->len = tok_lvar->len;
       lvar->offset = fn->locals->offset + get_sizeof(type);
+      fn->offset = lvar->offset;
       lvar->type = type;
       nd_lvar->var = lvar;
       nd_lvar->type = type;
@@ -793,6 +796,9 @@ Node *local_variable_declaration(Token *tok, Type *type) {
   } else {
     type->array_size = 1;
     lvar->offset = current_fn->locals->offset + get_sizeof(type);
+  }
+  if (current_fn->offset < lvar->offset) {
+    current_fn->offset = lvar->offset;
   }
   node->var = lvar;
   node->type = type;
@@ -904,7 +910,8 @@ Node *stmt() {
   int loop_id_prev;
   if (consume("{")) {
     node = new_node(ND_BLOCK);
-    node->body = malloc(sizeof(Node *) * 1);
+    // LVar *var = current_fn->locals;
+    node->body = malloc(sizeof(Node *));
     int i = 0;
     while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
       node->body[i++] = stmt();
@@ -913,6 +920,7 @@ Node *stmt() {
         error("realloc failed");
     }
     node->body[i] = new_node(ND_NONE);
+    // current_fn->locals = var;
     expect("}", "after block", "block");
   } else if (is_type(token)) {
     // 変数宣言または関数定義
@@ -1040,6 +1048,7 @@ Node *stmt() {
     node->then = stmt();
     loop_id = loop_id_prev;
   } else if (token->kind == TK_FOR) {
+    int init;
     token = token->next;
     expect("(", "before initialization", "for");
     node = new_node(ND_FOR);
@@ -1047,9 +1056,22 @@ Node *stmt() {
     if (consume(";")) {
       node->init = new_node(ND_NONE);
       node->init->endline = TRUE;
-    } else {
-      node->init = stmt();
+      init = FALSE;
+    } else if (is_type(token)) {
+      type = consume_type();
+      tok = consume_ident();
+      if (!tok) {
+        error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len,
+                 token->str);
+      }
+      node->init = local_variable_declaration(tok, type);
       node->init->endline = TRUE;
+      init = TRUE;
+    } else {
+      node->init = expr();
+      expect(";", "after initialization", "for");
+      node->init->endline = TRUE;
+      init = FALSE;
     }
     if (consume(";")) {
       node->cond = new_num(1);
@@ -1070,6 +1092,9 @@ Node *stmt() {
     loop_id_prev = loop_id;
     loop_id = node->id;
     node->then = stmt();
+    if (init) {
+      current_fn->locals = current_fn->locals->next;
+    }
     loop_id = loop_id_prev;
   } else if (token->kind == TK_BREAK) {
     if (loop_id == -1) {
@@ -1832,10 +1857,10 @@ void gen(Node *node) {
     printf("  push rbp\n");
     printf("  mov rbp, rsp\n");
     int offset;
-    if (node->fn->locals->offset % 8) {
-      offset = (node->fn->locals->offset / 8 + 1) * 8;
+    if (node->fn->offset % 8) {
+      offset = (node->fn->offset / 8 + 1) * 8;
     } else {
-      offset = node->fn->locals->offset;
+      offset = node->fn->offset;
     }
     printf("  sub rsp, %d\n", offset);
     for (i = 0; i < node->val; i++) {

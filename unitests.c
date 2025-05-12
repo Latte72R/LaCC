@@ -279,6 +279,17 @@ int test43() {
   return 1 & 2 == 2;
 }
 
+int test44() {
+  int n = 1;
+  for (int i = 1; i < 4; i++) {
+    n *= i;
+  }
+  for (int i = 1; i < 4; i++) {
+    n *= i;
+  }
+  return n;
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -331,6 +342,7 @@ int main() {
   check(test41(), 41, 12);
   check(test42(), 42, -2);
   check(test43(), 43, 1);
+  check(test44(), 44, 36);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");
