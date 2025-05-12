@@ -181,7 +181,7 @@ Node *new_sub(Node *lhs, Node *rhs, char *consumed_ptr);
 Node *add();
 Node *mul();
 Node *increment_decrement();
-Node *refer_struct();
+Node *access_member();
 Node *unary();
 Node *primary();
 
@@ -295,7 +295,7 @@ Token *tokenize() {
     }
 
     // Single-letter punctuator
-    if (strchr("+-*/()<>={}[];&|^~,%!", *p)) {
+    if (strchr("+-*/()<>={}[];&|^~,%!.", *p)) {
       cur = new_token(TK_RESERVED, cur, p++, 1);
       continue;
     }
@@ -1369,12 +1369,12 @@ Node *unary() {
 Node *increment_decrement() {
   Node *node;
   if (consume("++")) {
-    node = refer_struct();
+    node = access_member();
     return new_binary(ND_ASSIGN, node, new_add(node, new_num(1), consumed_ptr));
   } else if (consume("--")) {
     return new_binary(ND_ASSIGN, node, new_sub(node, new_num(1), consumed_ptr));
   }
-  node = refer_struct();
+  node = access_member();
   if (consume("++")) {
     node = new_binary(ND_POSTINC, node, new_add(node, new_num(1), consumed_ptr));
   } else if (consume("--")) {
@@ -1383,40 +1383,80 @@ Node *increment_decrement() {
   return node;
 }
 
-// Structure Reference
-Node *refer_struct() {
+// Structure Reference and Array Indexing
+Node *access_member() {
   Node *ptr;
-  Type *type;
+  Node *offset_node;
+  Token *tok;
+  Struct *struct_;
+  LVar *var;
+  char *consumed_ptr_prev;
   Token *prev_tok = token;
   Node *node = primary();
-  while (TRUE) {
-    if (consume("->")) {
-      if (node->type->ty != TY_PTR) {
-        error_at(prev_tok->str, "%.*s is not a pointer [in struct reference]", prev_tok->len, prev_tok->str);
+  for (;;) {
+    if (consume("[")) {
+      consumed_ptr_prev = consumed_ptr;
+      if (!is_ptr_or_arr(node->type)) {
+        error_at(consumed_ptr_prev, "invalid array access [in primary]");
       }
-      if (node->type->ptr_to->ty != TY_STRUCT) {
+      node = new_add(node, logical(), consumed_ptr_prev);
+      expect("]", "after number", "array access");
+      Node *nd_deref = new_node(ND_DEREF);
+      nd_deref->lhs = node;
+      node = nd_deref;
+      node->type = node->lhs->type->ptr_to;
+    }
+    if (consume(".")) {
+      if (node->type->ty != TY_STRUCT) {
         error_at(prev_tok->str, "%.*s is not a struct [in struct reference]", prev_tok->len, prev_tok->str);
       }
-      Token *tok = consume_ident();
+      tok = consume_ident();
       if (!tok) {
         error_at(token->str, "expected an identifier but got \"%.*s\" [in struct reference]", token->len, token->str);
       }
-      Struct *struct_ = node->type->ptr_to->struct_;
+      struct_ = node->type->struct_;
       if (!struct_) {
         error_at(prev_tok->str, "unknown struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
       } else if (!struct_->size) {
         error_at(prev_tok->str, "not initialized struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
       }
-      LVar *var = find_struct_member(struct_, tok);
-      Node *offset_node = new_num(var->offset);
+      var = find_struct_member(struct_, tok);
+      offset_node = new_num(var->offset);
+      ptr = new_node(ND_ADDR);
+      ptr->lhs = node;
+      ptr->type = new_type_ptr(node->type);
+      ptr = new_binary(ND_ADD, ptr, offset_node);
+      ptr->type = new_type_ptr(var->type);
+      node = new_node(ND_DEREF);
+      node->lhs = ptr;
+      node->type = var->type;
+    } else if (consume("->")) {
+      if (node->type->ty != TY_PTR) {
+        error_at(prev_tok->str, "%.*s is not a pointer [in struct reference]", prev_tok->len, prev_tok->str);
+      }
+      if (node->type->ptr_to->ty != TY_STRUCT) {
+        error_at(prev_tok->str, "%.*s is not a pointer of a struct [in struct reference]", prev_tok->len,
+                 prev_tok->str);
+      }
+      tok = consume_ident();
+      if (!tok) {
+        error_at(token->str, "expected an identifier but got \"%.*s\" [in struct reference]", token->len, token->str);
+      }
+      struct_ = node->type->ptr_to->struct_;
+      if (!struct_) {
+        error_at(prev_tok->str, "unknown struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
+      } else if (!struct_->size) {
+        error_at(prev_tok->str, "not initialized struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
+      }
+      var = find_struct_member(struct_, tok);
+      offset_node = new_num(var->offset);
       if (consume("[")) {
-        char *consumed_ptr_prev = consumed_ptr;
+        consumed_ptr_prev = consumed_ptr;
         if (!is_ptr_or_arr(var->type)) {
           error_at(consumed_ptr_prev, "invalid array access [in struct reference]");
         }
         ptr = new_binary(ND_ADD, node, offset_node);
-        type = new_type_ptr(var->type);
-        ptr->type = type;
+        ptr->type = new_type_ptr(var->type);
         node = new_node(ND_DEREF);
         node->lhs = ptr;
         node->type = var->type;
@@ -1427,8 +1467,7 @@ Node *refer_struct() {
         node->type = var->type->ptr_to;
       } else {
         ptr = new_binary(ND_ADD, node, offset_node);
-        type = new_type_ptr(var->type);
-        ptr->type = type;
+        ptr->type = new_type_ptr(var->type);
         node = new_node(ND_DEREF);
         node->lhs = ptr;
         node->type = var->type;
@@ -1514,18 +1553,6 @@ Node *primary() {
 
     } else {
       error_at(tok->str, "undefined variable: %.*s [in primary]", tok->len, tok->str);
-    }
-    if (consume("[")) {
-      char *consumed_ptr_prev = consumed_ptr;
-      if (!is_ptr_or_arr(node->type)) {
-        error_at(consumed_ptr_prev, "invalid array access [in primary]");
-      }
-      node = new_add(node, logical(), consumed_ptr_prev);
-      expect("]", "after number", "array access");
-      Node *nd_deref = new_node(ND_DEREF);
-      nd_deref->lhs = node;
-      node = nd_deref;
-      node->type = node->lhs->type->ptr_to;
     }
     return node;
   }

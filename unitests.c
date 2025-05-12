@@ -244,6 +244,41 @@ int test37() {
   return 16 >> 2; // 0b10000 >> 2 = 0b100 = 4
 }
 
+int test38() {
+  STRUCT c;
+  c.a = 5;
+  ((&c)->b)[0] = 3;
+  c.b[1] = 4;
+  return c.a * (&c)->b[0] - (&c)->b[1];
+}
+
+int test39() {
+  // 演算子の優先順位
+  return 1 + 2 * 3 << 2;
+}
+
+int test40() {
+  // ポインタ差：配列要素間の差
+  char arr[3];
+  return &arr[2] - &arr[0]; // 2
+}
+
+int test41() {
+  // 構造体のサイズ
+  // STRUCT は int(4) + int の合計 12 バイト
+  return sizeof(STRUCT);
+}
+
+int test42() {
+  // 演算子の優先順位
+  return 1 + ~2;
+}
+
+int test43() {
+  // 演算子の優先順位
+  return 1 & 2 == 2;
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -290,6 +325,12 @@ int main() {
   check(test35(), 35, -6);
   check(test36(), 36, 16);
   check(test37(), 37, 4);
+  check(test38(), 38, 11);
+  check(test39(), 39, 28);
+  check(test40(), 40, 2);
+  check(test41(), 41, 12);
+  check(test42(), 42, -2);
+  check(test43(), 43, 1);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");
