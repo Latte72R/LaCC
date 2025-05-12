@@ -29,7 +29,14 @@ Both global and local (stack) variable declarations are supported.
   - `while (condition) { … }`  
 - **Loop Control**  
   - `break` exits a loop  
-  - `continue` skips to the next iteration  
+  - `continue` skips to the next iteration
+
+### 5. Operators
+
+* **Arithmetic**: `+`, `-`, `*`, `/`, `%`
+* **Relational**: `==`, `!=`, `<`, `<=`, `>`, `>=`
+* **Logical**: `&&`, `||`, `!`
+* **Bitwise**: `&`, `|`, `^`, `~`, `<<`, `>>`
 
 ## Unsupported Constructs
 
@@ -38,7 +45,6 @@ LCC does **not** support the following:
 - Nested functions (functions defined within other functions)  
 - `switch` statements and `case`/`default` labels  
 - `do-while` loops  
-- Bitwise operators: `&`, `|`, `^`, `~`, `<<`, `>>`  
 - Ternary conditional operator (`?:`)  
 - `union` types  
 - Extended primitive types: `unsigned`, `long`, `float`, `double`, etc.  
