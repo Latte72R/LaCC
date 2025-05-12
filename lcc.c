@@ -155,7 +155,7 @@ struct Node {
   Node *then;    // kindがND_IFの場合のみ使う
   Node *els;     // kindがND_IFの場合のみ使う
   Node *init;    // kindがND_FORの場合のみ使う
-  Node *inc;     // kindがND_FORの場合のみ使う
+  Node *step;    // kindがND_FORの場合のみ使う
   Node **body;   // kindがND_BLOCKの場合のみ使う
   Node *args[6]; // kindがND_FUNCALLの場合のみ使う
   Function *fn;  // kindがND_FUNCDEF, ND_FUNCALLの場合のみ使う
@@ -1038,24 +1038,29 @@ Node *stmt() {
     expect("(", "before initialization", "for");
     node = new_node(ND_FOR);
     node->id = loop_cnt++;
-    if (is_type(token)) {
-      type = consume_type();
-      tok = consume_ident();
-      if (!tok) {
-        error_at(token->str, "expected an identifier but got \"%.*s\" [in for]", token->len, token->str);
-      }
-      node->init = local_variable_declaration(tok, type);
-    } else {
-      node->init = expr();
+    if (consume(";")) {
+      node->init = new_node(ND_NONE);
       node->init->endline = TRUE;
-      expect(";", "after initialization", "for");
+    } else {
+      node->init = stmt();
+      node->init->endline = TRUE;
     }
-    node->cond = logical();
-    node->cond->endline = FALSE;
-    expect(";", "after condition", "for");
-    node->inc = expr();
-    node->inc->endline = TRUE;
-    expect(")", "after step expression", "for");
+    if (consume(";")) {
+      node->cond = new_num(1);
+      node->cond->endline = FALSE;
+    } else {
+      node->cond = logical();
+      node->cond->endline = FALSE;
+      expect(";", "after condition", "for");
+    }
+    if (consume(")")) {
+      node->step = new_node(ND_NONE);
+      node->step->endline = TRUE;
+    } else {
+      node->step = expr();
+      node->step->endline = TRUE;
+      expect(")", "after step expression", "for");
+    }
     loop_id_prev = loop_id;
     loop_id = node->id;
     node->then = stmt();
@@ -1594,7 +1599,9 @@ void gen_lval(Node *node) {
 
 void gen(Node *node) {
   int i;
-  if (node->kind == ND_NUM) {
+  if (node->kind == ND_NONE) {
+    return;
+  } else if (node->kind == ND_NUM) {
     if (!node->endline)
       printf("  push %d\n", node->val);
     return;
@@ -1744,7 +1751,7 @@ void gen(Node *node) {
     printf("  je .Lend%d\n", node->id);
     gen(node->then);
     printf(".Lstep%d:\n", node->id);
-    gen(node->inc);
+    gen(node->step);
     printf("  jmp .Lbegin%d\n", node->id);
     printf(".Lend%d:\n", node->id);
     return;

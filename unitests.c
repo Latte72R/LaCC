@@ -181,6 +181,16 @@ int test29() {
   return a * b;
 }
 
+int test30() {
+  int a = 0;
+  for (;;) {
+    if (a > 6)
+      break;
+    a++;
+  }
+  return a;
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -219,6 +229,7 @@ int main() {
   check(test27(), 27, 8);
   check(test28(), 28, 67);
   check(test29(), 29, 12);
+  check(test30(), 30, 7);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");
