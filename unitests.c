@@ -314,6 +314,36 @@ int test48() {
   return 1 || 1 && 0;
 }
 
+int test49_helper(int x) {
+  if (x % 2) {
+    return x * 3;
+  } else {
+    return x + 3;
+  }
+}
+
+int test49() {
+  STRUCT arr[3];
+  for (int i = 0; i < 3; i++) {
+    arr[i].a = test49_helper(i + 1);
+    arr[i].b[0] = i;
+    arr[i].b[1] = i * 2;
+  }
+  int total = 0;
+  for (int i = 0; i < 3; i++) {
+    total += arr[i].a + (arr[i].b[0] + arr[i].b[1]);
+  }
+  return total;
+}
+
+int test50() {
+  int v = 7;
+  int *p = &v;
+  int **pp = &p;
+  int ***ppp = &pp;
+  return ~***ppp + sizeof(**pp);
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -371,6 +401,8 @@ int main() {
   check(test46(), 46, 56);
   check(test47(), 47, 7);
   check(test48(), 48, 1);
+  check(test49(), 49, 26);
+  check(test50(), 50, -4);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");

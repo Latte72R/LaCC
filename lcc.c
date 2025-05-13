@@ -742,10 +742,10 @@ Node *new_num(int val) {
   return node;
 }
 
-Node *new_deref(Node *lhs, Type *type) {
+Node *new_deref(Node *lhs) {
   Node *node = new_node(ND_DEREF);
   node->lhs = lhs;
-  node->type = type;
+  node->type = lhs->type->ptr_to;
   return node;
 }
 
@@ -1357,13 +1357,13 @@ Node *new_add(Node *lhs, Node *rhs, char *ptr) {
   }
   // lhsがptr, rhsがintなら
   if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
-    mul_node = new_binary(ND_MUL, rhs, new_num(get_type_size(lhs->type->ptr_to)));
+    mul_node = new_binary(ND_MUL, rhs, new_num(get_sizeof(lhs->type->ptr_to)));
     node = new_binary(ND_ADD, lhs, mul_node);
     node->type = lhs->type;
   }
   // lhsがint, rhsがptrなら
   else if (is_number(lhs->type) && is_ptr_or_arr(rhs->type)) {
-    mul_node = new_binary(ND_MUL, lhs, new_num(get_type_size(rhs->type->ptr_to)));
+    mul_node = new_binary(ND_MUL, lhs, new_num(get_sizeof(rhs->type->ptr_to)));
     node = new_binary(ND_ADD, mul_node, rhs);
     node->type = rhs->type;
   }
@@ -1390,7 +1390,7 @@ Node *new_sub(Node *lhs, Node *rhs, char *ptr) {
   }
   // lhsがptr, rhsがintなら
   if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
-    mul_node = new_binary(ND_MUL, rhs, new_num(get_type_size(lhs->type->ptr_to)));
+    mul_node = new_binary(ND_MUL, rhs, new_num(get_sizeof(lhs->type->ptr_to)));
     node = new_binary(ND_SUB, lhs, mul_node);
     node->type = lhs->type;
   }
@@ -1477,7 +1477,7 @@ Node *unary() {
   if (consume("*")) {
     char *consumed_ptr_prev = consumed_ptr;
     node = unary();
-    node = new_deref(node, node->type->ptr_to);
+    node = new_deref(node);
     if (!is_ptr_or_arr(node->lhs->type)) {
       error_at(consumed_ptr_prev, "invalid pointer dereference");
     }
@@ -1533,7 +1533,7 @@ Node *access_member() {
       }
       node = new_add(node, logical_or(), consumed_ptr_prev);
       expect("]", "after number", "array access");
-      node = new_deref(node, node->type->ptr_to);
+      node = new_deref(node);
     } else if (consume(".")) {
       if (node->type->ty != TY_STRUCT) {
         error_at(prev_tok->str, "%.*s is not a struct [in struct reference]", prev_tok->len, prev_tok->str);
@@ -1555,7 +1555,7 @@ Node *access_member() {
       ptr->type = new_type_ptr(node->type);
       ptr = new_binary(ND_ADD, ptr, offset_node);
       ptr->type = new_type_ptr(var->type);
-      node = new_deref(ptr, var->type);
+      node = new_deref(ptr);
     } else if (consume("->")) {
       if (node->type->ty != TY_PTR) {
         error_at(prev_tok->str, "%.*s is not a pointer [in struct reference]", prev_tok->len, prev_tok->str);
@@ -1578,7 +1578,7 @@ Node *access_member() {
       offset_node = new_num(var->offset);
       ptr = new_binary(ND_ADD, node, offset_node);
       ptr->type = new_type_ptr(var->type);
-      node = new_deref(ptr, var->type);
+      node = new_deref(ptr);
     } else
       break;
   }
@@ -1595,11 +1595,6 @@ Node *primary() {
   if (consume("(")) {
     node = expr();
     expect(")", "after expression", "primary");
-    if (consume("++")) {
-      node = new_binary(ND_ASSIGN, node, new_add(node, new_num(1), consumed_ptr));
-    } else if (consume("--")) {
-      node = new_binary(ND_ASSIGN, node, new_sub(node, new_num(1), consumed_ptr));
-    }
     return node;
   }
 
