@@ -304,6 +304,16 @@ int test46() {
   return arr[0][0] * arr[0][1] + arr[1][0] * arr[1][1];
 }
 
+int test47() {
+  int a = 7, *b = &a, **c = &b;
+  return **c;
+}
+
+int test48() {
+  // 論理演算子の優先順位
+  return 1 || 1 && 0;
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -359,6 +369,8 @@ int main() {
   check(test44(), 44, 36);
   check(test45(), 45, 11);
   check(test46(), 46, 56);
+  check(test47(), 47, 7);
+  check(test48(), 48, 1);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");

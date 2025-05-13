@@ -174,13 +174,16 @@ struct Node {
 Node *stmt();
 Node *assign();
 Node *expr();
-Node *logical();
 Node *equality();
 Node *relational();
 Node *new_add(Node *lhs, Node *rhs, char *consumed_ptr);
 Node *new_sub(Node *lhs, Node *rhs, char *consumed_ptr);
 Node *add();
 Node *mul();
+Node *logical_and();
+Node *logical_or();
+Node *bit_operator();
+Node *bit_shift();
 Node *increment_decrement();
 Node *access_member();
 Node *unary();
@@ -257,7 +260,7 @@ Token *tokenize() {
   char *p = user_input;
   char *q;
   Token head;
-  (&head)->next = NULL;
+  head.next = NULL;
   Token *cur = &head;
 
   while (*p) {
@@ -482,7 +485,7 @@ Token *tokenize() {
   }
 
   new_token(TK_EOF, cur, p, 0);
-  return (&head)->next;
+  return head.next;
 }
 
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
@@ -565,6 +568,35 @@ Token *consume_ident() {
   consumed_ptr = token->str;
   token = token->next;
   return tok;
+}
+
+Type *check_type() {
+  Token *tok = token;
+  Type *type = malloc(sizeof(Type));
+  if (tok->kind == TK_IDENT) {
+    Struct *struct_ = find_struct(tok);
+    Enum *enum_ = find_enum(tok);
+    if (struct_) {
+      type->ty = TY_STRUCT;
+      type->struct_ = struct_;
+    } else if (enum_) {
+      type->ty = TY_INT;
+    } else {
+      return NULL;
+    }
+  } else if (tok->kind != TK_TYPE) {
+    return NULL;
+  } else if (memcmp(tok->str, "int", tok->len) == 0) {
+    type->ty = TY_INT;
+  } else if (memcmp(tok->str, "char", tok->len) == 0) {
+    type->ty = TY_CHAR;
+  } else if (memcmp(tok->str, "void", tok->len) == 0) {
+    type->ty = TY_VOID;
+  } else {
+    error_at(tok->str, "unknown type \"%.*s\" [in consume type]", tok->len, tok->str);
+  }
+  token = tok;
+  return type;
 }
 
 Type *consume_type() {
@@ -710,6 +742,13 @@ Node *new_num(int val) {
   return node;
 }
 
+Node *new_deref(Node *lhs, Type *type) {
+  Node *node = new_node(ND_DEREF);
+  node->lhs = lhs;
+  node->type = type;
+  return node;
+}
+
 Node *new_binary(NodeKind kind, Node *lhs, Node *rhs) {
   Node *node = new_node(kind);
   node->lhs = lhs;
@@ -802,7 +841,7 @@ Node *local_variable_declaration(Token *tok, Type *type) {
   lvar->next = current_fn->locals;
   current_fn->locals = lvar;
   if (consume("=")) {
-    node = new_binary(ND_ASSIGN, node, logical());
+    node = new_binary(ND_ASSIGN, node, logical_or());
   }
   node->endline = TRUE;
   return node;
@@ -836,7 +875,6 @@ Node *global_variable_declaration(Token *tok, Type *type) {
     }
     lvar->offset = expect_number() * sign;
   }
-  expect(";", "after line", "global variable declaration");
   node->endline = TRUE;
   return node;
 }
@@ -917,6 +955,7 @@ Node *stmt() {
     expect("}", "after block", "block");
   } else if (is_type(token)) {
     // 変数宣言または関数定義
+    Type *ch_type = check_type();
     type = consume_type();
     tok = consume_ident();
     if (!tok) {
@@ -935,6 +974,13 @@ Node *stmt() {
       int i = 0;
       node->body[i++] = local_variable_declaration(tok, type);
       while (consume(",")) {
+        type = ch_type;
+        while (consume("*")) {
+          Type *ptr = malloc(sizeof(Type));
+          ptr->ty = TY_PTR;
+          ptr->ptr_to = type;
+          type = ptr;
+        }
         tok = consume_ident();
         if (!tok) {
           error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len,
@@ -946,10 +992,33 @@ Node *stmt() {
           error("realloc failed");
       }
       node->body[i] = new_node(ND_NONE);
-      expect(";", "after line", "variable declaration");
+      expect(";", "after line", "local variable declaration");
     } else {
       // グローバル変数宣言
-      node = global_variable_declaration(tok, type);
+      node = new_node(ND_BLOCK);
+      node->body = malloc(sizeof(Node *));
+      int i = 0;
+      node->body[i++] = global_variable_declaration(tok, type);
+      while (consume(",")) {
+        type = ch_type;
+        while (consume("*")) {
+          Type *ptr = malloc(sizeof(Type));
+          ptr->ty = TY_PTR;
+          ptr->ptr_to = type;
+          type = ptr;
+        }
+        tok = consume_ident();
+        if (!tok) {
+          error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len,
+                   token->str);
+        }
+        node->body[i++] = global_variable_declaration(tok, type);
+        node->body = realloc(node->body, sizeof(Node *) * (i + 1));
+        if (!node->body)
+          error("realloc failed");
+      }
+      node->body[i] = new_node(ND_NONE);
+      expect(";", "after line", "global variable declaration");
     }
   } else if (token->kind == TK_STRUCT) {
     token = token->next;
@@ -1035,7 +1104,7 @@ Node *stmt() {
     node = new_node(ND_IF);
     node->id = loop_cnt++;
     expect("(", "before condition", "if");
-    node->cond = logical();
+    node->cond = logical_or();
     node->cond->endline = FALSE;
     expect(")", "after equality", "if");
     node->then = stmt();
@@ -1049,7 +1118,7 @@ Node *stmt() {
     expect("(", "before condition", "while");
     node = new_node(ND_WHILE);
     node->id = loop_cnt++;
-    node->cond = logical();
+    node->cond = logical_or();
     node->cond->endline = FALSE;
     expect(")", "after equality", "while");
     loop_id_prev = loop_id;
@@ -1087,7 +1156,7 @@ Node *stmt() {
       node->cond = new_num(1);
       node->cond->endline = FALSE;
     } else {
-      node->cond = logical();
+      node->cond = logical_or();
       node->cond->endline = FALSE;
       expect(";", "after condition", "for");
     }
@@ -1130,7 +1199,7 @@ Node *stmt() {
     if (consume(";")) {
       node->rhs = new_num(0);
     } else {
-      node->rhs = logical();
+      node->rhs = logical_or();
       expect(";", "after line", "return");
     }
     node->endline = TRUE;
@@ -1157,34 +1226,53 @@ void program() {
 Node *expr() { return assign(); }
 
 Node *assign() {
-  Node *node = logical();
+  Node *node = logical_or();
   if (consume("=")) {
-    node = new_binary(ND_ASSIGN, node, logical());
+    node = new_binary(ND_ASSIGN, node, logical_or());
   } else if (consume("+=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_ADD, node, logical()));
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_ADD, node, logical_or()));
   } else if (consume("-=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_SUB, node, logical()));
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_SUB, node, logical_or()));
   } else if (consume("*=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_MUL, node, logical()));
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_MUL, node, logical_or()));
   } else if (consume("/=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_DIV, node, logical()));
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_DIV, node, logical_or()));
   } else if (consume("%=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_MOD, node, logical()));
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_MOD, node, logical_or()));
   }
   return node;
 }
 
-// logical = equality ("&&" equality | "||" equality)*
-Node *logical() {
-  Node *node = equality();
+Node *logical_or() {
+  Node *node = logical_and();
+  while (TRUE) {
+    if (consume("||")) {
+      node = new_binary(ND_OR, node, logical_and());
+      node->type = node->lhs->type;
+    } else {
+      break;
+    }
+  }
+  return node;
+}
+
+Node *logical_and() {
+  Node *node = bit_operator();
   while (TRUE) {
     if (consume("&&")) {
-      node = new_binary(ND_AND, node, equality());
+      node = new_binary(ND_AND, node, bit_operator());
       node->type = node->lhs->type;
-    } else if (consume("||")) {
-      node = new_binary(ND_OR, node, equality());
-      node->type = node->lhs->type;
-    } else if (consume("&")) {
+    } else {
+      break;
+    }
+  }
+  return node;
+}
+
+Node *bit_operator() {
+  Node *node = equality();
+  while (TRUE) {
+    if (consume("&")) {
       node = new_binary(ND_BITAND, node, equality());
       node->type = node->lhs->type;
     } else if (consume("|")) {
@@ -1192,12 +1280,6 @@ Node *logical() {
       node->type = node->lhs->type;
     } else if (consume("^")) {
       node = new_binary(ND_BITXOR, node, equality());
-      node->type = node->lhs->type;
-    } else if (consume("<<")) {
-      node = new_binary(ND_SHL, node, equality());
-      node->type = node->lhs->type;
-    } else if (consume(">>")) {
-      node = new_binary(ND_SHR, node, equality());
       node->type = node->lhs->type;
     } else {
       break;
@@ -1226,21 +1308,37 @@ Node *equality() {
 
 // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
 Node *relational() {
-  Node *node = add();
+  Node *node = bit_shift();
 
   while (TRUE) {
     if (consume("<")) {
-      node = new_binary(ND_LT, node, add());
+      node = new_binary(ND_LT, node, bit_shift());
       node->type = new_type(TY_INT);
     } else if (consume("<=")) {
-      node = new_binary(ND_LE, node, add());
+      node = new_binary(ND_LE, node, bit_shift());
       node->type = new_type(TY_INT);
     } else if (consume(">")) {
-      node = new_binary(ND_LT, add(), node);
+      node = new_binary(ND_LT, bit_shift(), node);
       node->type = new_type(TY_INT);
     } else if (consume(">=")) {
-      node = new_binary(ND_LE, add(), node);
+      node = new_binary(ND_LE, bit_shift(), node);
       node->type = new_type(TY_INT);
+    } else {
+      break;
+    }
+  }
+  return node;
+}
+
+Node *bit_shift() {
+  Node *node = add();
+  while (TRUE) {
+    if (consume("<<")) {
+      node = new_binary(ND_SHL, node, add());
+      node->type = node->lhs->type;
+    } else if (consume(">>")) {
+      node = new_binary(ND_SHR, node, add());
+      node->type = node->lhs->type;
     } else {
       break;
     }
@@ -1378,12 +1476,11 @@ Node *unary() {
   }
   if (consume("*")) {
     char *consumed_ptr_prev = consumed_ptr;
-    node = new_node(ND_DEREF);
-    node->lhs = unary();
+    node = unary();
+    node = new_deref(node, node->type->ptr_to);
     if (!is_ptr_or_arr(node->lhs->type)) {
       error_at(consumed_ptr_prev, "invalid pointer dereference");
     }
-    node->type = node->lhs->type->ptr_to;
     return node;
   }
   if (consume("!")) {
@@ -1434,12 +1531,9 @@ Node *access_member() {
       if (!is_ptr_or_arr(node->type)) {
         error_at(consumed_ptr_prev, "invalid array access [in primary]");
       }
-      node = new_add(node, logical(), consumed_ptr_prev);
+      node = new_add(node, logical_or(), consumed_ptr_prev);
       expect("]", "after number", "array access");
-      Node *nd_deref = new_node(ND_DEREF);
-      nd_deref->lhs = node;
-      node = nd_deref;
-      node->type = node->lhs->type->ptr_to;
+      node = new_deref(node, node->type->ptr_to);
     } else if (consume(".")) {
       if (node->type->ty != TY_STRUCT) {
         error_at(prev_tok->str, "%.*s is not a struct [in struct reference]", prev_tok->len, prev_tok->str);
@@ -1461,9 +1555,7 @@ Node *access_member() {
       ptr->type = new_type_ptr(node->type);
       ptr = new_binary(ND_ADD, ptr, offset_node);
       ptr->type = new_type_ptr(var->type);
-      node = new_node(ND_DEREF);
-      node->lhs = ptr;
-      node->type = var->type;
+      node = new_deref(ptr, var->type);
     } else if (consume("->")) {
       if (node->type->ty != TY_PTR) {
         error_at(prev_tok->str, "%.*s is not a pointer [in struct reference]", prev_tok->len, prev_tok->str);
@@ -1486,9 +1578,7 @@ Node *access_member() {
       offset_node = new_num(var->offset);
       ptr = new_binary(ND_ADD, node, offset_node);
       ptr->type = new_type_ptr(var->type);
-      node = new_node(ND_DEREF);
-      node->lhs = ptr;
-      node->type = var->type;
+      node = new_deref(ptr, var->type);
     } else
       break;
   }
@@ -1586,7 +1676,7 @@ Node *primary() {
     if (!consume(")")) {
       int n = 0;
       for (int i = 0; i < 6; i++) {
-        node->args[i] = logical();
+        node->args[i] = logical_or();
         n += 1;
         if (!consume(","))
           break;
