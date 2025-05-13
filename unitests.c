@@ -295,6 +295,15 @@ int test45() {
   return a * b + c;
 }
 
+int test46() {
+  int arr[2][2];
+  arr[0][0] = 2;
+  arr[0][1] = 4;
+  arr[1][0] = 6;
+  arr[1][1] = 8;
+  return arr[0][0] * arr[0][1] + arr[1][0] * arr[1][1];
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -349,6 +358,7 @@ int main() {
   check(test43(), 43, 1);
   check(test44(), 44, 36);
   check(test45(), 45, 11);
+  check(test46(), 46, 56);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");

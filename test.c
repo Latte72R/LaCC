@@ -17,8 +17,7 @@ int main() {
   int r = 0;
   int u = 10000;
   int v = 0;
-  char *literal = ".,-~:;=!*#$@";
-  while (1) {
+  for (;;) {
     memset(b, 32, 1760);
     memset(z, 0, 1760 * sizeof(int));
     int l = 0;
@@ -41,9 +40,9 @@ int main() {
                 if (g > z[o]) {
                   z[o] = g;
                   if (N >= 1) {
-                    b[o] = literal[N];
+                    b[o] = ".,-~:;=!*#$@"[N];
                   } else {
-                    b[o] = literal[0];
+                    b[o] = ".,-~:;=!*#$@"[0];
                   }
                 }
               }
@@ -64,8 +63,8 @@ int main() {
     }
     a(&q, &r, 9992, 400);
     a(&u, &v, 9998, 200);
-    printf("Author: @a1k0n. Rewritten by @hsjoihs so that it works without floating types.\n");
-    printf("Note that rounding errors gradually reduce the donut's size.\n");
+    printf("Author: @a1k0n. Rewritten by @hsjoihs so that it works without flo");
+    printf("ating types.\nNote that rounding errors gradually reduce the donut's size.\n");
     usleep(50000);
   }
   return 0;

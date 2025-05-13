@@ -5,9 +5,8 @@ void printf();
 int main() {
   int prm[30];
   prm[0] = 2;
-  int i = 3;
   int n = 1;
-  while (n < 30) {
+  for (int i = 3; n < 30; i++) {
     for (int j = 0; j < n; j++) {
       if (i % prm[j] == 0)
         break;
@@ -18,7 +17,6 @@ int main() {
         break;
       }
     }
-    i++;
   }
   printf("\n");
   return 0;

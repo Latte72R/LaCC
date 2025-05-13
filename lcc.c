@@ -787,14 +787,12 @@ Node *local_variable_declaration(Token *tok, Type *type) {
   lvar = malloc(sizeof(LVar));
   lvar->name = tok->str;
   lvar->len = tok->len;
-  if (consume("[")) {
+  type->array_size = 1;
+  while (consume("[")) {
     type = new_type_arr(type, expect_number());
     expect("]", "after number", "array declaration");
-    lvar->offset = current_fn->locals->offset + get_sizeof(type);
-  } else {
-    type->array_size = 1;
-    lvar->offset = current_fn->locals->offset + get_sizeof(type);
   }
+  lvar->offset = current_fn->locals->offset + get_sizeof(type);
   if (current_fn->offset < lvar->offset) {
     current_fn->offset = lvar->offset;
   }
@@ -819,11 +817,10 @@ Node *global_variable_declaration(Token *tok, Type *type) {
   lvar = malloc(sizeof(LVar));
   lvar->name = tok->str;
   lvar->len = tok->len;
-  if (consume("[")) {
+  type->array_size = 1;
+  while (consume("[")) {
     type = new_type_arr(type, expect_number());
     expect("]", "after number", "array declaration");
-  } else {
-    type->array_size = 1;
   }
   node->var = lvar;
   node->type = type;
@@ -862,11 +859,10 @@ Node *new_struct(Token *tok) {
     if (!member_tok) {
       error_at(token->str, "expected an identifier but got \"%.*s\" [in struct declaration]", token->len, token->str);
     }
-    if (consume("[")) {
+    type->array_size = 1;
+    while (consume("[")) {
       type = new_type_arr(type, expect_number());
-      expect("]", "after number", "struct");
-    } else {
-      type->array_size = 1;
+      expect("]", "after number", "array declaration");
     }
     LVar *member_var = malloc(sizeof(LVar));
     member_var->name = member_tok->str;
@@ -1444,8 +1440,7 @@ Node *access_member() {
       nd_deref->lhs = node;
       node = nd_deref;
       node->type = node->lhs->type->ptr_to;
-    }
-    if (consume(".")) {
+    } else if (consume(".")) {
       if (node->type->ty != TY_STRUCT) {
         error_at(prev_tok->str, "%.*s is not a struct [in struct reference]", prev_tok->len, prev_tok->str);
       }
@@ -1489,28 +1484,11 @@ Node *access_member() {
       }
       var = find_struct_member(struct_, tok);
       offset_node = new_num(var->offset);
-      if (consume("[")) {
-        consumed_ptr_prev = consumed_ptr;
-        if (!is_ptr_or_arr(var->type)) {
-          error_at(consumed_ptr_prev, "invalid array access [in struct reference]");
-        }
-        ptr = new_binary(ND_ADD, node, offset_node);
-        ptr->type = new_type_ptr(var->type);
-        node = new_node(ND_DEREF);
-        node->lhs = ptr;
-        node->type = var->type;
-        ptr = new_add(node, logical(), consumed_ptr_prev);
-        expect("]", "after number", "struct reference");
-        node = new_node(ND_DEREF);
-        node->lhs = ptr;
-        node->type = var->type->ptr_to;
-      } else {
-        ptr = new_binary(ND_ADD, node, offset_node);
-        ptr->type = new_type_ptr(var->type);
-        node = new_node(ND_DEREF);
-        node->lhs = ptr;
-        node->type = var->type;
-      }
+      ptr = new_binary(ND_ADD, node, offset_node);
+      ptr->type = new_type_ptr(var->type);
+      node = new_node(ND_DEREF);
+      node->lhs = ptr;
+      node->type = var->type;
     } else
       break;
   }
