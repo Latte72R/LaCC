@@ -132,7 +132,7 @@ typedef enum {
   ND_GVAR,     // グローバル変数
   ND_GLBDEC,   // グローバル変数宣言
   ND_NUM,      // 整数
-  ND_STR,      // 文字列
+  ND_STRING,   // 文字列
   ND_ADDR,     // &
   ND_DEREF,    // *
   ND_IF,       // if
@@ -213,6 +213,7 @@ int isdigit();
 
 // string.h
 int memcmp();
+int memcpy();
 int strlen();
 int strtol();
 char *strstr();
@@ -371,7 +372,12 @@ Token *tokenize() {
           p++;
         }
       }
-      cur = new_token(TK_STR, cur, q, p - q);
+      if (cur->kind == TK_STR) {
+        memcpy(cur->str + cur->len, q, p - q);
+        cur->len += p - q;
+      } else {
+        cur = new_token(TK_STR, cur, q, p - q);
+      }
       p++;
       continue;
     }
@@ -734,6 +740,7 @@ Node *new_node(NodeKind kind) {
   Node *node = malloc(sizeof(Node));
   node->kind = kind;
   node->endline = FALSE;
+  node->val = 0;
   return node;
 }
 
@@ -843,6 +850,7 @@ Node *local_variable_declaration(Token *tok, Type *type) {
   current_fn->locals = lvar;
   if (consume("=")) {
     node = new_binary(ND_ASSIGN, node, expr());
+    node->val = 1;
   }
   node->endline = TRUE;
   return node;
@@ -1632,7 +1640,7 @@ Node *primary() {
     str->next = strings;
     strings = str;
     token = token->next;
-    node = new_node(ND_STR);
+    node = new_node(ND_STRING);
     node->str = str;
     node->type = new_type_ptr(new_type(TY_CHAR));
     return node;
@@ -1775,12 +1783,45 @@ void gen_lval(Node *node) {
   }
 }
 
+void asm_memcpy(Node *lhs, Node *rhs) {
+  gen_lval(lhs);
+  gen(rhs);
+  printf("  pop rdi\n");
+  printf("  pop rsi\n");
+  int size = get_sizeof(rhs->type);
+  int offset = 0;
+  while (size > 0) {
+    if (size >= 8) {
+      printf("  mov rax, QWORD PTR [rdi]\n");
+      printf("  mov QWORD PTR [rsi + %d], rax\n", offset);
+      size -= 8;
+      offset += 8;
+    } else if (size >= 4) {
+      printf("  mov eax, DWORD PTR [rdi]\n");
+      printf("  mov DWORD PTR [rsi + %d], eax\n", offset);
+      size -= 4;
+      offset += 4;
+    } else if (size >= 2) {
+      printf("  mov ax, WORD PTR [rdi]\n");
+      printf("  mov WORD PTR [rsi + %d], ax\n", offset);
+      size -= 2;
+      offset += 2;
+    } else {
+      printf("  mov al, BYTE PTR [rdi]\n");
+      printf("  mov BYTE PTR [rsi + %d], al\n", offset);
+      size -= 1;
+      offset += 1;
+    }
+  }
+  printf("  push rdi\n");
+}
+
 void gen(Node *node) {
   if (node->kind == ND_NUM) {
     if (!node->endline)
       printf("  push %d\n", node->val);
     return;
-  } else if (node->kind == ND_STR) {
+  } else if (node->kind == ND_STRING) {
     printf("  lea rax, [rip + .L.str%d]\n", node->str->label);
     if (!node->endline)
       printf("  push rax\n");
@@ -1837,23 +1878,34 @@ void gen(Node *node) {
       printf("  push rax\n");
     return;
   } else if (node->kind == ND_ASSIGN) {
-    gen_lval(node->lhs);
-    gen(node->rhs);
-
-    printf("  pop rdi\n");
-    printf("  pop rax\n");
-    if (node->lhs->type->ty == TY_INT) {
-      printf("  mov DWORD PTR [rax], edi\n");
-    } else if (node->lhs->type->ty == TY_CHAR) {
-      printf("  mov BYTE PTR [rax], dil\n");
-    } else if (node->lhs->type->ty == TY_PTR) {
-      printf("  mov QWORD PTR [rax], rdi\n");
+    if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR && node->lhs->type->ptr_to->ty == TY_CHAR) {
+      if (!node->val) {
+        error("invalid assignment [in ND_ASSIGN]");
+      }
+      asm_memcpy(node->lhs, node->rhs);
+      printf("  pop rax\n");
+      if (!node->endline)
+        printf("  push rax\n");
+      return;
     } else {
-      error("invalid type [in ND_ASSIGN]");
+      gen_lval(node->lhs);
+      gen(node->rhs);
+
+      printf("  pop rdi\n");
+      printf("  pop rax\n");
+      if (node->lhs->type->ty == TY_INT) {
+        printf("  mov DWORD PTR [rax], edi\n");
+      } else if (node->lhs->type->ty == TY_CHAR) {
+        printf("  mov BYTE PTR [rax], dil\n");
+      } else if (node->lhs->type->ty == TY_PTR) {
+        printf("  mov QWORD PTR [rax], rdi\n");
+      } else {
+        error("invalid type [in ND_ASSIGN]");
+      }
+      if (!node->endline)
+        printf("  push rdi\n");
+      return;
     }
-    if (!node->endline)
-      printf("  push rdi\n");
-    return;
   } else if (node->kind == ND_POSTINC) {
     gen_lval(node->lhs);
     if (!node->endline) {
@@ -1881,7 +1933,7 @@ void gen(Node *node) {
     } else if (node->lhs->type->ty == TY_PTR) {
       printf("  mov QWORD PTR [rax], rdi\n");
     } else {
-      error("invalid type [in ND_ASSIGN]");
+      error("invalid type [in ND_POSTINC]");
     }
     return;
   } else if (node->kind == ND_RETURN) {

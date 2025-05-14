@@ -381,6 +381,13 @@ int test55() {
   return n * nn * nnn;
 }
 
+int test56() {
+  // 文字列リテラルの代入
+  char str[15] = "Hello, "
+                 "World!\n";
+  return str[4] - str[1];
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -445,6 +452,7 @@ int main() {
   check(test53(), 53, 10);
   check(test54(), 54, 40);
   check(test55(), 55, 60);
+  check(test56(), 56, 10);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");
