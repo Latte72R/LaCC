@@ -27,7 +27,7 @@ Both global and local (stack) variable declarations are supported.
 - **Loops**  
   - `for (init; condition; step) { … }`  
   - `while (condition) { … }`  
-  - `do { … } while (condition);` loops  
+  - `do { … } while (condition);` 
 - **Loop Control**  
   - `break` exits a loop  
   - `continue` skips to the next iteration

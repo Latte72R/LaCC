@@ -10,7 +10,9 @@ typedef enum {
   TK_TYPE,     // 型
   TK_NUM,      // 整数トークン
   TK_RETURN,   // return
+  TK_SIZEOF,   // sizeof
   TK_IF,
+  TK_ELSE,
   TK_WHILE,
   TK_FOR,
   TK_BREAK,
@@ -23,16 +25,6 @@ typedef enum {
   TK_STRUCT   // struct
 } TokenKind;
 
-// Token type
-typedef struct Token Token;
-struct Token {
-  TokenKind kind; // Token kind
-  Token *next;    // Next token
-  int val;        // If kind is TK_NUM, its value
-  char *str;      // Token string
-  int len;        // Token length
-};
-
 // ローカル変数の型
 
 typedef struct String String;
@@ -44,6 +36,17 @@ struct String {
 };
 
 typedef enum { TY_NONE, TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_VOID, TY_STRUCT } TypeKind;
+
+// Token type
+typedef struct Token Token;
+struct Token {
+  TokenKind kind; // Token kind
+  Token *next;    // Next token
+  int val;        // If kind is TK_NUM, its value
+  char *str;      // Token string
+  int len;        // Token length
+  TypeKind ty;    // Token type
+};
 
 typedef struct Type Type;
 
@@ -251,7 +254,7 @@ Token *new_token(TokenKind kind, Token *cur, char *str, int len) {
   return tok;
 }
 
-int startswith(char *p, char *q) { return memcmp(p, q, strlen(q)) == 0; }
+int startswith(char *p, char *q) { return !memcmp(p, q, strlen(q)); }
 
 int is_alnum(char c) {
   return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') || (c == '_');
@@ -388,14 +391,20 @@ Token *tokenize() {
       continue;
     }
 
+    if (startswith(p, "if") && !is_alnum(p[2])) {
+      cur = new_token(TK_IF, cur, p, 2);
+      p += 2;
+      continue;
+    }
+
     if (startswith(p, "sizeof") && !is_alnum(p[6])) {
-      cur = new_token(TK_RESERVED, cur, p, 6);
+      cur = new_token(TK_SIZEOF, cur, p, 6);
       p += 6;
       continue;
     }
 
     if (startswith(p, "else") && !is_alnum(p[4])) {
-      cur = new_token(TK_RESERVED, cur, p, 4);
+      cur = new_token(TK_ELSE, cur, p, 4);
       p += 4;
       continue;
     }
@@ -430,12 +439,6 @@ Token *tokenize() {
       continue;
     }
 
-    if (startswith(p, "if") && !is_alnum(p[2])) {
-      cur = new_token(TK_IF, cur, p, 2);
-      p += 2;
-      continue;
-    }
-
     if (startswith(p, "while") && !is_alnum(p[5])) {
       cur = new_token(TK_WHILE, cur, p, 5);
       p += 5;
@@ -450,18 +453,21 @@ Token *tokenize() {
 
     if (startswith(p, "int") && !is_alnum(p[3])) {
       cur = new_token(TK_TYPE, cur, p, 3);
+      cur->ty = TY_INT;
       p += 3;
       continue;
     }
 
     if (startswith(p, "char") && !is_alnum(p[4])) {
       cur = new_token(TK_TYPE, cur, p, 4);
+      cur->ty = TY_CHAR;
       p += 4;
       continue;
     }
 
     if (startswith(p, "void") && !is_alnum(p[4])) {
       cur = new_token(TK_TYPE, cur, p, 4);
+      cur->ty = TY_VOID;
       p += 4;
       continue;
     }
@@ -594,14 +600,8 @@ Type *check_type() {
     }
   } else if (tok->kind != TK_TYPE) {
     return NULL;
-  } else if (memcmp(tok->str, "int", tok->len) == 0) {
-    type->ty = TY_INT;
-  } else if (memcmp(tok->str, "char", tok->len) == 0) {
-    type->ty = TY_CHAR;
-  } else if (memcmp(tok->str, "void", tok->len) == 0) {
-    type->ty = TY_VOID;
   } else {
-    error_at(tok->str, "unknown type \"%.*s\" [in consume type]", tok->len, tok->str);
+    type->ty = tok->ty;
   }
   token = tok;
   return type;
@@ -623,14 +623,8 @@ Type *consume_type() {
     }
   } else if (tok->kind != TK_TYPE) {
     return NULL;
-  } else if (memcmp(tok->str, "int", tok->len) == 0) {
-    type->ty = TY_INT;
-  } else if (memcmp(tok->str, "char", tok->len) == 0) {
-    type->ty = TY_CHAR;
-  } else if (memcmp(tok->str, "void", tok->len) == 0) {
-    type->ty = TY_VOID;
   } else {
-    error_at(tok->str, "unknown type \"%.*s\" [in consume type]", tok->len, tok->str);
+    type->ty = tok->ty;
   }
   consumed_ptr = token->str;
   token = token->next;
@@ -1113,7 +1107,8 @@ Node *stmt() {
     node->cond->endline = FALSE;
     expect(")", "after equality", "if");
     node->then = stmt();
-    if (consume("else")) {
+    if (token->kind == TK_ELSE) {
+      token = token->next;
       node->els = stmt();
     } else {
       node->els = NULL;
@@ -1481,7 +1476,8 @@ Node *mul() {
 //       | primary
 Node *unary() {
   Node *node;
-  if (consume("sizeof")) {
+  if (token->kind == TK_SIZEOF) {
+    token = token->next;
     return new_num(get_sizeof(unary()->type));
   }
   if (consume("+"))
@@ -1985,7 +1981,7 @@ void gen(Node *node) {
       }
     }
     gen(node->lhs);
-    if (node->fn->type->ty == TY_VOID) {
+    if (node->fn->type->ty == TY_VOID || startswith(node->fn->name, "main") && node->fn->len == 4) {
       printf("  mov rsp, rbp\n");
       printf("  pop rbp\n");
       printf("  ret\n");
