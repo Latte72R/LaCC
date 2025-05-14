@@ -27,6 +27,7 @@ Both global and local (stack) variable declarations are supported.
 - **Loops**  
   - `for (init; condition; step) { … }`  
   - `while (condition) { … }`  
+  - `do { … } while (condition);` loops  
 - **Loop Control**  
   - `break` exits a loop  
   - `continue` skips to the next iteration
@@ -45,7 +46,6 @@ LCC does **not** support the following:
 - Nested functions (functions defined within other functions)  
 - `switch` statements and `case`/`default` labels  
 - `goto` statement  
-- `do-while` loops  
 - Ternary conditional operator (`?:`)  
 - `union` types  
 - Extended primitive types: `unsigned`, `long`, `float`, `double`, etc.  

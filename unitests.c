@@ -369,6 +369,11 @@ int test53() {
   return a;
 }
 
+int test54() {
+  int n = 5;
+  return n * foo_test11(n = n - 3);
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -431,6 +436,7 @@ int main() {
   check(test51(), 51, 45);
   check(test52(), 52, 15);
   check(test53(), 53, 10);
+  check(test54(), 54, 40);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");
