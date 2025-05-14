@@ -127,6 +127,7 @@ int test19() {
   }
   return a;
 }
+
 int test20() {
   int a = 0;
   while (a < 10) {
@@ -344,6 +345,30 @@ int test50() {
   return ~***ppp + sizeof(**pp);
 }
 
+int test51() {
+  int n = 10;
+  int k = 0;
+  while (--n) {
+    k += n;
+  }
+  return k;
+}
+
+int test52() {
+  int n = 10;
+  int k = 0;
+  k = n += 5;
+  return k;
+}
+
+int test53() {
+  int a = 0;
+  do {
+    a++;
+  } while (a < 10);
+  return a;
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -403,6 +428,9 @@ int main() {
   check(test48(), 48, 1);
   check(test49(), 49, 26);
   check(test50(), 50, -4);
+  check(test51(), 51, 45);
+  check(test52(), 52, 15);
+  check(test53(), 53, 10);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");

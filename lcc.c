@@ -15,6 +15,7 @@ typedef enum {
   TK_FOR,
   TK_BREAK,
   TK_CONTINUE,
+  TK_DO,
   TK_EXTERN,
   TK_STR,     // 文字列
   TK_TYPEDEF, // typedef
@@ -137,6 +138,7 @@ typedef enum {
   ND_FOR,      // for
   ND_BREAK,    // break
   ND_CONTINUE, // continue
+  ND_DOWHILE,  // do-while
   ND_RETURN,   // return
   ND_FUNCDEF,  // 関数定義
   ND_FUNCALL,  // 関数呼び出し
@@ -298,7 +300,7 @@ Token *tokenize() {
     }
 
     // Single-letter punctuator
-    if (strchr("+-*/()<>={}[];&|^~,%!.", *p)) {
+    if (strchr("+-*/()<>={}[];&|^~,%!.:", *p)) {
       cur = new_token(TK_RESERVED, cur, p++, 1);
       continue;
     }
@@ -377,6 +379,12 @@ Token *tokenize() {
       q = p;
       cur->val = strtol(p, &p, 10);
       cur->len = p - q;
+      continue;
+    }
+
+    if (startswith(p, "do") && !is_alnum(p[2])) {
+      cur = new_token(TK_DO, cur, p, 2);
+      p += 2;
       continue;
     }
 
@@ -826,7 +834,6 @@ Node *local_variable_declaration(Token *tok, Type *type) {
   lvar = malloc(sizeof(LVar));
   lvar->name = tok->str;
   lvar->len = tok->len;
-  type->array_size = 1;
   while (consume("[")) {
     type = new_type_arr(type, expect_number());
     expect("]", "after number", "array declaration");
@@ -841,7 +848,7 @@ Node *local_variable_declaration(Token *tok, Type *type) {
   lvar->next = current_fn->locals;
   current_fn->locals = lvar;
   if (consume("=")) {
-    node = new_binary(ND_ASSIGN, node, logical_or());
+    node = new_binary(ND_ASSIGN, node, expr());
   }
   node->endline = TRUE;
   return node;
@@ -856,7 +863,6 @@ Node *global_variable_declaration(Token *tok, Type *type) {
   lvar = malloc(sizeof(LVar));
   lvar->name = tok->str;
   lvar->len = tok->len;
-  type->array_size = 1;
   while (consume("[")) {
     type = new_type_arr(type, expect_number());
     expect("]", "after number", "array declaration");
@@ -897,7 +903,6 @@ Node *new_struct(Token *tok) {
     if (!member_tok) {
       error_at(token->str, "expected an identifier but got \"%.*s\" [in struct declaration]", token->len, token->str);
     }
-    type->array_size = 1;
     while (consume("[")) {
       type = new_type_arr(type, expect_number());
       expect("]", "after number", "array declaration");
@@ -1104,7 +1109,7 @@ Node *stmt() {
     node = new_node(ND_IF);
     node->id = loop_cnt++;
     expect("(", "before condition", "if");
-    node->cond = logical_or();
+    node->cond = expr();
     node->cond->endline = FALSE;
     expect(")", "after equality", "if");
     node->then = stmt();
@@ -1118,13 +1123,31 @@ Node *stmt() {
     expect("(", "before condition", "while");
     node = new_node(ND_WHILE);
     node->id = loop_cnt++;
-    node->cond = logical_or();
+    node->cond = expr();
     node->cond->endline = FALSE;
     expect(")", "after equality", "while");
     loop_id_prev = loop_id;
     loop_id = node->id;
     node->then = stmt();
     loop_id = loop_id_prev;
+  } else if (token->kind == TK_DO) {
+    token = token->next;
+    node = new_node(ND_DOWHILE);
+    node->id = loop_cnt++;
+    node->then = stmt();
+    if (token->kind != TK_WHILE) {
+      error_at(token->str, "expected 'while' but got \"%.*s\" [in do-while statement]", token->len, token->str);
+    }
+    token = token->next;
+    expect("(", "before condition", "do-while");
+    node->cond = expr();
+    node->cond->endline = FALSE;
+    expect(")", "after equality", "do-while");
+    loop_id_prev = loop_id;
+    loop_id = node->id;
+    loop_id = loop_id_prev;
+    expect(";", "after line", "do-while");
+    node->endline = TRUE;
   } else if (token->kind == TK_FOR) {
     int init;
     token = token->next;
@@ -1156,7 +1179,7 @@ Node *stmt() {
       node->cond = new_num(1);
       node->cond->endline = FALSE;
     } else {
-      node->cond = logical_or();
+      node->cond = expr();
       node->cond->endline = FALSE;
       expect(";", "after condition", "for");
     }
@@ -1199,7 +1222,7 @@ Node *stmt() {
     if (consume(";")) {
       node->rhs = new_num(0);
     } else {
-      node->rhs = logical_or();
+      node->rhs = expr();
       expect(";", "after line", "return");
     }
     node->endline = TRUE;
@@ -1228,24 +1251,24 @@ Node *expr() { return assign(); }
 Node *assign() {
   Node *node = logical_or();
   if (consume("=")) {
-    node = new_binary(ND_ASSIGN, node, logical_or());
+    node = new_binary(ND_ASSIGN, node, expr());
   } else if (consume("+=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_ADD, node, logical_or()));
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_ADD, node, expr()));
   } else if (consume("-=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_SUB, node, logical_or()));
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_SUB, node, expr()));
   } else if (consume("*=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_MUL, node, logical_or()));
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_MUL, node, expr()));
   } else if (consume("/=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_DIV, node, logical_or()));
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_DIV, node, expr()));
   } else if (consume("%=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_MOD, node, logical_or()));
+    node = new_binary(ND_ASSIGN, node, new_binary(ND_MOD, node, expr()));
   }
   return node;
 }
 
 Node *logical_or() {
   Node *node = logical_and();
-  while (TRUE) {
+  for (;;) {
     if (consume("||")) {
       node = new_binary(ND_OR, node, logical_and());
       node->type = node->lhs->type;
@@ -1258,7 +1281,7 @@ Node *logical_or() {
 
 Node *logical_and() {
   Node *node = bit_operator();
-  while (TRUE) {
+  for (;;) {
     if (consume("&&")) {
       node = new_binary(ND_AND, node, bit_operator());
       node->type = node->lhs->type;
@@ -1271,7 +1294,7 @@ Node *logical_and() {
 
 Node *bit_operator() {
   Node *node = equality();
-  while (TRUE) {
+  for (;;) {
     if (consume("&")) {
       node = new_binary(ND_BITAND, node, equality());
       node->type = node->lhs->type;
@@ -1292,7 +1315,7 @@ Node *bit_operator() {
 Node *equality() {
   Node *node = relational();
 
-  while (TRUE) {
+  for (;;) {
     if (consume("==")) {
       node = new_binary(ND_EQ, node, relational());
       node->type = new_type(TY_INT);
@@ -1310,7 +1333,7 @@ Node *equality() {
 Node *relational() {
   Node *node = bit_shift();
 
-  while (TRUE) {
+  for (;;) {
     if (consume("<")) {
       node = new_binary(ND_LT, node, bit_shift());
       node->type = new_type(TY_INT);
@@ -1332,7 +1355,7 @@ Node *relational() {
 
 Node *bit_shift() {
   Node *node = add();
-  while (TRUE) {
+  for (;;) {
     if (consume("<<")) {
       node = new_binary(ND_SHL, node, add());
       node->type = node->lhs->type;
@@ -1356,7 +1379,7 @@ Node *new_add(Node *lhs, Node *rhs, char *ptr) {
     error_at(ptr, "invalid operands to binary expression [in new_add]");
   }
   // lhsがptr, rhsがintなら
-  if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
+  else if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
     mul_node = new_binary(ND_MUL, rhs, new_num(get_sizeof(lhs->type->ptr_to)));
     node = new_binary(ND_ADD, lhs, mul_node);
     node->type = lhs->type;
@@ -1385,11 +1408,11 @@ Node *new_sub(Node *lhs, Node *rhs, char *ptr) {
     node->type = new_type(TY_INT);
   }
   // lhsがint, rhsがptrなら
-  if (is_number(lhs->type) && is_ptr_or_arr(rhs->type)) {
+  else if (is_number(lhs->type) && is_ptr_or_arr(rhs->type)) {
     error_at(ptr, "invalid operands to binary expression [in new_sub]");
   }
   // lhsがptr, rhsがintなら
-  if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
+  else if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
     mul_node = new_binary(ND_MUL, rhs, new_num(get_sizeof(lhs->type->ptr_to)));
     node = new_binary(ND_SUB, lhs, mul_node);
     node->type = lhs->type;
@@ -1407,7 +1430,7 @@ Node *new_sub(Node *lhs, Node *rhs, char *ptr) {
 Node *add() {
   char *consumed_ptr_prev;
   Node *node = mul();
-  while (TRUE) {
+  for (;;) {
     if (consume("+")) {
       consumed_ptr_prev = consumed_ptr;
       node = new_add(node, mul(), consumed_ptr_prev);
@@ -1434,7 +1457,7 @@ Node *mul() {
   char *consumed_ptr_prev;
   Node *node = unary();
 
-  while (TRUE) {
+  for (;;) {
     if (consume("*")) {
       consumed_ptr_prev = consumed_ptr;
       node = new_binary(ND_MUL, node, unary());
@@ -1504,6 +1527,7 @@ Node *increment_decrement() {
     node = access_member();
     return new_binary(ND_ASSIGN, node, new_add(node, new_num(1), consumed_ptr));
   } else if (consume("--")) {
+    node = access_member();
     return new_binary(ND_ASSIGN, node, new_sub(node, new_num(1), consumed_ptr));
   }
   node = access_member();
@@ -1531,7 +1555,7 @@ Node *access_member() {
       if (!is_ptr_or_arr(node->type)) {
         error_at(consumed_ptr_prev, "invalid array access [in primary]");
       }
-      node = new_add(node, logical_or(), consumed_ptr_prev);
+      node = new_add(node, expr(), consumed_ptr_prev);
       expect("]", "after number", "array access");
       node = new_deref(node);
     } else if (consume(".")) {
@@ -1671,7 +1695,7 @@ Node *primary() {
     if (!consume(")")) {
       int n = 0;
       for (int i = 0; i < 6; i++) {
-        node->args[i] = logical_or();
+        node->args[i] = expr();
         n += 1;
         if (!consume(","))
           break;
@@ -1900,6 +1924,17 @@ void gen(Node *node) {
     printf("  cmp rax, 0\n");
     printf("  je .Lend%d\n", node->id);
     gen(node->then);
+    printf(".Lstep%d:\n", node->id);
+    printf("  jmp .Lbegin%d\n", node->id);
+    printf(".Lend%d:\n", node->id);
+    return;
+  } else if (node->kind == ND_DOWHILE) {
+    printf(".Lbegin%d:\n", node->id);
+    gen(node->then);
+    gen(node->cond);
+    printf("  pop rax\n");
+    printf("  cmp rax, 0\n");
+    printf("  je .Lend%d\n", node->id);
     printf(".Lstep%d:\n", node->id);
     printf("  jmp .Lbegin%d\n", node->id);
     printf(".Lend%d:\n", node->id);
