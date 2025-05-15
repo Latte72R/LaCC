@@ -19,7 +19,7 @@ typedef enum {
   TK_CONTINUE,
   TK_DO,
   TK_EXTERN,
-  TK_STR,     // 文字列
+  TK_STRING,  // 文字列
   TK_TYPEDEF, // typedef
   TK_ENUM,    // enum
   TK_STRUCT   // struct
@@ -382,11 +382,11 @@ Token *tokenize() {
           p++;
         }
       }
-      if (cur->kind == TK_STR) {
+      if (cur->kind == TK_STRING) {
         memcpy(cur->str + cur->len, q, p - q);
         cur->len += p - q;
       } else {
-        cur = new_token(TK_STR, cur, q, p - q);
+        cur = new_token(TK_STRING, cur, q, p - q);
       }
       p++;
       continue;
@@ -890,7 +890,9 @@ Node *local_variable_declaration(Token *tok, Type *type) {
     } else {
       node = new_binary(ND_ASSIGN, node, expr());
       node->type = type;
-      node->val = 1;
+      if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR) {
+        node->val = node->lhs->type->ptr_to->ty == TY_CHAR;
+      }
     }
   }
   node->endline = TRUE;
@@ -1673,7 +1675,7 @@ Node *primary() {
   }
 
   // 文字列
-  if (token->kind == TK_STR) {
+  if (token->kind == TK_STRING) {
     String *str = malloc(sizeof(String));
     str->text = token->str;
     str->len = token->len;
@@ -1924,17 +1926,7 @@ void gen(Node *node) {
       printf("  push rax\n");
     return;
   } else if (node->kind == ND_ASSIGN) {
-    if (node->val == 2) {
-      asm_memcpy(node->lhs, node->rhs);
-      printf("  pop rax\n");
-      if (!node->endline)
-        printf("  push rax\n");
-      return;
-    } else if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR &&
-               node->lhs->type->ptr_to->ty == TY_CHAR) {
-      if (node->val != 1) {
-        error("invalid assignment [in ND_ASSIGN]");
-      }
+    if (node->val == 1 || node->val == 2) {
       asm_memcpy(node->lhs, node->rhs);
       printf("  pop rax\n");
       if (!node->endline)
@@ -1943,7 +1935,6 @@ void gen(Node *node) {
     } else {
       gen_lval(node->lhs);
       gen(node->rhs);
-
       printf("  pop rdi\n");
       printf("  pop rax\n");
       if (node->lhs->type->ty == TY_INT) {
