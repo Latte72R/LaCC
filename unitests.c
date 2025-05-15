@@ -394,6 +394,73 @@ int test57() {
   return arr[0] + arr[1] * arr[2];
 }
 
+int test58() { return sizeof(int *); }
+
+int test59() { return 'a' + 1; }
+
+int test60() {
+  /* ポインタの後置インクリメントと評価順 */
+  int a[2] = {1, 2};
+  int *p = a;
+  return *p++ + *p; /* 1 + 2 = 3 */
+}
+
+int test61() {
+  /* 2 段間接ポインタでの書き込み */
+  int v = 6;
+  int *p = &v;
+  int **pp = &p;
+  **pp += 4; /* v==10 */
+  return v;
+}
+
+int test62() {
+  /* sizeof 配列 vs sizeof ポインタ */
+  int arr[10];
+  int *p = arr;
+  return sizeof(arr) / sizeof(*p); /* 10 */
+}
+
+int test63() {
+  /* && の短絡評価で右辺が呼ばれないことを確認 */
+  int a = 0, b = 0;
+  if (a && (b = 1)) { /* 左辺が 0 なので右辺は評価されない */
+    return -1;
+  }
+  return b; /* 0 なら OK */
+}
+
+int test64() {
+  /* 後置 ++ と左辺値の取り扱い */
+  int a = 2;
+  return a++ * a; /* 2 * 3 = 6 */
+}
+
+int test65() {
+  /* 括弧付きシフトと算術の優先順位 */
+  return (2 + 1) << (1 + 1); /* 3 << 2 = 12 */
+}
+
+int test66() {
+  /* char 配列でのポインタ差 */
+  char buf[20];
+  return &buf[15] - &buf[5]; /* 10 */
+}
+
+int test67() {
+  /* 2 次元配列をポインタ算術で横断 */
+  int m[3][4];
+  m[2][3] = 7;
+  return *(*(m + 2) + 3); /* 7 */
+}
+
+int test68() {
+  /* || の短絡評価で副作用をスキップ */
+  int a = 0;
+  (1 || (a = 5)); /* 左辺が真なので右辺は評価されない */
+  return a;       /* 0 */
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -460,6 +527,17 @@ int main() {
   check(test55(), 55, 60);
   check(test56(), 56, 10);
   check(test57(), 57, 15);
+  check(test58(), 58, 8);
+  check(test59(), 59, 98);
+  check(test60(), 60, 3);
+  check(test61(), 61, 10);
+  check(test62(), 62, 10);
+  check(test63(), 63, 0);
+  check(test64(), 64, 6);
+  check(test65(), 65, 12);
+  check(test66(), 66, 10);
+  check(test67(), 67, 7);
+  check(test68(), 68, 0);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");
