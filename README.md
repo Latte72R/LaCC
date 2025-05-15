@@ -72,7 +72,7 @@ There are no code-generation optimizations beyond what's needed to make it work.
 
 ## Getting Started with LCC
 
-1. Clone the repository and enter it
+1. **Clone the repository and enter it**
 
   ```bash
   git clone https://github.com/Latte72R/LCC
