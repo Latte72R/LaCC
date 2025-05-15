@@ -70,7 +70,7 @@ There are no code-generation optimizations beyond what's needed to make it work.
 LCC is designed and maintained by student engineer **Latte72**!  
 
 ### Links  
-- **Website:** [https://latte72.net/](https://latte72.net/) :contentReference[oaicite:0]{index=0}  
-- **GitHub:** [@Latte72R](https://github.com/Latte72R/LCC) :contentReference[oaicite:1]{index=1}  
-- **X a.k.a Twitter:** [@Latte72R](https://twitter.com/Latte72R) :contentReference[oaicite:2]{index=2}  
-- **Qiita:** [@Latte72R](https://qiita.com/Latte72R) :contentReference[oaicite:3]{index=3}  
+- **Website:** [https://latte72.net/](https://latte72.net/)
+- **GitHub:** [@Latte72R](https://github.com/Latte72R/LCC)
+- **X a.k.a Twitter:** [@Latte72R](https://twitter.com/Latte72R)
+- **Qiita:** [@Latte72R](https://qiita.com/Latte72R)
