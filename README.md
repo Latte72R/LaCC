@@ -47,7 +47,7 @@ LCC does **not** support the following:
 
 - Nested functions (functions defined within other functions)  
 - `switch` statements and `case`/`default` labels  
-- `goto` statement  
+- `goto` statement and labels
 - Ternary conditional operator (`?:`)  
 - `union` types  
 - Extended primitive types: `unsigned`, `long`, `float`, `double`, etc.  
@@ -56,6 +56,9 @@ LCC does **not** support the following:
 - Inline assembly  
 - Preprocessor directives: `#include`, `#define`, `#ifdef`, etc.  
 - Variadic functions (functions with `...` parameters)  
+- The comma operator
+- Function pointers
+- Explicit type casting
 
 
 ## Limitations
