@@ -32,7 +32,16 @@ struct String {
   String *next;
   char *text;
   int len;
-  int label;
+  int id;
+};
+
+typedef struct Array Array;
+struct Array {
+  Array *next;
+  int *val;
+  int byte;
+  int len;
+  int id;
 };
 
 typedef enum { TY_NONE, TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_VOID, TY_STRUCT } TypeKind;
@@ -133,6 +142,7 @@ typedef enum {
   ND_GLBDEC,   // グローバル変数宣言
   ND_NUM,      // 整数
   ND_STRING,   // 文字列
+  ND_ARRAY,    // 配列
   ND_ADDR,     // &
   ND_DEREF,    // *
   ND_IF,       // if
@@ -147,7 +157,6 @@ typedef enum {
   ND_FUNCALL,  // 関数呼び出し
   ND_EXTERN,   // extern
   ND_BLOCK,    // { ... }
-  ND_ARR,      // 配列
   ND_ENUM,     // 列挙体
   ND_STRUCT,   // 構造体
   ND_TYPEDEF,  // typedef
@@ -172,7 +181,6 @@ struct Node {
   Node *args[6]; // kindがND_FUNCALLの場合のみ使う
   Function *fn;  // kindがND_FUNCDEF, ND_FUNCALLの場合のみ使う
   LVar *var;     // kindがND_LVAR, ND_GVARの場合のみ使う
-  String *str;   // kindがND_STRの場合のみ使う
   Type *type;
 };
 
@@ -227,6 +235,7 @@ char *user_input;
 Token *token;
 Node **code;
 int label_cnt = 0;
+int array_cnt = 0;
 int loop_cnt = 0;
 int variable_cnt = 0;
 int loop_id = -1;
@@ -238,6 +247,7 @@ StructTag *struct_tags;
 Enum *enums;
 LVar *enum_members;
 String *strings;
+Array *arrays;
 char *filename;
 char *consumed_ptr;
 
@@ -849,8 +859,39 @@ Node *local_variable_declaration(Token *tok, Type *type) {
   lvar->next = current_fn->locals;
   current_fn->locals = lvar;
   if (consume("=")) {
-    node = new_binary(ND_ASSIGN, node, expr());
-    node->val = 1;
+    if (consume("{")) {
+      if (type->ty != TY_ARR) {
+        error_at(token->str, "array initializer is only allowed for array type [in variable declaration]");
+      }
+      Array *array = malloc(sizeof(Array));
+      array->next = arrays;
+      arrays = array;
+      array->id = array_cnt++;
+      array->byte = get_type_size(type->ptr_to);
+      array->val = NULL;
+      int i = 0;
+      while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
+        array->val = realloc(array->val, array->byte * i++);
+        array->val[i - 1] = expect_number();
+        if (!array->val)
+          error("realloc failed");
+        if (!consume(",")) {
+          break;
+        }
+      }
+      array->len = i;
+      expect("}", "after array initializer", "variable declaration");
+      Node *arr = new_node(ND_ARRAY);
+      arr->type = type;
+      arr->id = array->id;
+      node = new_binary(ND_ASSIGN, node, arr);
+      node->type = type;
+      node->val = 2;
+    } else {
+      node = new_binary(ND_ASSIGN, node, expr());
+      node->type = type;
+      node->val = 1;
+    }
   }
   node->endline = TRUE;
   return node;
@@ -1636,12 +1677,12 @@ Node *primary() {
     String *str = malloc(sizeof(String));
     str->text = token->str;
     str->len = token->len;
-    str->label = label_cnt++;
+    str->id = label_cnt++;
     str->next = strings;
     strings = str;
     token = token->next;
     node = new_node(ND_STRING);
-    node->str = str;
+    node->id = str->id;
     node->type = new_type_ptr(new_type(TY_CHAR));
     return node;
   }
@@ -1792,22 +1833,22 @@ void asm_memcpy(Node *lhs, Node *rhs) {
   int offset = 0;
   while (size > 0) {
     if (size >= 8) {
-      printf("  mov rax, QWORD PTR [rdi]\n");
+      printf("  mov rax, QWORD PTR [rdi + %d]\n", offset);
       printf("  mov QWORD PTR [rsi + %d], rax\n", offset);
       size -= 8;
       offset += 8;
     } else if (size >= 4) {
-      printf("  mov eax, DWORD PTR [rdi]\n");
+      printf("  mov eax, DWORD PTR [rdi + %d]\n", offset);
       printf("  mov DWORD PTR [rsi + %d], eax\n", offset);
       size -= 4;
       offset += 4;
     } else if (size >= 2) {
-      printf("  mov ax, WORD PTR [rdi]\n");
+      printf("  mov ax, WORD PTR [rdi + %d]\n", offset);
       printf("  mov WORD PTR [rsi + %d], ax\n", offset);
       size -= 2;
       offset += 2;
     } else {
-      printf("  mov al, BYTE PTR [rdi]\n");
+      printf("  mov al, BYTE PTR [rdi + %d]\n", offset);
       printf("  mov BYTE PTR [rsi + %d], al\n", offset);
       size -= 1;
       offset += 1;
@@ -1822,7 +1863,12 @@ void gen(Node *node) {
       printf("  push %d\n", node->val);
     return;
   } else if (node->kind == ND_STRING) {
-    printf("  lea rax, [rip + .L.str%d]\n", node->str->label);
+    printf("  lea rax, [rip + .L.str%d]\n", node->id);
+    if (!node->endline)
+      printf("  push rax\n");
+    return;
+  } else if (node->kind == ND_ARRAY) {
+    printf("  lea rax, [rip + .L.arr%d]\n", node->id);
     if (!node->endline)
       printf("  push rax\n");
     return;
@@ -1878,8 +1924,15 @@ void gen(Node *node) {
       printf("  push rax\n");
     return;
   } else if (node->kind == ND_ASSIGN) {
-    if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR && node->lhs->type->ptr_to->ty == TY_CHAR) {
-      if (!node->val) {
+    if (node->val == 2) {
+      asm_memcpy(node->lhs, node->rhs);
+      printf("  pop rax\n");
+      if (!node->endline)
+        printf("  push rax\n");
+      return;
+    } else if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR &&
+               node->lhs->type->ptr_to->ty == TY_CHAR) {
+      if (node->val != 1) {
         error("invalid assignment [in ND_ASSIGN]");
       }
       asm_memcpy(node->lhs, node->rhs);
@@ -2177,6 +2230,8 @@ void init_global_variables() {
   // 文字列リテラルの初期化
   strings = malloc(sizeof(String));
   strings->next = NULL;
+  arrays = malloc(sizeof(Array));
+  arrays->next = NULL;
 }
 
 int main(int argc, char **argv) {
@@ -2215,8 +2270,23 @@ int main(int argc, char **argv) {
   // 文字列リテラル
   for (String *str = strings; str->next; str = str->next) {
     printf("  .section .rodata\n");
-    printf(".L.str%d:\n", str->label);
+    printf(".L.str%d:\n", str->id);
     printf("  .string \"%.*s\"\n", str->len, str->text);
+  }
+
+  // 配列リテラル
+  for (Array *arr = arrays; arr->next; arr = arr->next) {
+    printf("  .section .rodata\n");
+    printf(".L.arr%d:\n", arr->id);
+    for (int i = 0; i < arr->len; i++) {
+      if (arr->byte == 1) {
+        printf("  .byte %d\n", arr->val[i]);
+      } else if (arr->byte == 4) {
+        printf("  .long %d\n", arr->val[i]);
+      } else {
+        error("invalid array type [INIT]");
+      }
+    }
   }
 
   // 先頭の式から順にコード生成
