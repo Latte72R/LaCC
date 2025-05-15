@@ -238,6 +238,7 @@ int label_cnt = 0;
 int array_cnt = 0;
 int loop_cnt = 0;
 int variable_cnt = 0;
+int logical_cnt = 0;
 int loop_id = -1;
 Function *functions;
 Function *current_fn;
@@ -1318,6 +1319,7 @@ Node *logical_or() {
     if (consume("||")) {
       node = new_binary(ND_OR, node, logical_and());
       node->type = node->lhs->type;
+      node->id = logical_cnt++;
     } else {
       break;
     }
@@ -1331,6 +1333,7 @@ Node *logical_and() {
     if (consume("&&")) {
       node = new_binary(ND_AND, node, bit_operator());
       node->type = node->lhs->type;
+      node->id = logical_cnt++;
     } else {
       break;
     }
@@ -2117,6 +2120,44 @@ void gen(Node *node) {
     if (!node->endline)
       printf("  push rax\n");
     return;
+  } else if (node->kind == ND_AND) {
+    gen(node->lhs);
+    printf("  pop rax\n");
+    printf("  cmp rax, 0\n");
+    printf("  push 0\n");
+    printf("  je .Llogical%d\n", node->id);
+    printf("  pop rax\n");
+    gen(node->rhs);
+    printf("  pop rax\n");
+    printf("  cmp rax, 0\n");
+    printf("  push 0\n");
+    printf("  je .Llogical%d\n", node->id);
+    printf("  pop rax\n");
+    printf("  push 1\n");
+    printf(".Llogical%d:\n", node->id);
+    printf("  pop rax\n");
+    if (!node->endline)
+      printf("  push rax\n");
+    return;
+  } else if (node->kind == ND_OR) {
+    gen(node->lhs);
+    printf("  pop rax\n");
+    printf("  cmp rax, 0\n");
+    printf("  push 1\n");
+    printf("  jne .Llogical%d\n", node->id);
+    printf("  pop rax\n");
+    gen(node->rhs);
+    printf("  pop rax\n");
+    printf("  cmp rax, 0\n");
+    printf("  push 1\n");
+    printf("  jne .Llogical%d\n", node->id);
+    printf("  pop rax\n");
+    printf("  push 0\n");
+    printf(".Llogical%d:\n", node->id);
+    printf("  pop rax\n");
+    if (!node->endline)
+      printf("  push rax\n");
+    return;
   } else if ((node->kind == ND_GLBDEC) || (node->kind == ND_VARDEC) || (node->kind == ND_EXTERN) ||
              (node->kind == ND_TYPEDEF) || (node->kind == ND_ENUM) || (node->kind == ND_STRUCT) ||
              (node->kind == ND_TYPE || node->kind == ND_NONE)) {
@@ -2157,20 +2198,6 @@ void gen(Node *node) {
   } else if (node->kind == ND_LE) {
     printf("  cmp rax, rdi\n");
     printf("  setle al\n");
-    printf("  movzx rax, al\n");
-  } else if (node->kind == ND_AND) {
-    printf("  test rax, rax\n");
-    printf("  setne al\n");
-    printf("  test rdi, rdi\n");
-    printf("  setne dl\n");
-    printf("  and al, dl\n");
-    printf("  movzx rax, al\n");
-  } else if (node->kind == ND_OR) {
-    printf("  test rax, rax\n");
-    printf("  setne al\n");
-    printf("  test rdi, rdi\n");
-    printf("  setne dl\n");
-    printf("  or al, dl\n");
     printf("  movzx rax, al\n");
   } else if (node->kind == ND_BITAND) {
     printf("  and rax, rdi\n");
