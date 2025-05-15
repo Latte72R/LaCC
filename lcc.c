@@ -2122,39 +2122,33 @@ void gen(Node *node) {
     return;
   } else if (node->kind == ND_AND) {
     gen(node->lhs);
-    printf("  pop rax\n");
-    printf("  cmp rax, 0\n");
-    printf("  push 0\n");
+    printf("  pop rdi\n");
+    printf("  cmp rdi, 0\n");
+    printf("  mov rax, 0\n");
     printf("  je .Llogical%d\n", node->id);
-    printf("  pop rax\n");
     gen(node->rhs);
-    printf("  pop rax\n");
-    printf("  cmp rax, 0\n");
-    printf("  push 0\n");
+    printf("  pop rdi\n");
+    printf("  cmp rdi, 0\n");
+    printf("  mov rax, 0\n");
     printf("  je .Llogical%d\n", node->id);
-    printf("  pop rax\n");
-    printf("  push 1\n");
+    printf("  mov rax, 1\n");
     printf(".Llogical%d:\n", node->id);
-    printf("  pop rax\n");
     if (!node->endline)
       printf("  push rax\n");
     return;
   } else if (node->kind == ND_OR) {
     gen(node->lhs);
-    printf("  pop rax\n");
-    printf("  cmp rax, 0\n");
-    printf("  push 1\n");
+    printf("  pop rdi\n");
+    printf("  cmp rdi, 0\n");
+    printf("  mov rax, 1\n");
     printf("  jne .Llogical%d\n", node->id);
-    printf("  pop rax\n");
     gen(node->rhs);
-    printf("  pop rax\n");
-    printf("  cmp rax, 0\n");
-    printf("  push 1\n");
+    printf("  pop rdi\n");
+    printf("  cmp rdi, 0\n");
+    printf("  mov rax, 1\n");
     printf("  jne .Llogical%d\n", node->id);
-    printf("  pop rax\n");
-    printf("  push 0\n");
+    printf("  mov rax, 0\n");
     printf(".Llogical%d:\n", node->id);
-    printf("  pop rax\n");
     if (!node->endline)
       printf("  push rax\n");
     return;
