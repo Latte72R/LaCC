@@ -14,7 +14,7 @@ clean:
 test: lcc
 	./multitest.sh ./lcc
 
-self: lccs
+selfhost-test: lccs
 	./multitest.sh ./lccs
 
-.PHONY: test clean
+.PHONY: test selfhost-test clean

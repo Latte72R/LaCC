@@ -69,6 +69,78 @@ LCC only handles one .c file at a time — there's no support for separate compi
 ### No Optimizations
 There are no code-generation optimizations beyond what's needed to make it work.
 
+
+## Getting Started with LCC
+
+1. Clone the repository and enter it
+
+  ```bash
+  git clone https://github.com/Latte72R/LCC
+  cd LCC
+  ```
+
+  After that, you have a few `make` targets to build and test your compiler:
+
+2. **Build the compiler**
+
+  ```bash
+  make
+  ```
+
+  This invokes the default target, compiling all sources into the `lcc` executable.  
+  If nothing has changed, you’ll see
+
+  ```bash
+  'lcc' is up to date.
+  ```
+
+3. **Build the self-hosted compiler**
+
+  ```bash
+  make lccs
+  ```
+
+  Here, `lcc` is used to recompile the compiler source itself, producing a second-stage compiler named `lccs`. 
+  This ensures that your compiler can correctly compile its own code.
+
+4. **Run primary tests**
+
+  ```bash
+  make test
+  ```
+
+  Similarly, this runs
+
+  ```bash
+  ./multitest.sh ./lcc
+  ```
+
+  to validate the first-stage compiler `lcc` against the same test suite.
+
+5. **Run self-host tests**
+
+  ```bash
+  make selfhost-test
+  ```
+
+  Internally this runs
+
+  ```bash
+  ./multitest.sh ./lccs
+  ```
+
+  and executes a suite of example programs (unit tests, `prime.c`, `fizzbuzz.c`, etc.) using `lccs`. 
+  Passing all tests confirms that your self-hosted compiler behaves as expected.
+
+6. **Clean up build artifacts**
+
+  ```bash
+  make clean
+  ```
+
+  Removes the `lcc` and `lccs` binaries, object files (`*.o`), backup files (`*~`) and any temporary files (`tmp*`), letting you start from a clean slate.
+
+
 ## About the Author  
 LCC is designed and maintained by student engineer **Latte72**!  
 
