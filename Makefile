@@ -1,4 +1,5 @@
-CFLAGS=-std=c11 -g -static -Wno-incompatible-library-redeclaration
+CFLAGS=-std=c99 -Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option
+LDFLAGS=-std=c99
 SRCS=lcc.c extention.c
 
 lcc: $(SRCS)
