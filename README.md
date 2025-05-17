@@ -1,8 +1,8 @@
-# Latte’s C Compiler
+![](./LaCC.png)
 
-LCC is a minimalist C compiler that implements only the core language features you need to get simple C programs running.
+LaCC is a minimalist C compiler that implements only the core language features you need to get simple C programs running.
 
-[![DeepWiki](https://img.shields.io/badge/DeepWiki-Latte72R%2FLCC-blue.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1saEDv4O3n3dV60RfP947Mm9/SQc0ICFQgzfc4CYZoTPAswgSJCCUJUnAAoRHOAUOcATwbmVLWdGoH//PB8mnKqScAhsD0kYP3j/Yt5LPQe2KvcXmGvRHcDnpxfL2zOYJ1mFwrryWTz0advv1Ut4CJgf5uhDuDj5eUcAUoahrdY/56ebRWeraTjMt/00Sh3UDtjgHtQNHwcRGOC98BJEAEymycmYcWwOprTgcB6VZ5JK5TAJ+fXGLBm3FDAmn6oPPjR4rKCAoJCal2eAiQp2x0vxTPB3ALO2CRkwmDy5WohzBDwSEFKRwPbknEggCPB/imwrycgxX2NzoMCHhPkDwqYMr9tRcP5qNrMZHkVnOjRMWwLCcr8ohBVb1OMjxLwGCvjTikrsBOiA6fNyCrm8V1rP93iVPpwaE+gO0SsWmPiXB+jikdf6SizrT5qKasx5j8ABbHpFTx+vFXp9EnYQmLx02h1QTTrl6eDqxLnGjporxl3NL3agEvXdT0WmEost648sQOYAeJS9Q7bfUVoMGnjo4AZdUMQku50McDcMWcBPvr0SzbTAFDfvJqwLzgxwATnCgnp4wDl6Aa+Ax283gghmj+vj7feE2KBBRMW3FzOpLOADl0Isb5587h/U4gGvkt5v60Z1VLG8BhYjbzRwyQZemwAd6cCR5/XFWLYZRIMpX39AR0tjaGGiGzLVyhse5C9RKC6ai42ppWPKiBagOvaYk8lO7DajerabOZP46Lby5wKjw1HCRx7p9sVMOWGzb/vA1hwiWc6jm3MvQDTogQkiqIhJV0nBQBTU+3okKCFDy9WwferkHjtxib7t3xIUQtHxnIwtx4mpg26/HfwVNVDb4oI9RHmx5WGelRVlrtiw43zboCLaxv46AZeB3IlTkwouebTr1y2NjSpHz68WNFjHvupy3q8TFn3Hos2IAk4Ju5dCo8B3wP7VPr/FGaKiG+T+v+TQqIrOqMTL1VdWV1DdmcbO8KXBz6esmYWYKPwDL5b5FA1a0hwapHiom0r/cKaoqr+27/XcrS5UwSMbQAAAABJRU5ErkJggg==)](https://deepwiki.com/Latte72R/LCC)
+[![DeepWiki](https://img.shields.io/badge/DeepWiki-Latte72R%2FLCC-blue.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1saEDv4O3n3dV60RfP947Mm9/SQc0ICFQgzfc4CYZoTPAswgSJCCUJUnAAoRHOAUOcATwbmVLWdGoH//PB8mnKqScAhsD0kYP3j/Yt5LPQe2KvcXmGvRHcDnpxfL2zOYJ1mFwrryWTz0advv1Ut4CJgf5uhDuDj5eUcAUoahrdY/56ebRWeraTjMt/00Sh3UDtjgHtQNHwcRGOC98BJEAEymycmYcWwOprTgcB6VZ5JK5TAJ+fXGLBm3FDAmn6oPPjR4rKCAoJCal2eAiQp2x0vxTPB3ALO2CRkwmDy5WohzBDwSEFKRwPbknEggCPB/imwrycgxX2NzoMCHhPkDwqYMr9tRcP5qNrMZHkVnOjRMWwLCCr8ohBVb1OMjxLwGCvjTikrsBOiA6fNyCrm8V1rP93iVPpwaE+gO0SsWmPiXB+jikdf6SizrT5qKasx5j8ABbHpFTx+vFXp9EnYQmLx02h1QTTrl6eDqxLnGjporxl3NL3agEvXdT0WmEost648sQOYAeJS9Q7bfUVoMGnjo4AZdUMQku50McDcMWcBPvr0SzbTAFDfvJqwLzgxwATnCgnp4wDl6Aa+Ax283gghmj+vj7feE2KBBRMW3FzOpLOADl0Isb5587h/U4gGvkt5v60Z1VLG8BhYjbzRwyQZemwAd6cCR5/XFWLYZRIMpX39AR0tjaGGiGzLVyhse5C9RKC6ai42ppWPKiBagOvaYk8lO7DajerabOZP46Lby5wKjw1HCRx7p9sVMOWGzb/vA1hwiWc6jm3MvQDTogQkiqIhJV0nBQBTU+3okKCFDy9WwferkHjtxib7t3xIUQtHxnIwtx4mpg26/HfwVNVDb4oI9RHmx5WGelRVlrtiw43zboCLaxv46AZeB3IlTkwouebTr1y2NjSpHz68WNFjHvupy3q8TFn3Hos2IAk4Ju5dCo8B3wP7VPr/FGaKiG+T+v+TQqIrOqMTL1VdWV1DdmcbO8KXBz6esmYWYKPwDL5b5FA1a0hwapHiom0r/cKaoqr+27/XcrS5UwSMbQAAAABJRU5ErkJggg==)](https://deepwiki.com/Latte72R/LCC)
 
 ## Supported Features
 
@@ -43,7 +43,7 @@ Both global and local (stack) variable declarations are supported.
 
 ## Unsupported Constructs
 
-LCC does **not** support the following:
+LaCC does **not** support the following:
 
 - Nested functions (functions defined within other functions)  
 - `switch` statements and `case`/`default` labels  
@@ -64,19 +64,19 @@ LCC does **not** support the following:
 ## Limitations
 
 ### Single‐Unit Compilation
-LCC only handles one .c file at a time — there's no support for separate compilation or linking multiple translation units.
+LaCC only handles one .c file at a time — there's no support for separate compilation or linking multiple translation units.
 
 ### No Optimizations
 There are no code-generation optimizations beyond what's needed to make it work.
 
 
-## Getting Started with LCC
+## Getting Started with LaCC
 
 ### 1. Clone the repository and enter it
 
   ```bash
-  git clone https://github.com/Latte72R/LCC
-  cd LCC
+  git clone https://github.com/Latte72R/LaCC
+  cd LaCC
   ```
 
   After that, you have a few `make` targets to build and test your compiler:
@@ -87,20 +87,20 @@ There are no code-generation optimizations beyond what's needed to make it work.
   make
   ```
 
-  This invokes the default target, compiling all sources into the `lcc` executable.  
+  This invokes the default target, compiling all sources into the `LaCC` executable.  
   If nothing has changed, you’ll see
 
   ```bash
-  'lcc' is up to date.
+  'LaCC' is up to date.
   ```
 
 ### 3. Build the self-hosted compiler
 
   ```bash
-  make lccs
+  make LaCCs
   ```
 
-  Here, `lcc` is used to recompile the compiler source itself, producing a second-stage compiler named `lccs`. 
+  Here, `LaCC` is used to recompile the compiler source itself, producing a second-stage compiler named `LaCCs`. 
   This ensures that your compiler can correctly compile its own code.
 
 ### 4. Run primary tests
@@ -112,10 +112,10 @@ There are no code-generation optimizations beyond what's needed to make it work.
   Similarly, this runs
 
   ```bash
-  ./multitest.sh ./lcc
+  ./multitest.sh ./LaCC
   ```
 
-  to validate the first-stage compiler `lcc` against the same test suite.
+  to validate the first-stage compiler `LaCC` against the same test suite.
 
 ### 5. Run self-host tests
 
@@ -126,10 +126,10 @@ There are no code-generation optimizations beyond what's needed to make it work.
   Internally this runs
 
   ```bash
-  ./multitest.sh ./lccs
+  ./multitest.sh ./LaCCs
   ```
 
-  and executes a suite of example programs (unit tests, `prime.c`, `fizzbuzz.c`, etc.) using `lccs`. 
+  and executes a suite of example programs (unit tests, `prime.c`, `fizzbuzz.c`, etc.) using `LaCCs`. 
   Passing all tests confirms that your self-hosted compiler behaves as expected.
 
 ### 6. Clean up build artifacts
@@ -138,14 +138,14 @@ There are no code-generation optimizations beyond what's needed to make it work.
   make clean
   ```
 
-  Removes the `lcc` and `lccs` binaries, object files (`*.o`), backup files (`*~`) and any temporary files (`tmp*`), letting you start from a clean slate.
+  Removes the `LaCC` and `LaCCs` binaries, object files (`*.o`), backup files (`*~`) and any temporary files (`tmp*`), letting you start from a clean slate.
 
 
 ## About the Author  
-LCC is designed and maintained by student engineer **Latte72**!  
+LaCC is designed and maintained by student engineer **Latte72**!  
 
 ### Links  
 - **Website:** [https://latte72.net/](https://latte72.net/)
-- **GitHub:** [@Latte72R](https://github.com/Latte72R/LCC)
+- **GitHub:** [@Latte72R](https://github.com/Latte72R/LaCC)
 - **X a.k.a Twitter:** [@Latte72R](https://twitter.com/Latte72R)
 - **Qiita:** [@Latte72R](https://qiita.com/Latte72R)
