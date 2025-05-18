@@ -147,7 +147,21 @@ void tokenize() {
     }
 
     // Integer literal
-    if (isdigit(*p)) {
+    if (startswith(p, "0b")) {
+      new_token(TK_NUM, p, 0);
+      p += 2;
+      q = p;
+      token->val = strtol(p, &p, 2);
+      token->len = p - q + 2;
+      continue;
+    } else if (startswith(p, "0x")) {
+      p += 2;
+      q = p;
+      new_token(TK_NUM, p, 0);
+      token->val = strtol(p, &p, 16);
+      token->len = p - q + 2;
+      continue;
+    } else if (isdigit(*p)) {
       new_token(TK_NUM, p, 0);
       q = p;
       token->val = strtol(p, &p, 10);

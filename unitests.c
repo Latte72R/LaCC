@@ -461,6 +461,24 @@ int test68() {
   return a;       /* 0 */
 }
 
+void test69_sub(int arr[2][2]) {
+  arr[0][0] = 5;
+  arr[0][1] = 2;
+  arr[1][0] = 3;
+  arr[1][1] = 4;
+}
+
+int test69() {
+  /* 2 次元配列を引数に渡す */
+  int a[2][2];
+  test69_sub(a);
+  return a[0][0] * a[0][1] + a[1][0] * a[1][1];
+}
+
+int test70() {
+  return 0b0101 * 0x3f; // 5 * 63 = 315
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -538,6 +556,8 @@ int main() {
   check(test66(), 66, 10);
   check(test67(), 67, 7);
   check(test68(), 68, 0);
+  check(test69(), 69, 22);
+  check(test70(), 70, 315);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");

@@ -24,4 +24,10 @@ test: $(BOOSTSTRAP)
 selfhost-test: $(SELFHOST)
 	./multitest.sh $(SELFHOST)
 
-.PHONY: test selfhost-test clean
+lifegame: $(SELFHOST)
+	./rf.sh $(SELFHOST) ./lifegame.c
+
+rotate: $(SELFHOST)
+	./rf.sh $(SELFHOST) ./rotate.c
+
+.PHONY: test selfhost-test lifegame rotate clean
