@@ -87,20 +87,20 @@ There are no code-generation optimizations beyond what's needed to make it work.
   make
   ```
 
-  This invokes the default target, compiling all sources into the `LaCC` executable.  
-  If nothing has changed, you’ll see
+  This invokes the default target, compiling all sources into the `lacc` executable.  
+  If nothing has changed, you'll see
 
   ```bash
-  'LaCC' is up to date.
+  'lacc' is up to date.
   ```
 
 ### 3. Build the self-hosted compiler
 
   ```bash
-  make LaCCs
+  make selfhost
   ```
 
-  Here, `LaCC` is used to recompile the compiler source itself, producing a second-stage compiler named `LaCCs`. 
+  Here, `lacc` is used to recompile the compiler source itself, producing a second-stage compiler named `laccs`. 
   This ensures that your compiler can correctly compile its own code.
 
 ### 4. Run primary tests
@@ -112,10 +112,10 @@ There are no code-generation optimizations beyond what's needed to make it work.
   Similarly, this runs
 
   ```bash
-  ./multitest.sh ./LaCC
+  ./multitest.sh ./lacc
   ```
 
-  to validate the first-stage compiler `LaCC` against the same test suite.
+  to validate the first-stage compiler `lacc` against the same test suite.
 
 ### 5. Run self-host tests
 
@@ -126,10 +126,10 @@ There are no code-generation optimizations beyond what's needed to make it work.
   Internally this runs
 
   ```bash
-  ./multitest.sh ./LaCCs
+  ./multitest.sh ./laccs
   ```
 
-  and executes a suite of example programs (unit tests, `prime.c`, `fizzbuzz.c`, etc.) using `LaCCs`. 
+  and executes a suite of example programs (unit tests, `prime.c`, `fizzbuzz.c`, etc.) using `laccs`. 
   Passing all tests confirms that your self-hosted compiler behaves as expected.
 
 ### 6. Clean up build artifacts
@@ -138,7 +138,7 @@ There are no code-generation optimizations beyond what's needed to make it work.
   make clean
   ```
 
-  Removes the `LaCC` and `LaCCs` binaries, object files (`*.o`), backup files (`*~`) and any temporary files (`tmp*`), letting you start from a clean slate.
+  Removes the `lacc` and `laccs` binaries, object files (`*.o`), backup files (`*~`) and any temporary files (`tmp*`), letting you start from a clean slate.
 
 
 ## About the Author  

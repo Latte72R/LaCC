@@ -2,23 +2,23 @@ CFLAGS=-std=c99 -Wno-incompatible-library-redeclaration -Wno-builtin-declaration
 LDFLAGS=-std=c99
 SRCS=main.c tokenize.c parse.c codegen.c extention.c
 
-lcc: $(SRCS)
-	$(CC) -o lcc $(SRCS) $(CFLAGS)
+lacc: $(SRCS)
+	$(CC) -o lacc $(SRCS) $(CFLAGS)
 
-lccs: lcc
-	./lcc ./main.c > main.s
-	./lcc ./tokenize.c > tokenize.s
-	./lcc ./parse.c > parse.s
-	./lcc ./codegen.c > codegen.s
-	$(CC) -o lccs main.s tokenize.s parse.s codegen.s extention.c $(LDFLAGS)
+selfhost: lacc
+	./lacc ./main.c > main.s
+	./lacc ./tokenize.c > tokenize.s
+	./lacc ./parse.c > parse.s
+	./lacc ./codegen.c > codegen.s
+	$(CC) -o laccs main.s tokenize.s parse.s codegen.s extention.c $(LDFLAGS)
 
 clean:
-	rm -f lcc lccs *.o *~ tmp*
+	rm -f lacc laccs *.o *~ tmp*
 
-test: lcc
-	./multitest.sh ./lcc
+test: lacc
+	./multitest.sh ./lacc
 
-selfhost-test: lccs
-	./multitest.sh ./lccs
+selfhost-test: selfhost
+	./multitest.sh ./laccs
 
 .PHONY: test selfhost-test clean
