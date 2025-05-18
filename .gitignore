@@ -1,8 +1,8 @@
 *~
 *.o
 *.s
-lcc
-lccs
+lacc
+laccs
 tmp*
 *.out
 *.exe

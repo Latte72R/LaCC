@@ -84,6 +84,7 @@ LaCC does **not** support the following:
 - The comma operator
 - Function pointers
 - Explicit type casting
+- Variable Length Arrays (VLAs)
 
 
 ## Limitations

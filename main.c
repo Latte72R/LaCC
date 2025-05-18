@@ -89,10 +89,10 @@ int main(int argc, char **argv) {
   program();
 
   // アセンブリの前半部分を出力
-  printf(".intel_syntax noprefix\n\n");
+  printf(".intel_syntax noprefix\n");
 
   // グローバル変数の定義
-  printf("  .section .data\n\n");
+  printf("  .data\n");
   for (LVar *var = globals; var->next; var = var->next) {
     if (var->ext) {
       continue;
@@ -105,19 +105,16 @@ int main(int argc, char **argv) {
     } else {
       printf("  .zero %d\n", get_type_size(var->type));
     }
-    printf("\n");
   }
 
   // 文字列リテラル
   for (String *str = strings; str->next; str = str->next) {
-    printf("  .section .rodata\n");
     printf(".L.str%d:\n", str->id);
     printf("  .string \"%.*s\"\n", str->len, str->text);
   }
 
   // 配列リテラル
   for (Array *arr = arrays; arr->next; arr = arr->next) {
-    printf("  .section .rodata\n");
     printf(".L.arr%d:\n", arr->id);
     for (int i = 0; i < arr->len; i++) {
       if (arr->byte == 1) {
@@ -131,7 +128,7 @@ int main(int argc, char **argv) {
   }
 
   // 先頭の式から順にコード生成
-  printf("  .section .text\n");
+  printf("  .text\n");
   for (int i = 0; code[i]->kind != ND_NONE; i++) {
     gen(code[i]);
   }
