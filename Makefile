@@ -1,24 +1,27 @@
-CFLAGS=-std=c99 -Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option
-LDFLAGS=-std=c99
-SRCS=main.c tokenize.c parse.c codegen.c extention.c
+CFLAGS:=-std=c99 -Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option
+LDFLAGS:=-std=c99
+SRCS:=main.c tokenize.c parse.c codegen.c
+ASMS:=$(SRCS:.c=.s)
+BOOSTSTRAP:=./lacc
+SELFHOST:=./laccs
 
-lacc: $(SRCS)
-	$(CC) -o lacc $(SRCS) $(CFLAGS)
+$(BOOSTSTRAP): $(SRCS)
+	$(CC) $(CFLAGS) -o $(BOOSTSTRAP) $(SRCS) extention.c
 
-selfhost: lacc
-	./lacc ./main.c > main.s
-	./lacc ./tokenize.c > tokenize.s
-	./lacc ./parse.c > parse.s
-	./lacc ./codegen.c > codegen.s
-	$(CC) -o laccs main.s tokenize.s parse.s codegen.s extention.c $(LDFLAGS)
+$(SELFHOST): $(ASMS) $(BOOSTSTRAP)
+	$(BOOSTSTRAP) ./main.c > main.s
+	$(BOOSTSTRAP) ./tokenize.c > tokenize.s
+	$(BOOSTSTRAP) ./parse.c > parse.s
+	$(BOOSTSTRAP) ./codegen.c > codegen.s
+	$(CC) -o $(SELFHOST) $(ASMS) extention.c $(LDFLAGS)
 
 clean:
-	rm -f lacc laccs *.o *~ tmp*
+	rm -f $(BOOSTSTRAP) $(SELFHOST) *.o *~ tmp*
 
-test: lacc
-	./multitest.sh ./lacc
+test: $(BOOSTSTRAP)
+	./multitest.sh $(BOOSTSTRAP)
 
-selfhost-test: selfhost
-	./multitest.sh ./laccs
+selfhost-test: $(SELFHOST)
+	./multitest.sh $(SELFHOST)
 
 .PHONY: test selfhost-test clean
