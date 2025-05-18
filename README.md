@@ -28,6 +28,7 @@ Both global and local (stack) variable declarations are supported.
   - `else { … }`  
 - **Loops**  
   - `for (init; condition; step) { … }`  
+    You can omit any or all of the three components of a for loop          (initialization, condition, and step).
   - `while (condition) { … }`  
   - `do { … } while (condition);` 
 - **Loop Control**  
@@ -50,7 +51,7 @@ Both global and local (stack) variable declarations are supported.
 - **Initializer lists for arrays** (with limitations)  
   1. **Array initialization with a list of values:**  
      `int arr[3] = {3, 6, 2};`
-  2. **String literal initialization for character arrays:**
+  2. **String literal initialization for character arrays:**  
      `char str[15] = "Hello, World!\n";`  
   
   The initializer list can **only** contain numeric literals, 
