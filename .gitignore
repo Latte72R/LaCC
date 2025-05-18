@@ -1,7 +1,12 @@
 *~
 *.o
+*.s
+lcc
+lccs
 tmp*
 *.out
-9cc
+*.exe
+*.a
+*.so
 *.Identifier
 .vscode/*
