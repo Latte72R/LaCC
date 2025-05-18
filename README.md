@@ -1,3 +1,5 @@
+English | [日本語](./README-ja.md)
+
 ![](./LaCC.png)
 
 LaCC is a minimalist C compiler that implements only the core language features you need to get simple C programs running.
