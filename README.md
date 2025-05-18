@@ -41,6 +41,22 @@ Both global and local (stack) variable declarations are supported.
 * **Logical**: `&&`, `||`, `!`
 * **Bitwise**: `&`, `|`, `^`, `~`, `<<`, `>>`
 
+### 6. Others
+
+- **Include directive** (with limitations)  
+  LaCC can process `#include` statements with double quotes like `#include "lacc.h"`, 
+  but it does not support the standard library headers like `<stdio.h>` in the traditional sense.
+
+- **Initializer lists for arrays** (with limitations)  
+
+- **Extern declaration**
+
+- **Typedef support**  
+  LaCC supports the `typedef` keyword for creating type aliases.
+
+- **Struct member access**  
+  Both dot notation (`.`) for direct struct access and arrow notation (`->`) for pointer-to-struct access are supported.
+
 ## Unsupported Constructs
 
 LaCC does **not** support the following:
@@ -54,7 +70,7 @@ LaCC does **not** support the following:
 - Type qualifiers & storage-class specifiers: `const`, `volatile`, `static`, `register`, `auto`, etc.  
 - No initializer lists for structs (e.g.,  `struct AB p = {.a = 1, .b = 2};`)  
 - Inline assembly  
-- Preprocessor directives: `#include`, `#define`, `#ifdef`, etc.  
+- Preprocessor directives: `#define`, `#ifdef`, etc.  
 - Variadic functions (functions with `...` parameters)  
 - The comma operator
 - Function pointers
