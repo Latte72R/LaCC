@@ -8,7 +8,7 @@ SELFHOST:=./laccs
 $(BOOSTSTRAP): $(SRCS)
 	$(CC) $(CFLAGS) -o $(BOOSTSTRAP) $(SRCS) extention.c
 
-$(SELFHOST): $(ASMS) $(BOOSTSTRAP)
+$(SELFHOST): $(BOOSTSTRAP)
 	$(BOOSTSTRAP) ./main.c > main.s
 	$(BOOSTSTRAP) ./tokenize.c > tokenize.s
 	$(BOOSTSTRAP) ./parse.c > parse.s
@@ -16,7 +16,7 @@ $(SELFHOST): $(ASMS) $(BOOSTSTRAP)
 	$(CC) -o $(SELFHOST) $(ASMS) extention.c $(LDFLAGS)
 
 clean:
-	rm -f $(BOOSTSTRAP) $(SELFHOST) *.o *~ tmp*
+	rm -f $(BOOSTSTRAP) $(SELFHOST) *.o *.s tmp*
 
 test: $(BOOSTSTRAP)
 	./multitest.sh $(BOOSTSTRAP)

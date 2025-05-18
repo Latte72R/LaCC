@@ -58,13 +58,22 @@ Both global and local (stack) variable declarations are supported.
   and there's **no** support for nested initializer lists.
 
 - **Extern declarations**  
-  It supports external variable declarations with basic types, pointers, and arrays.
+  LaCC supports external variable declarations with basic types, pointers, and arrays.
 
 - **Typedef support**  
   LaCC supports the `typedef` keyword for creating type aliases.
 
 - **Struct member access**  
   Both dot notation (`.`) for direct struct access and arrow notation (`->`) for pointer-to-struct access are supported.
+
+- **Binary and Hexadecimal numbers:** `0b001011` or `0xFF2A`
+
+- **Comment support**
+  ```c
+  // single-line comment
+  /* multi-line
+     comment */
+  ```
 
 ## Unsupported Constructs
 
@@ -164,11 +173,11 @@ There are no code-generation optimizations beyond what's needed to make it work.
   make clean
   ```
 
-  Removes the `lacc` and `laccs` binaries, object files (`*.o`), backup files (`*~`) and any temporary files (`tmp*`), letting you start from a clean slate.
+  Removes the `lacc` and `laccs` binaries, object files (`*.o`), assembly files (`*.s`) and any temporary files (`tmp*`), letting you start from a clean slate.
 
 
 ## About the Author  
-LaCC is designed and maintained by student engineer **Latte72**!  
+LaCC is designed and maintained by student engineer **Latte72** !  
 
 ### Links  
 - **Website:** [https://latte72.net/](https://latte72.net/)
