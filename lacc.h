@@ -44,7 +44,7 @@ struct Array {
   int id;
 };
 
-typedef enum { TY_NONE, TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_VOID, TY_STRUCT } TypeKind;
+typedef enum { TY_NONE, TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_ARGARR, TY_VOID, TY_STRUCT } TypeKind;
 
 // Token type
 typedef struct Token Token;

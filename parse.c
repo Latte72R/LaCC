@@ -190,22 +190,8 @@ int expect_number() {
   return val;
 }
 
-int is_ptr_or_arr(Type *type) { return type->ty == TY_PTR || type->ty == TY_ARR; }
+int is_ptr_or_arr(Type *type) { return type->ty == TY_PTR || type->ty == TY_ARR || type->ty == TY_ARGARR; }
 int is_number(Type *type) { return type->ty == TY_INT || type->ty == TY_CHAR; }
-
-// 変数として扱うときのサイズ
-int get_type_size(Type *type) {
-  if (type->ty == TY_INT) {
-    return 4;
-  } else if (type->ty == TY_CHAR) {
-    return 1;
-  } else if (is_ptr_or_arr(type)) {
-    return 8;
-  } else {
-    error_at(token->str, "invalid type (%d) [in get_type_size]", type->ty);
-    return 0;
-  }
-}
 
 // 予約しているスタック領域のサイズ
 int get_sizeof(Type *type) {
@@ -215,7 +201,7 @@ int get_sizeof(Type *type) {
     return 1;
   } else if (type->ty == TY_PTR) {
     return 8;
-  } else if (type->ty == TY_ARR) {
+  } else if (type->ty == TY_ARR || type->ty == TY_ARGARR) {
     return get_sizeof(type->ptr_to) * type->array_size;
   } else if (type->ty == TY_STRUCT) {
     return type->struct_->size;
@@ -235,6 +221,7 @@ Type *new_type_ptr(Type *ptr_to) {
   Type *type = malloc(sizeof(Type));
   type->ty = TY_PTR;
   type->ptr_to = ptr_to;
+  type->array_size = 1;
   return type;
 }
 
@@ -312,13 +299,24 @@ Node *function_definition(Token *tok, Type *type) {
       if (!tok_lvar) {
         error_at(consumed_ptr, "expected an identifier [in variable declaration]");
       }
+      while (consume("[")) {
+        type = new_type_arr(type, expect_number());
+        expect("]", "after number", "array declaration");
+      }
+      if (type->ty == TY_ARR) {
+        type->ty = TY_ARGARR;
+      }
       Node *nd_lvar = new_node(ND_LVAR);
       node->args[i] = nd_lvar;
       LVar *lvar = malloc(sizeof(LVar));
       lvar->next = fn->locals;
       lvar->name = tok_lvar->str;
       lvar->len = tok_lvar->len;
-      lvar->offset = fn->locals->offset + get_sizeof(type);
+      if (is_ptr_or_arr(type)) {
+        lvar->offset = fn->locals->offset + 8;
+      } else {
+        lvar->offset = fn->locals->offset + get_sizeof(type);
+      }
       fn->offset = lvar->offset;
       lvar->type = type;
       nd_lvar->var = lvar;
@@ -352,6 +350,7 @@ Node *local_variable_declaration(Token *tok, Type *type) {
   lvar = malloc(sizeof(LVar));
   lvar->name = tok->str;
   lvar->len = tok->len;
+  Type *org_type = type;
   while (consume("[")) {
     type = new_type_arr(type, expect_number());
     expect("]", "after number", "array declaration");
@@ -374,11 +373,11 @@ Node *local_variable_declaration(Token *tok, Type *type) {
       array->next = arrays;
       arrays = array;
       array->id = array_cnt++;
-      array->byte = get_type_size(type->ptr_to);
+      array->byte = get_sizeof(org_type);
       array->val = NULL;
       int i = 0;
       while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
-        array->val = realloc(array->val, array->byte * i++);
+        array->val = realloc(array->val, array->byte * ++i);
         array->val[i - 1] = expect_number();
         if (!array->val)
           error("realloc failed");
@@ -481,6 +480,7 @@ Node *new_struct(Token *tok) {
     if (!member_tok) {
       error_at(token->str, "expected an identifier but got \"%.*s\" [in struct declaration]", token->len, token->str);
     }
+    Type *org_type = type;
     while (consume("[")) {
       type = new_type_arr(type, expect_number());
       expect("]", "after number", "array declaration");
@@ -491,18 +491,12 @@ Node *new_struct(Token *tok) {
     member_var->type = type;
     member_var->next = struct_->var;
     struct_->var = member_var;
-    int type_size = get_sizeof(type);
-    int single_size;
-    if (type->ty == TY_ARR) {
-      single_size = get_type_size(type->ptr_to);
-    } else {
-      single_size = type_size;
-    }
+    int single_size = get_sizeof(org_type);
     if (offset % single_size != 0) {
       offset += single_size - (offset % single_size);
     }
     member_var->offset = offset;
-    offset += type_size;
+    offset += get_sizeof(type);
     if (consume(";")) {
       continue;
     } else {
@@ -848,10 +842,10 @@ Node *stmt() {
 
 void program() {
   int i = 0;
-  code = malloc(sizeof(Node *));
+  code = NULL;
   while (token->kind != TK_EOF) {
-    code[i++] = stmt();
-    code = realloc(code, sizeof(Node *) * (i + 1));
+    code = realloc(code, sizeof(Node *) * ++i);
+    code[i - 1] = stmt();
     if (!code)
       error("realloc failed");
   }

@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
     if (var->offset) {
       printf("  .long %d\n", var->offset);
     } else {
-      printf("  .zero %d\n", get_type_size(var->type));
+      printf("  .zero %d\n", get_sizeof(var->type));
     }
   }
 

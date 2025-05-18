@@ -126,7 +126,7 @@ void gen(Node *node) {
       printf("  movsxd rax, DWORD PTR [rax]\n");
     } else if (node->type->ty == TY_CHAR) {
       printf("  movzx rax, BYTE PTR [rax]\n");
-    } else if (node->type->ty == TY_PTR) {
+    } else if (node->type->ty == TY_PTR || node->type->ty == TY_ARGARR) {
       printf("  mov rax, QWORD PTR [rax]\n");
     } else if (node->type->ty == TY_ARR) {
     } else {
@@ -145,7 +145,7 @@ void gen(Node *node) {
       printf("  movsxd rax, DWORD PTR [rax]\n");
     } else if (node->type->ty == TY_CHAR) {
       printf("  movzx rax, BYTE PTR [rax]\n");
-    } else if (node->type->ty == TY_PTR) {
+    } else if (node->type->ty == TY_PTR || node->type->ty == TY_ARGARR) {
       printf("  mov rax, QWORD PTR [rax]\n");
     } else if (node->type->ty == TY_ARR) {
     } else {
@@ -315,7 +315,7 @@ void gen(Node *node) {
         printf("  mov DWORD PTR [rax], %s\n", regs4(i));
       } else if (node->args[i]->type->ty == TY_CHAR) {
         printf("  mov BYTE PTR [rax], %s\n", regs1(i));
-      } else if (node->args[i]->type->ty == TY_PTR) {
+      } else if (node->args[i]->type->ty == TY_PTR || node->args[i]->type->ty == TY_ARGARR) {
         printf("  mov QWORD PTR [rax], %s\n", regs8(i));
       } else {
         error("invalid type [in ND_FUNCDEF]");
