@@ -48,8 +48,16 @@ Both global and local (stack) variable declarations are supported.
   but it does not support the standard library headers like `<stdio.h>` in the traditional sense.
 
 - **Initializer lists for arrays** (with limitations)  
+  1. **Array initialization with a list of values:**  
+     `int arr[3] = {3, 6, 2};`
+  2. **String literal initialization for character arrays:**
+     `char str[15] = "Hello, World!\n";`  
+  
+  The initializer list can **only** contain numeric literals, 
+  and there's **no** support for nested initializer lists.
 
-- **Extern declaration**
+- **Extern declarations**  
+  It supports external variable declarations with basic types, pointers, and arrays.
 
 - **Typedef support**  
   LaCC supports the `typedef` keyword for creating type aliases.
@@ -62,7 +70,7 @@ Both global and local (stack) variable declarations are supported.
 LaCC does **not** support the following:
 
 - Nested functions (functions defined within other functions)  
-- `switch` statements and `case`/`default` labels  
+- `switch` statements and `case` / `default` labels  
 - `goto` statement and labels
 - Ternary conditional operator (`?:`)  
 - `union` types  
@@ -103,7 +111,7 @@ There are no code-generation optimizations beyond what's needed to make it work.
   make
   ```
 
-  This invokes the default target, compiling all sources into the `lacc` executable.  
+  This invokes the default target, compiling all sources into the `lacc` executable.   
   If nothing has changed, you'll see
 
   ```bash
@@ -113,11 +121,11 @@ There are no code-generation optimizations beyond what's needed to make it work.
 ### 3. Build the self-hosted compiler
 
   ```bash
-  make selfhost
+  make laccs
   ```
 
-  Here, `lacc` is used to recompile the compiler source itself, producing a second-stage compiler named `laccs`. 
-  This ensures that your compiler can correctly compile its own code.
+  Here, `lacc` is used to recompile the compiler source itself, producing a second-stage compiler named `laccs`.  
+  This ensures that your compiler can correctly compile its own code.  
 
 ### 4. Run primary tests
 
@@ -145,8 +153,8 @@ There are no code-generation optimizations beyond what's needed to make it work.
   ./multitest.sh ./laccs
   ```
 
-  and executes a suite of example programs (unit tests, `prime.c`, `fizzbuzz.c`, etc.) using `laccs`. 
-  Passing all tests confirms that your self-hosted compiler behaves as expected.
+  and executes a suite of example programs (unit tests, `prime.c`, `fizzbuzz.c`, etc.) using `laccs`.  
+  Passing all tests confirms that your self-hosted compiler behaves as expected.  
 
 ### 6. Clean up build artifacts
 
