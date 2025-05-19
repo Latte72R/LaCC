@@ -18,6 +18,17 @@ $(SELFHOST): $(BOOSTSTRAP)
 clean:
 	rm -f $(BOOSTSTRAP) $(SELFHOST) *.o *.s tmp*
 
+cc-test: $(BOOSTSTRAP)
+	echo \[unitests.c\]
+	cc ./unitests.c $(CFLAGS)
+	./a.out
+	echo \[prime.c\]
+	cc ./prime.c $(CFLAGS)
+	./a.out
+	echo \[fizzbuzz.c\]
+	cc ./fizzbuzz.c $(CFLAGS)
+	./a.out
+
 test: $(BOOSTSTRAP)
 	./multitest.sh $(BOOSTSTRAP)
 

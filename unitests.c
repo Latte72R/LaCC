@@ -479,6 +479,41 @@ int test70() {
   return 0b0101 * 0x3f; // 5 * 63 = 315
 }
 
+int test71() {
+  return 0b010110 | 0b001011 & 0b110011; // 0b010111 = 23
+}
+
+/* 複合代入演算子と式の値 */
+int test72() {
+  int a = 4, b = 5;
+  return (a += 3) * (b -= 2); /* 7 * 3 = 21 */
+}
+
+/* int 配列でのポインタ差 (int 同士なので差は要素数) */
+int test73() {
+  int arr[10];
+  return &arr[9] - &arr[4]; /* 5 */
+}
+
+/* 構造体の丸ごと代入が正しく動くか */
+int test74() {
+  STRUCT s1, s2;
+  s1.a = 4;
+  s1.b[0] = 2;
+  s1.b[1] = 1;
+  s2 = s1;                         /* 構造体のコピー */
+  return s2.a + s2.b[0] + s2.b[1]; /* 4 + 2 + 1 = 7 */
+}
+
+/* sizeof でポインタ型を組み合わせた時の結果 */
+int test75() { return sizeof(STRUCT *) + sizeof(char **); /* 8 + 8 = 16 (LP64 環境を想定) */ }
+
+/* 文字定数の扱いと算術演算 */
+int test76() { return '\n' + 1; /* 10 + 1 = 11 */ }
+
+/* ビット演算とシフトの優先順位確認 */
+int test77() { return 1 << 3 & 0b10110; }
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -558,6 +593,13 @@ int main() {
   check(test68(), 68, 0);
   check(test69(), 69, 22);
   check(test70(), 70, 315);
+  check(test71(), 71, 23);
+  check(test72(), 72, 21);
+  check(test73(), 73, 5);
+  check(test74(), 74, 7);
+  check(test75(), 75, 16);
+  check(test76(), 76, 11);
+  check(test77(), 77, 0);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");

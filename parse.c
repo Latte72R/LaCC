@@ -392,7 +392,7 @@ Node *local_variable_declaration(Token *tok, Type *type) {
       arr->id = array->id;
       node = new_binary(ND_ASSIGN, node, arr);
       node->type = type;
-      node->val = 2;
+      node->val = TRUE;
     } else {
       node = new_binary(ND_ASSIGN, node, expr());
       node->type = type;
@@ -887,10 +887,10 @@ Node *logical_or() {
 }
 
 Node *logical_and() {
-  Node *node = bit_operator();
+  Node *node = bit_or();
   for (;;) {
     if (consume("&&")) {
-      node = new_binary(ND_AND, node, bit_operator());
+      node = new_binary(ND_AND, node, bit_or());
       node->type = node->lhs->type;
       node->id = logical_cnt++;
     } else {
@@ -900,17 +900,37 @@ Node *logical_and() {
   return node;
 }
 
-Node *bit_operator() {
+Node *bit_or() {
+  Node *node = bit_xor();
+  for (;;) {
+    if (consume("|")) {
+      node = new_binary(ND_BITOR, node, bit_xor());
+      node->type = node->lhs->type;
+    } else {
+      break;
+    }
+  }
+  return node;
+}
+
+Node *bit_xor() {
+  Node *node = bit_and();
+  for (;;) {
+    if (consume("^")) {
+      node = new_binary(ND_BITXOR, node, bit_and());
+      node->type = node->lhs->type;
+    } else {
+      break;
+    }
+  }
+  return node;
+}
+
+Node *bit_and() {
   Node *node = equality();
   for (;;) {
     if (consume("&")) {
       node = new_binary(ND_BITAND, node, equality());
-      node->type = node->lhs->type;
-    } else if (consume("|")) {
-      node = new_binary(ND_BITOR, node, equality());
-      node->type = node->lhs->type;
-    } else if (consume("^")) {
-      node = new_binary(ND_BITXOR, node, equality());
       node->type = node->lhs->type;
     } else {
       break;
@@ -1013,6 +1033,8 @@ Node *new_sub(Node *lhs, Node *rhs, char *ptr) {
   // lhsがptr, rhsがptrなら
   if (is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) {
     node = new_binary(ND_SUB, lhs, rhs);
+    node->type = lhs->type;
+    node = new_binary(ND_DIV, node, new_num(get_sizeof(lhs->type->ptr_to)));
     node->type = new_type(TY_INT);
   }
   // lhsがint, rhsがptrなら

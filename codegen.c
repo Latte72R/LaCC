@@ -72,8 +72,6 @@ void gen_lval(Node *node) {
 }
 
 void asm_memcpy(Node *lhs, Node *rhs) {
-  gen_lval(lhs);
-  gen(rhs);
   printf("  pop rdi\n");
   printf("  pop rsi\n");
   int size = get_sizeof(rhs->type);
@@ -171,7 +169,17 @@ void gen(Node *node) {
       printf("  push rax\n");
     return;
   } else if (node->kind == ND_ASSIGN) {
-    if (node->val == 1 || node->val == 2) {
+    if (node->val) {
+      gen_lval(node->lhs);
+      gen(node->rhs);
+      asm_memcpy(node->lhs, node->rhs);
+      printf("  pop rax\n");
+      if (!node->endline)
+        printf("  push rax\n");
+      return;
+    } else if (node->lhs->type->ty == TY_STRUCT) {
+      gen_lval(node->lhs);
+      gen_lval(node->rhs);
       asm_memcpy(node->lhs, node->rhs);
       printf("  pop rax\n");
       if (!node->endline)
