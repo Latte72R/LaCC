@@ -198,6 +198,6 @@ LaCC は学生エンジニア **Latte72** が設計・開発しています！
 ### リンク
 
 * **Web サイト:** [https://latte72.net/](https://latte72.net/)
-* **GitHub:** [https://github.com/latte72r/LaCC](https://github.com/latte72r)
-* **X (a.k.a Twitter):** [https://twitter.com/Latte72R](https://twitter.com/Latte72R)
-* **Qiita:** [https://qiita.com/latte72r](https://qiita.com/latte72r)
+* **GitHub:** [@Latte72R](https://github.com/latte72r)
+* **X (a.k.a Twitter):** [@Latte72R](https://twitter.com/Latte72R)
+* **Qiita:** [@Latte72R](https://qiita.com/latte72r)
