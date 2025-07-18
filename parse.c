@@ -113,7 +113,7 @@ Token *consume_ident() {
   return tok;
 }
 
-Type *check_type() {
+Type *check_base_type() {
   Token *tok = token;
   Type *type = malloc(sizeof(Type));
   if (tok->kind == TK_IDENT) {
@@ -539,7 +539,7 @@ Node *stmt() {
   } else if (token->kind == TK_EXTERN) {
     // extern宣言
     free_token();
-    Type *ch_type = check_type();
+    Type *ch_type = check_base_type();
     type = consume_type();
     tok = consume_ident();
     if (!tok) {
@@ -571,7 +571,7 @@ Node *stmt() {
     expect(";", "after line", "global variable declaration");
   } else if (is_type(token)) {
     // 変数宣言または関数定義
-    Type *ch_type = check_type();
+    Type *ch_type = check_base_type();
     type = consume_type();
     tok = consume_ident();
     if (!tok) {

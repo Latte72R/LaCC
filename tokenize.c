@@ -274,6 +274,12 @@ void tokenize() {
       continue;
     }
 
+    if (startswith(p, "const") && !is_alnum(p[5])) {
+      warning_at(p, "const is not supported yet, treated as variable");
+      p += 5;
+      continue;
+    }
+
     if (startswith(p, "while") && !is_alnum(p[5])) {
       new_token(TK_WHILE, p, 5);
       p += 5;

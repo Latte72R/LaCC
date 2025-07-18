@@ -54,6 +54,42 @@ void error_at(char *loc, char *fmt, ...) {
   exit(1);
 }
 
+// 警告の起きた場所を報告するための関数
+void warning_at(char *loc, char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+
+  // locが含まれている行の開始地点と終了地点を取得
+  char *line = loc;
+  while (user_input < line && line[-1] != '\n')
+    line--;
+
+  char *end = loc;
+  while (*end != '\n') {
+    if (*end == '\0') {
+      break;
+    }
+    end++;
+  }
+
+  // 見つかった行が全体の何行目なのかを調べる
+  int line_num = 1;
+  for (char *p = user_input; p < line; p++)
+    if (*p == '\n')
+      line_num++;
+
+  // 見つかった行を、ファイル名と行番号と一緒に表示
+  int indent = fprintf(stderr, "\033[1m\033[32m %s:%d\033[0m: ", filename, line_num) - 13;
+  fprintf(stderr, "%.*s\n", (int)(end - line), line);
+
+  // エラー箇所を"^"で指し示して、エラーメッセージを表示
+  int pos = loc - line + indent;
+  char fmt2[128];
+  sprintf(fmt2, "\033[1m\033[33m^\033[0m %s\n", fmt);
+  fprintf(stderr, "%*s", pos, ""); // pos個の空白を出力
+  vfprintf(stderr, fmt2, ap);
+}
+
 // 指定されたファイルの内容を返す
 char *read_file(char *path) {
   // ファイルを開く
