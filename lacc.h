@@ -12,6 +12,8 @@ typedef enum {
   TK_RETURN,   // return
   TK_SIZEOF,   // sizeof
   TK_CONST,    // const
+  TK_STATIC,   // static
+  TK_EXTERN,   // extern
   TK_IF,
   TK_ELSE,
   TK_WHILE,
@@ -19,7 +21,6 @@ typedef enum {
   TK_BREAK,
   TK_CONTINUE,
   TK_DO,
-  TK_EXTERN,
   TK_STRING,  // 文字列
   TK_TYPEDEF, // typedef
   TK_ENUM,    // enum
@@ -62,12 +63,14 @@ typedef struct Type Type;
 
 typedef struct LVar LVar;
 struct LVar {
-  LVar *next; // 次の変数かNULL
-  char *name; // 変数の名前
-  int len;    // 名前の長さ
-  int offset; // RBPからのオフセット
-  int ext;    // externかどうか
-  Type *type; // 変数の型
+  LVar *next;    // 次の変数かNULL
+  char *name;    // 変数の名前
+  int len;       // 名前の長さ
+  int offset;    // RBPからのオフセット
+  int ext;       // externかどうか
+  Type *type;    // 変数の型
+  int is_static; // staticかどうか
+  int block;     // ブロックのID
 };
 
 typedef struct Struct Struct;
@@ -111,6 +114,7 @@ struct Function {
   int len;        // 名前の長さ
   int offset;     // RBPからのオフセット
   Type *type;     // 関数の型
+  int is_static;  // staticかどうか
 };
 
 //

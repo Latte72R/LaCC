@@ -9,10 +9,12 @@ extern int array_cnt;
 extern int loop_cnt;
 extern int variable_cnt;
 extern int logical_cnt;
+extern int block_cnt;
 extern int loop_id;
 extern Function *functions;
 extern Function *current_fn;
 extern LVar *globals;
+extern LVar *statics;
 extern Struct *structs;
 extern StructTag *struct_tags;
 extern Enum *enums;
@@ -21,14 +23,14 @@ extern String *strings;
 extern Array *arrays;
 extern char *consumed_ptr;
 
-extern int TRUE;
-extern int FALSE;
+extern const int TRUE;
+extern const int FALSE;
 extern void *NULL;
 
 void free_token() {
   Token *tok = token;
   token = tok->next;
-  free(tok);
+  // free(tok);
 }
 
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
@@ -304,7 +306,7 @@ Node *new_binary(NodeKind kind, Node *lhs, Node *rhs) {
   return node;
 }
 
-Node *function_definition(Token *tok, Type *type) {
+Node *function_definition(Token *tok, Type *type, int is_static) {
   Function *fn = find_fn(tok);
   if (fn) {
     // error_at(token->str, "duplicated function name: %.*s", tok->len, tok->str);
@@ -321,6 +323,7 @@ Node *function_definition(Token *tok, Type *type) {
   fn->locals->next = NULL;
   fn->type = type;
   fn->offset = 0;
+  fn->is_static = is_static;
   Function *prev_fn = current_fn;
   current_fn = fn;
   Node *node = new_node(ND_FUNCDEF);
@@ -346,6 +349,8 @@ Node *function_definition(Token *tok, Type *type) {
       lvar->next = fn->locals;
       lvar->name = tok_lvar->str;
       lvar->len = tok_lvar->len;
+      lvar->ext = FALSE;
+      lvar->is_static = FALSE;
       if (is_ptr_or_arr(type)) {
         lvar->offset = fn->locals->offset + 8;
       } else {
@@ -375,7 +380,7 @@ Node *function_definition(Token *tok, Type *type) {
   return node;
 }
 
-Node *local_variable_declaration(Token *tok, Type *type) {
+Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
   LVar *lvar = find_lvar(tok);
   if (lvar) {
     error_at(tok->str, "duplicated variable name: %.*s [in variable declaration]", tok->len, tok->str);
@@ -384,54 +389,85 @@ Node *local_variable_declaration(Token *tok, Type *type) {
   lvar = malloc(sizeof(LVar));
   lvar->name = tok->str;
   lvar->len = tok->len;
+  lvar->ext = FALSE;
+  lvar->is_static = is_static;
   Type *org_type = type;
   while (consume("[")) {
     type = new_type_arr(type, expect_number());
     expect("]", "after number", "array declaration");
   }
-  lvar->offset = current_fn->locals->offset + get_sizeof(type);
-  if (current_fn->offset < lvar->offset) {
-    current_fn->offset = lvar->offset;
+  if (is_static) {
+    lvar->block = block_cnt;
+    LVar *static_lvar = malloc(sizeof(LVar));
+    static_lvar->name = lvar->name;
+    static_lvar->len = lvar->len;
+    static_lvar->ext = FALSE;
+    static_lvar->is_static = TRUE;
+    static_lvar->type = type;
+    static_lvar->block = lvar->block;
+    static_lvar->next = statics;
+    statics = static_lvar;
+  } else {
+    lvar->offset = current_fn->locals->offset + get_sizeof(type);
+    if (current_fn->offset < lvar->offset) {
+      current_fn->offset = lvar->offset;
+    }
   }
   node->var = lvar;
   node->type = type;
   lvar->type = type;
   lvar->next = current_fn->locals;
   current_fn->locals = lvar;
-  if (consume("=")) {
-    if (consume("{")) {
-      if (type->ty != TY_ARR) {
-        error_at(token->str, "array initializer is only allowed for array type [in variable declaration]");
+
+  // 要修正
+  if (is_static) {
+    if (consume("=")) {
+      int sign = 1;
+      if (consume("-")) {
+        sign = -1;
+      } else if (consume("+")) {
+        sign = 1;
       }
-      Array *array = malloc(sizeof(Array));
-      array->next = arrays;
-      arrays = array;
-      array->id = array_cnt++;
-      array->byte = get_sizeof(org_type);
-      array->val = NULL;
-      int i = 0;
-      while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
-        array->val = realloc(array->val, array->byte * ++i);
-        array->val[i - 1] = expect_number();
-        if (!array->val)
-          error("realloc failed");
-        if (!consume(",")) {
-          break;
-        }
-      }
-      array->len = i;
-      expect("}", "after array initializer", "variable declaration");
-      Node *arr = new_node(ND_ARRAY);
-      arr->type = type;
-      arr->id = array->id;
-      node = new_binary(ND_ASSIGN, node, arr);
-      node->type = type;
-      node->val = TRUE;
+      lvar->offset = expect_number() * sign;
     } else {
-      node = new_binary(ND_ASSIGN, node, expr());
-      node->type = type;
-      if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR) {
-        node->val = node->lhs->type->ptr_to->ty == TY_CHAR;
+      lvar->offset = 0;
+    }
+  } else {
+    if (consume("=")) {
+      if (consume("{")) {
+        if (type->ty != TY_ARR) {
+          error_at(token->str, "array initializer is only allowed for array type [in variable declaration]");
+        }
+        Array *array = malloc(sizeof(Array));
+        array->next = arrays;
+        arrays = array;
+        array->id = array_cnt++;
+        array->byte = get_sizeof(org_type);
+        array->val = NULL;
+        int i = 0;
+        while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
+          array->val = realloc(array->val, array->byte * ++i);
+          array->val[i - 1] = expect_number();
+          if (!array->val)
+            error("realloc failed");
+          if (!consume(",")) {
+            break;
+          }
+        }
+        array->len = i;
+        expect("}", "after array initializer", "variable declaration");
+        Node *arr = new_node(ND_ARRAY);
+        arr->type = type;
+        arr->id = array->id;
+        node = new_binary(ND_ASSIGN, node, arr);
+        node->type = type;
+        node->val = TRUE;
+      } else {
+        node = new_binary(ND_ASSIGN, node, expr());
+        node->type = type;
+        if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR) {
+          node->val = node->lhs->type->ptr_to->ty == TY_CHAR;
+        }
       }
     }
   }
@@ -439,7 +475,7 @@ Node *local_variable_declaration(Token *tok, Type *type) {
   return node;
 }
 
-Node *global_variable_declaration(Token *tok, Type *type) {
+Node *global_variable_declaration(Token *tok, Type *type, int is_static) {
   LVar *lvar = find_gver(tok);
   if (lvar) {
     error_at(token->str, "duplicated variable name: %.*s [in global variable declaration]", tok->len, tok->str);
@@ -457,7 +493,10 @@ Node *global_variable_declaration(Token *tok, Type *type) {
   lvar->type = type;
   lvar->ext = FALSE;
   lvar->next = globals;
+  lvar->is_static = is_static;
   globals = lvar;
+
+  // 要修正
   if (consume("=")) {
     int sign = 1;
     if (consume("-")) {
@@ -470,6 +509,80 @@ Node *global_variable_declaration(Token *tok, Type *type) {
     lvar->offset = 0;
   }
   node->endline = TRUE;
+  return node;
+}
+
+Node *vardec_and_funcdef(int is_static) {
+  // 変数宣言または関数定義
+  Node *node;
+  Type *ch_type = check_base_type();
+  Type *type = consume_type();
+  Token *tok = consume_ident();
+  if (!tok) {
+    error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len, token->str);
+  }
+  if (consume("(")) {
+    // 関数定義
+    if (current_fn->next) {
+      error_at(token->str, "nested function is not supported [in function definition]");
+    }
+    node = function_definition(tok, type, is_static);
+  } else if (current_fn->next) {
+    // ローカル変数宣言
+    node = new_node(ND_BLOCK);
+    node->body = malloc(sizeof(Node *));
+    int i = 0;
+    node->body[i++] = local_variable_declaration(tok, type, is_static);
+    while (consume(",")) {
+      type = ch_type;
+      while (consume("*")) {
+        Type *ptr = malloc(sizeof(Type));
+        ptr->ty = TY_PTR;
+        ptr->ptr_to = type;
+        type = ptr;
+        if (token->kind == TK_CONST) {
+          type->const_ = TRUE;
+        }
+      }
+      tok = consume_ident();
+      if (!tok) {
+        error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len,
+                 token->str);
+      }
+      node->body[i++] = local_variable_declaration(tok, type, is_static);
+      node->body = realloc(node->body, sizeof(Node *) * (i + 1));
+      if (!node->body)
+        error("realloc failed");
+    }
+    node->body[i] = new_node(ND_NONE);
+    expect(";", "after line", "variable declaration");
+  } else {
+    // グローバル変数宣言
+    node = new_node(ND_BLOCK);
+    node->body = malloc(sizeof(Node *));
+    int i = 0;
+    node->body[i++] = global_variable_declaration(tok, type, is_static);
+    while (consume(",")) {
+      type = ch_type;
+      while (consume("*")) {
+        Type *ptr = malloc(sizeof(Type));
+        ptr->ty = TY_PTR;
+        ptr->ptr_to = type;
+        type = ptr;
+      }
+      tok = consume_ident();
+      if (!tok) {
+        error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len,
+                 token->str);
+      }
+      node->body[i++] = global_variable_declaration(tok, type, is_static);
+      node->body = realloc(node->body, sizeof(Node *) * (i + 1));
+      if (!node->body)
+        error("realloc failed");
+    }
+    node->body[i] = new_node(ND_NONE);
+    expect(";", "after line", "variable declaration");
+  }
   return node;
 }
 
@@ -490,6 +603,7 @@ Node *extern_declaration(Token *tok, Type *type) {
   node->type = type;
   lvar->type = type;
   lvar->ext = TRUE;
+  lvar->is_static = FALSE;
   lvar->next = globals;
   globals = lvar;
   node->endline = TRUE;
@@ -524,6 +638,8 @@ Node *new_struct(Token *tok) {
     member_var->len = member_tok->len;
     member_var->type = type;
     member_var->next = struct_->var;
+    member_var->ext = FALSE;
+    member_var->is_static = FALSE;
     struct_->var = member_var;
     int single_size = get_sizeof(org_type);
     if (offset % single_size != 0) {
@@ -551,6 +667,7 @@ Node *stmt() {
   Type *type;
   int loop_id_prev;
   if (consume("{")) {
+    // ブロック
     node = new_node(ND_BLOCK);
     LVar *var = current_fn->locals;
     node->body = malloc(sizeof(Node *));
@@ -563,6 +680,7 @@ Node *stmt() {
     }
     node->body[i] = new_node(ND_NONE);
     current_fn->locals = var;
+    block_cnt++;
     expect("}", "after block", "block");
   } else if (token->kind == TK_EXTERN) {
     // extern宣言
@@ -600,76 +718,11 @@ Node *stmt() {
     }
     node->body[i] = new_node(ND_NONE);
     expect(";", "after line", "global variable declaration");
+  } else if (token->kind == TK_STATIC) {
+    free_token();
+    node = vardec_and_funcdef(TRUE);
   } else if (is_type(token)) {
-    // 変数宣言または関数定義
-    Type *ch_type = check_base_type();
-    type = consume_type();
-    tok = consume_ident();
-    if (!tok) {
-      error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len, token->str);
-    }
-    if (consume("(")) {
-      // 関数定義
-      if (current_fn->next) {
-        error_at(token->str, "nested function is not supported [in function definition]");
-      }
-      node = function_definition(tok, type);
-    } else if (current_fn->next) {
-      // ローカル変数宣言
-      node = new_node(ND_BLOCK);
-      node->body = malloc(sizeof(Node *));
-      int i = 0;
-      node->body[i++] = local_variable_declaration(tok, type);
-      while (consume(",")) {
-        type = ch_type;
-        while (consume("*")) {
-          Type *ptr = malloc(sizeof(Type));
-          ptr->ty = TY_PTR;
-          ptr->ptr_to = type;
-          type = ptr;
-          if (token->kind == TK_CONST) {
-            type->const_ = TRUE;
-          }
-        }
-        tok = consume_ident();
-        if (!tok) {
-          error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len,
-                   token->str);
-        }
-        node->body[i++] = local_variable_declaration(tok, type);
-        node->body = realloc(node->body, sizeof(Node *) * (i + 1));
-        if (!node->body)
-          error("realloc failed");
-      }
-      node->body[i] = new_node(ND_NONE);
-      expect(";", "after line", "local variable declaration");
-    } else {
-      // グローバル変数宣言
-      node = new_node(ND_BLOCK);
-      node->body = malloc(sizeof(Node *));
-      int i = 0;
-      node->body[i++] = global_variable_declaration(tok, type);
-      while (consume(",")) {
-        type = ch_type;
-        while (consume("*")) {
-          Type *ptr = malloc(sizeof(Type));
-          ptr->ty = TY_PTR;
-          ptr->ptr_to = type;
-          type = ptr;
-        }
-        tok = consume_ident();
-        if (!tok) {
-          error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len,
-                   token->str);
-        }
-        node->body[i++] = global_variable_declaration(tok, type);
-        node->body = realloc(node->body, sizeof(Node *) * (i + 1));
-        if (!node->body)
-          error("realloc failed");
-      }
-      node->body[i] = new_node(ND_NONE);
-      expect(";", "after line", "global variable declaration");
-    }
+    node = vardec_and_funcdef(FALSE);
   } else if (token->kind == TK_STRUCT) {
     free_token();
     tok = consume_ident();
@@ -722,6 +775,8 @@ Node *stmt() {
         member_var->len = member_tok->len;
         member_var->type = new_type(TY_INT);
         member_var->offset = offset;
+        member_var->ext = FALSE;
+        member_var->is_static = FALSE;
         offset++;
         member_var->next = enum_members;
         enum_members = member_var;
@@ -811,7 +866,7 @@ Node *stmt() {
         error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len,
                  token->str);
       }
-      node->init = local_variable_declaration(tok, type);
+      node->init = local_variable_declaration(tok, type, FALSE);
       expect(";", "after initialization", "for");
       node->init->endline = TRUE;
       init = TRUE;

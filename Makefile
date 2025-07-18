@@ -9,11 +9,14 @@ SELFHOST:=./laccs
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-build: $(BOOSTSTRAP) ## Build the bootstrap compiler
+bootstrap: $(BOOSTSTRAP) ## Build the bootstrap compiler
 	@echo "Bootstrap compiler built successfully."
 
 selfhost: $(SELFHOST) ## Build the self-hosted compiler
 	@echo "Self-hosted compiler built successfully."
+
+runfile: $(SELFHOST) ## Run a file with the self-hosted compiler
+	./rf.sh $(SELFHOST) $(FILE)
 
 $(BOOSTSTRAP): $(SRCS)
 	$(CC) $(CFLAGS) -o $(BOOSTSTRAP) $(SRCS) extention.c

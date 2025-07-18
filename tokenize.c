@@ -6,8 +6,8 @@ extern Token *token;
 extern String *filenames;
 extern char *filename;
 
-extern int TRUE;
-extern int FALSE;
+extern const int TRUE;
+extern const int FALSE;
 extern void *NULL;
 
 // Create a new token and add it as the next token of `cur`.
@@ -288,8 +288,7 @@ void tokenize() {
     }
 
     if (startswith(p, "static") && !is_alnum(p[6])) {
-      // "static" is not supported yet
-      warning_at(p, "static is not supported yet [in tokenize]");
+      new_token(TK_STATIC, p, 6);
       p += 6;
       continue;
     }

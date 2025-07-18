@@ -1,8 +1,8 @@
 
 #include "lacc.h"
 
-extern int TRUE;
-extern int FALSE;
+extern const int TRUE;
+extern const int FALSE;
 extern void *NULL;
 
 char *regs1(int i) {
@@ -58,8 +58,12 @@ char *regs8(int i) {
 
 void gen_lval(Node *node) {
   if (node->kind == ND_LVAR || node->kind == ND_VARDEC) {
-    printf("  mov rax, rbp\n");
-    printf("  sub rax, %d\n", node->var->offset);
+    if (node->var->is_static) {
+      printf("  lea rax, %.*s.%d[rip]\n", node->var->len, node->var->name, node->var->block);
+    } else {
+      printf("  mov rax, rbp\n");
+      printf("  sub rax, %d\n", node->var->offset);
+    }
     printf("  push rax\n");
   } else if (node->kind == ND_GVAR) {
     printf("  lea rax, %.*s[rip]\n", node->var->len, node->var->name);
@@ -304,7 +308,11 @@ void gen(Node *node) {
     printf("  jmp .Lstep%d\n", node->id);
     return;
   } else if (node->kind == ND_FUNCDEF) {
-    printf("  .globl %.*s\n", node->fn->len, node->fn->name);
+    if (node->fn->is_static) {
+      printf("  .local %.*s\n", node->fn->len, node->fn->name);
+    } else {
+      printf("  .globl %.*s\n", node->fn->len, node->fn->name);
+    }
     printf("  .p2align 4\n");
     printf("%.*s:\n", node->fn->len, node->fn->name);
     printf("  push rbp\n");

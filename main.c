@@ -9,10 +9,12 @@ int array_cnt = 0;
 int loop_cnt = 0;
 int variable_cnt = 0;
 int logical_cnt = 0;
+int block_cnt = 0;
 int loop_id = -1;
 Function *functions;
 Function *current_fn;
 LVar *globals;
+LVar *statics;
 Struct *structs;
 StructTag *struct_tags;
 Enum *enums;
@@ -50,6 +52,11 @@ void init_global_variables() {
   globals = malloc(sizeof(LVar));
   globals->next = NULL;
   globals->type = new_type(TY_NONE);
+
+  // 静的な変数の初期化
+  statics = malloc(sizeof(LVar));
+  statics->next = NULL;
+  statics->type = new_type(TY_NONE);
 
   // 文字列リテラルの初期化
   strings = malloc(sizeof(String));
@@ -91,13 +98,24 @@ int main(int argc, char **argv) {
   // アセンブリの前半部分を出力
   printf(".intel_syntax noprefix\n");
 
-  // グローバル変数の定義
+  printf("  .rodata\n");
+  // 文字列リテラル
+  for (String *str = strings; str->next; str = str->next) {
+    printf(".L.str%d:\n", str->id);
+    printf("  .string \"%.*s\"\n", str->len, str->text);
+  }
+
   printf("  .data\n");
+  // グローバル変数の定義
   for (LVar *var = globals; var->next; var = var->next) {
     if (var->ext) {
       continue;
     }
-    printf("  .globl %.*s\n", var->len, var->name);
+    if (var->is_static) {
+      printf("  .local %.*s\n", var->len, var->name);
+    } else {
+      printf("  .globl %.*s\n", var->len, var->name);
+    }
     printf("  .p2align 3\n");
     printf("%.*s:\n", var->len, var->name);
     if (var->offset) {
@@ -107,10 +125,16 @@ int main(int argc, char **argv) {
     }
   }
 
-  // 文字列リテラル
-  for (String *str = strings; str->next; str = str->next) {
-    printf(".L.str%d:\n", str->id);
-    printf("  .string \"%.*s\"\n", str->len, str->text);
+  // 静的な関数内変数の定義
+  for (LVar *var = statics; var->next; var = var->next) {
+    printf("  .local %.*s.%d\n", var->len, var->name, var->block);
+    printf("  .p2align 3\n");
+    printf("%.*s.%d:\n", var->len, var->name, var->block);
+    if (var->offset) {
+      printf("  .long %d\n", var->offset);
+    } else {
+      printf("  .zero %d\n", get_sizeof(var->type));
+    }
   }
 
   // 配列リテラル

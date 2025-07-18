@@ -514,6 +514,14 @@ int test76() { return '\n' + 1; /* 10 + 1 = 11 */ }
 /* ビット演算とシフトの優先順位確認 */
 int test77() { return 1 << 3 & 0b10110; }
 
+int test78_sub(int n) {
+  static int cnt = 0;
+  cnt += n;
+  return cnt;
+}
+
+int test78() { return test78_sub(3) * test78_sub(4) + test78_sub(2); }
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -600,6 +608,7 @@ int main() {
   check(test75(), 75, 16);
   check(test76(), 76, 11);
   check(test77(), 77, 0);
+  check(test78(), 78, 30);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");
