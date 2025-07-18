@@ -23,8 +23,8 @@ String *filenames;
 char *filename;
 char *consumed_ptr;
 
-int TRUE = 1;
-int FALSE = 0;
+const int TRUE = 1;
+const int FALSE = 0;
 void *NULL = 0;
 
 void init_global_variables() {

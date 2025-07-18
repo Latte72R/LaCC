@@ -42,6 +42,9 @@ test: $(BOOSTSTRAP) ## Run tests with the bootstrap compiler
 selfhost-test: $(SELFHOST) ## Run tests with the self-hosted compiler
 	./multitest.sh $(SELFHOST)
 
+error-test: $(SELFHOST) ## Run error tests with the self-hosted compiler
+	./error_test.sh $(SELFHOST)
+
 lifegame: $(SELFHOST) ## Run tests for the life game
 	./rf.sh $(SELFHOST) ./lifegame.c
 
