@@ -25,6 +25,12 @@ extern int TRUE;
 extern int FALSE;
 extern void *NULL;
 
+void free_token() {
+  Token *tok = token;
+  token = tok->next;
+  free(tok);
+}
+
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_lvar(Token *tok) {
   for (LVar *var = current_fn->locals; var->next; var = var->next)
@@ -94,7 +100,7 @@ int consume(char *op) {
   if (token->kind != TK_RESERVED || strlen(op) != token->len || memcmp(token->str, op, token->len))
     return FALSE;
   consumed_ptr = token->str;
-  token = token->next;
+  free_token();
   return TRUE;
 }
 
@@ -103,7 +109,7 @@ Token *consume_ident() {
     return NULL;
   Token *tok = token;
   consumed_ptr = token->str;
-  token = token->next;
+  free_token();
   return tok;
 }
 
@@ -150,7 +156,7 @@ Type *consume_type() {
     type->ty = tok->ty;
   }
   consumed_ptr = token->str;
-  token = token->next;
+  free_token();
   while (consume("*")) {
     Type *ptr = malloc(sizeof(Type));
     ptr->ty = TY_PTR;
@@ -178,7 +184,7 @@ int is_type(Token *tok) {
 void expect(char *op, char *err, char *st) {
   if (token->kind != TK_RESERVED || strlen(op) != token->len || memcmp(token->str, op, token->len))
     error_at(token->str, "expected \"%s\":\n  %s  [in %s statement]", op, err, st);
-  token = token->next;
+  free_token();
 }
 
 // Ensure that the current token is TK_NUM.
@@ -186,7 +192,7 @@ int expect_number() {
   if (token->kind != TK_NUM)
     error_at(token->str, "expected a number but got \"%.*s\" [in expect_number]", token->len, token->str);
   int val = token->val;
-  token = token->next;
+  free_token();
   return val;
 }
 
@@ -532,7 +538,7 @@ Node *stmt() {
     expect("}", "after block", "block");
   } else if (token->kind == TK_EXTERN) {
     // extern宣言
-    token = token->next;
+    free_token();
     Type *ch_type = check_type();
     type = consume_type();
     tok = consume_ident();
@@ -631,16 +637,16 @@ Node *stmt() {
       expect(";", "after line", "global variable declaration");
     }
   } else if (token->kind == TK_STRUCT) {
-    token = token->next;
+    free_token();
     tok = consume_ident();
     if (!tok) {
       error_at(token->str, "expected an identifier but got \"%.*s\" [in struct definition]", token->len, token->str);
     }
     node = new_struct(tok);
   } else if (token->kind == TK_TYPEDEF) {
-    token = token->next;
+    free_token();
     if (token->kind == TK_STRUCT) {
-      token = token->next;
+      free_token();
       node = new_node(ND_TYPEDEF);
       Token *tok1 = consume_ident();
       if (!tok1) {
@@ -668,7 +674,7 @@ Node *stmt() {
       tag->next = struct_tags;
       struct_tags = tag;
     } else if (token->kind == TK_ENUM) {
-      token = token->next;
+      free_token();
       node = new_node(ND_TYPEDEF);
       int offset = 0;
       expect("{", "before enum members", "enum");
@@ -710,7 +716,7 @@ Node *stmt() {
     node->endline = TRUE;
     expect(";", "after line", "typedef");
   } else if (token->kind == TK_IF) {
-    token = token->next;
+    free_token();
     node = new_node(ND_IF);
     node->id = loop_cnt++;
     expect("(", "before condition", "if");
@@ -719,13 +725,13 @@ Node *stmt() {
     expect(")", "after equality", "if");
     node->then = stmt();
     if (token->kind == TK_ELSE) {
-      token = token->next;
+      free_token();
       node->els = stmt();
     } else {
       node->els = NULL;
     }
   } else if (token->kind == TK_WHILE) {
-    token = token->next;
+    free_token();
     expect("(", "before condition", "while");
     node = new_node(ND_WHILE);
     node->id = loop_cnt++;
@@ -737,14 +743,14 @@ Node *stmt() {
     node->then = stmt();
     loop_id = loop_id_prev;
   } else if (token->kind == TK_DO) {
-    token = token->next;
+    free_token();
     node = new_node(ND_DOWHILE);
     node->id = loop_cnt++;
     node->then = stmt();
     if (token->kind != TK_WHILE) {
       error_at(token->str, "expected 'while' but got \"%.*s\" [in do-while statement]", token->len, token->str);
     }
-    token = token->next;
+    free_token();
     expect("(", "before condition", "do-while");
     node->cond = expr();
     node->cond->endline = FALSE;
@@ -756,7 +762,7 @@ Node *stmt() {
     node->endline = TRUE;
   } else if (token->kind == TK_FOR) {
     int init;
-    token = token->next;
+    free_token();
     expect("(", "before initialization", "for");
     node = new_node(ND_FOR);
     node->id = loop_cnt++;
@@ -808,7 +814,7 @@ Node *stmt() {
     if (loop_id == -1) {
       error_at(token->str, "stray break statement [in break statement]");
     }
-    token = token->next;
+    free_token();
     expect(";", "after line", "break");
     node = new_node(ND_BREAK);
     node->endline = TRUE;
@@ -817,13 +823,13 @@ Node *stmt() {
     if (loop_id == -1) {
       error_at(token->str, "stray continue statement [in continue statement]");
     }
-    token = token->next;
+    free_token();
     expect(";", "after line", "continue");
     node = new_node(ND_CONTINUE);
     node->endline = TRUE;
     node->id = loop_id;
   } else if (token->kind == TK_RETURN) {
-    token = token->next;
+    free_token();
     node = new_node(ND_RETURN);
     if (consume(";")) {
       node->rhs = new_num(0);
@@ -1112,7 +1118,7 @@ Node *mul() {
 Node *unary() {
   Node *node;
   if (token->kind == TK_SIZEOF) {
-    token = token->next;
+    free_token();
     return new_num(get_sizeof(unary()->type));
   }
   if (consume("+"))
@@ -1266,7 +1272,7 @@ Node *primary() {
     str->id = label_cnt++;
     str->next = strings;
     strings = str;
-    token = token->next;
+    free_token();
     node = new_node(ND_STRING);
     node->id = str->id;
     node->type = new_type_ptr(new_type(TY_CHAR));

@@ -123,7 +123,7 @@ void gen(Node *node) {
     if (node->type->ty == TY_INT) {
       printf("  movsxd rax, DWORD PTR [rax]\n");
     } else if (node->type->ty == TY_CHAR) {
-      printf("  movzx rax, BYTE PTR [rax]\n");
+      printf("  movsx rax, BYTE PTR [rax]\n");
     } else if (node->type->ty == TY_PTR || node->type->ty == TY_ARGARR) {
       printf("  mov rax, QWORD PTR [rax]\n");
     } else if (node->type->ty == TY_ARR) {
@@ -142,7 +142,7 @@ void gen(Node *node) {
     if (node->type->ty == TY_INT) {
       printf("  movsxd rax, DWORD PTR [rax]\n");
     } else if (node->type->ty == TY_CHAR) {
-      printf("  movzx rax, BYTE PTR [rax]\n");
+      printf("  movsx rax, BYTE PTR [rax]\n");
     } else if (node->type->ty == TY_PTR || node->type->ty == TY_ARGARR) {
       printf("  mov rax, QWORD PTR [rax]\n");
     } else if (node->type->ty == TY_ARR) {
@@ -157,7 +157,7 @@ void gen(Node *node) {
     printf("  pop rax\n");
     printf("  cmp rax, 0\n");
     printf("  sete al\n");
-    printf("  movzx rax, al\n");
+    printf("  movsx rax, al\n");
     if (!node->endline)
       printf("  push rax\n");
     return;
@@ -210,7 +210,7 @@ void gen(Node *node) {
       if (node->type->ty == TY_INT) {
         printf("  movsxd rdi, DWORD PTR [rax]\n");
       } else if (node->type->ty == TY_CHAR) {
-        printf("  movzx rdi, BYTE PTR [rax]\n");
+        printf("  movsx rdi, BYTE PTR [rax]\n");
       } else if (node->type->ty == TY_PTR) {
         printf("  mov rdi, QWORD PTR [rax]\n");
       } else {
@@ -345,7 +345,7 @@ void gen(Node *node) {
       if (node->args[i]->type->ty == TY_INT) {
         printf("  mov %s, eax\n", regs4(i));
       } else if (node->args[i]->type->ty == TY_CHAR) {
-        printf("  movzx %s, al\n", regs4(i));
+        printf("  movsx %s, al\n", regs4(i));
       } else if (is_ptr_or_arr(node->args[i]->type)) {
         printf("  mov %s, rax\n", regs8(i));
       } else {
@@ -430,19 +430,19 @@ void gen(Node *node) {
   } else if (node->kind == ND_EQ) {
     printf("  cmp rax, rdi\n");
     printf("  sete al\n");
-    printf("  movzx rax, al\n");
+    printf("  movsx rax, al\n");
   } else if (node->kind == ND_NE) {
     printf("  cmp rax, rdi\n");
     printf("  setne al\n");
-    printf("  movzx rax, al\n");
+    printf("  movsx rax, al\n");
   } else if (node->kind == ND_LT) {
     printf("  cmp rax, rdi\n");
     printf("  setl al\n");
-    printf("  movzx rax, al\n");
+    printf("  movsx rax, al\n");
   } else if (node->kind == ND_LE) {
     printf("  cmp rax, rdi\n");
     printf("  setle al\n");
-    printf("  movzx rax, al\n");
+    printf("  movsx rax, al\n");
   } else if (node->kind == ND_BITAND) {
     printf("  and rax, rdi\n");
   } else if (node->kind == ND_BITOR) {
