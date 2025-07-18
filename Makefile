@@ -5,6 +5,16 @@ ASMS:=$(SRCS:.c=.s)
 BOOSTSTRAP:=./lacc
 SELFHOST:=./laccs
 
+.DEFAULT_GOAL := help
+help:
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+build: $(BOOSTSTRAP) ## Build the bootstrap compiler
+	@echo "Bootstrap compiler built successfully."
+
+selfhost: $(SELFHOST) ## Build the self-hosted compiler
+	@echo "Self-hosted compiler built successfully."
+
 $(BOOSTSTRAP): $(SRCS)
 	$(CC) $(CFLAGS) -o $(BOOSTSTRAP) $(SRCS) extention.c
 
@@ -15,10 +25,7 @@ $(SELFHOST): $(BOOSTSTRAP)
 	$(BOOSTSTRAP) ./codegen.c > codegen.s
 	$(CC) -o $(SELFHOST) $(ASMS) extention.c $(LDFLAGS)
 
-clean:
-	rm -f $(BOOSTSTRAP) $(SELFHOST) *.o *.s tmp*
-
-cc-test: $(BOOSTSTRAP)
+cc-test: ## Run tests with the default C compiler
 	echo \[unitests.c\]
 	cc ./unitests.c $(CFLAGS)
 	./a.out
@@ -29,16 +36,19 @@ cc-test: $(BOOSTSTRAP)
 	cc ./fizzbuzz.c $(CFLAGS)
 	./a.out
 
-test: $(BOOSTSTRAP)
+test: $(BOOSTSTRAP) ## Run tests with the bootstrap compiler
 	./multitest.sh $(BOOSTSTRAP)
 
-selfhost-test: $(SELFHOST)
+selfhost-test: $(SELFHOST) ## Run tests with the self-hosted compiler
 	./multitest.sh $(SELFHOST)
 
-lifegame: $(SELFHOST)
+lifegame: $(SELFHOST) ## Run tests for the life game
 	./rf.sh $(SELFHOST) ./lifegame.c
 
-rotate: $(SELFHOST)
+rotate: $(SELFHOST) ## Run tests for the rotate program
 	./rf.sh $(SELFHOST) ./rotate.c
 
-.PHONY: test selfhost-test lifegame rotate clean
+clean: ## Clean up generated files
+	rm -f $(BOOSTSTRAP) $(SELFHOST) *.o *.s tmp*
+
+.PHONY: test selfhost-test lifegame rotate clean cc-test help
