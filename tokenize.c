@@ -275,7 +275,7 @@ void tokenize() {
     }
 
     if (startswith(p, "const") && !is_alnum(p[5])) {
-      warning_at(p, "const is not supported yet, treated as variable");
+      new_token(TK_CONST, p, 5);
       p += 5;
       continue;
     }

@@ -99,6 +99,7 @@ struct Type {
   Type *ptr_to;
   int array_size;
   Struct *struct_;
+  int const_; // constかどうか
 };
 
 // 関数の型
@@ -187,6 +188,7 @@ struct Node {
 };
 
 Node *stmt();
+Node *assign_sub(Node *lhs, Node *rhs, char *ptr);
 Node *assign();
 Node *expr();
 Node *equality();

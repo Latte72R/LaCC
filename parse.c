@@ -116,9 +116,15 @@ Token *consume_ident() {
 Type *check_base_type() {
   Token *tok = token;
   Type *type = malloc(sizeof(Type));
-  if (tok->kind == TK_IDENT) {
-    Struct *struct_ = find_struct(tok);
-    Enum *enum_ = find_enum(tok);
+  if (token->kind == TK_CONST) {
+    type->const_ = TRUE;
+    token = token->next;
+  } else {
+    type->const_ = FALSE;
+  }
+  if (token->kind == TK_IDENT) {
+    Struct *struct_ = find_struct(token);
+    Enum *enum_ = find_enum(token);
     if (struct_) {
       type->ty = TY_STRUCT;
       type->struct_ = struct_;
@@ -127,21 +133,31 @@ Type *check_base_type() {
     } else {
       return NULL;
     }
-  } else if (tok->kind != TK_TYPE) {
+  } else if (token->kind != TK_TYPE) {
     return NULL;
   } else {
-    type->ty = tok->ty;
+    type->ty = token->ty;
+  }
+  token = token->next;
+  if (token->kind == TK_CONST) {
+    type->const_ = TRUE;
+    token = token->next;
   }
   token = tok;
   return type;
 }
 
 Type *consume_type() {
-  Token *tok = token;
   Type *type = malloc(sizeof(Type));
-  if (tok->kind == TK_IDENT) {
-    Struct *struct_ = find_struct(tok);
-    Enum *enum_ = find_enum(tok);
+  if (token->kind == TK_CONST) {
+    type->const_ = TRUE;
+    free_token();
+  } else {
+    type->const_ = FALSE;
+  }
+  if (token->kind == TK_IDENT) {
+    Struct *struct_ = find_struct(token);
+    Enum *enum_ = find_enum(token);
     if (struct_) {
       type->ty = TY_STRUCT;
       type->struct_ = struct_;
@@ -150,24 +166,36 @@ Type *consume_type() {
     } else {
       return NULL;
     }
-  } else if (tok->kind != TK_TYPE) {
+  } else if (token->kind != TK_TYPE) {
     return NULL;
   } else {
-    type->ty = tok->ty;
+    type->ty = token->ty;
   }
   consumed_ptr = token->str;
   free_token();
+  if (token->kind == TK_CONST) {
+    type->const_ = TRUE;
+    free_token();
+  }
   while (consume("*")) {
     Type *ptr = malloc(sizeof(Type));
     ptr->ty = TY_PTR;
     ptr->ptr_to = type;
     type = ptr;
+    if (token->kind == TK_CONST) {
+      type->const_ = TRUE;
+      free_token();
+    } else {
+      type->const_ = FALSE;
+    }
   }
   return type;
 }
 
 int is_type(Token *tok) {
   if (tok->kind == TK_TYPE)
+    return TRUE;
+  if (tok->kind == TK_CONST)
     return TRUE;
   if (tok->kind == TK_IDENT) {
     Struct *struct_ = find_struct(tok);
@@ -556,6 +584,9 @@ Node *stmt() {
         ptr->ty = TY_PTR;
         ptr->ptr_to = type;
         type = ptr;
+        if (type->const_) {
+          error_at(token->str, "constant pointer is not allowed [in extern declaration]");
+        }
       }
       tok = consume_ident();
       if (!tok) {
@@ -596,6 +627,9 @@ Node *stmt() {
           ptr->ty = TY_PTR;
           ptr->ptr_to = type;
           type = ptr;
+          if (token->kind == TK_CONST) {
+            type->const_ = TRUE;
+          }
         }
         tok = consume_ident();
         if (!tok) {
@@ -860,20 +894,30 @@ void program() {
 
 Node *expr() { return assign(); }
 
+Node *assign_sub(Node *lhs, Node *rhs, char *ptr) {
+  if (lhs->type->const_) {
+    error_at(ptr, "constant variable cannot be assigned [in assign_sub]");
+  }
+  Node *node = new_binary(ND_ASSIGN, lhs, rhs);
+  return node;
+}
+
 Node *assign() {
   Node *node = logical_or();
+  char *ptr;
   if (consume("=")) {
-    node = new_binary(ND_ASSIGN, node, expr());
+    ptr = consumed_ptr;
+    node = assign_sub(node, expr(), ptr);
   } else if (consume("+=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_ADD, node, expr()));
+    node = assign_sub(node, new_binary(ND_ADD, node, expr()), ptr);
   } else if (consume("-=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_SUB, node, expr()));
+    node = assign_sub(node, new_binary(ND_SUB, node, expr()), ptr);
   } else if (consume("*=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_MUL, node, expr()));
+    node = assign_sub(node, new_binary(ND_MUL, node, expr()), ptr);
   } else if (consume("/=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_DIV, node, expr()));
+    node = assign_sub(node, new_binary(ND_DIV, node, expr()), ptr);
   } else if (consume("%=")) {
-    node = new_binary(ND_ASSIGN, node, new_binary(ND_MOD, node, expr()));
+    node = assign_sub(node, new_binary(ND_MOD, node, expr()), ptr);
   }
   return node;
 }
@@ -1160,12 +1204,15 @@ Node *unary() {
 
 Node *increment_decrement() {
   Node *node;
+  char *ptr;
   if (consume("++")) {
+    ptr = consumed_ptr;
     node = access_member();
-    return new_binary(ND_ASSIGN, node, new_add(node, new_num(1), consumed_ptr));
+    return assign_sub(node, new_add(node, new_num(1), consumed_ptr), ptr);
   } else if (consume("--")) {
+    ptr = consumed_ptr;
     node = access_member();
-    return new_binary(ND_ASSIGN, node, new_sub(node, new_num(1), consumed_ptr));
+    return assign_sub(node, new_sub(node, new_num(1), consumed_ptr), ptr);
   }
   node = access_member();
   if (consume("++")) {
