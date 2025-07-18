@@ -11,6 +11,7 @@ typedef enum {
   TK_NUM,      // 整数トークン
   TK_RETURN,   // return
   TK_SIZEOF,   // sizeof
+  TK_CONST,    // const
   TK_IF,
   TK_ELSE,
   TK_WHILE,
@@ -223,6 +224,7 @@ void gen(Node *node);
 // extention.c
 void error();
 void error_at();
+void warning_at();
 char *read_file();
 void init();
 
