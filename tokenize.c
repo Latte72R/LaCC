@@ -280,6 +280,20 @@ void tokenize() {
       continue;
     }
 
+    if (startswith(p, "volatile") && !is_alnum(p[8])) {
+      // "volatile" is not supported yet
+      // Because not performing any optimizations, special handling for volatile isn't necessary.
+      p += 8;
+      continue;
+    }
+
+    if (startswith(p, "static") && !is_alnum(p[6])) {
+      // "static" is not supported yet
+      warning_at(p, "static is not supported yet [in tokenize]");
+      p += 6;
+      continue;
+    }
+
     if (startswith(p, "while") && !is_alnum(p[5])) {
       new_token(TK_WHILE, p, 5);
       p += 5;
