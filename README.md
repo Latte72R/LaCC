@@ -65,6 +65,8 @@ Both global and local (stack) variable declarations are supported.
 - **Typedef support**  
   LaCC supports the `typedef` keyword for creating type aliases.
 
+- **Type qualifiers & storage-class specifiers:** `const`, `volatile`, `static`
+
 - **Struct member access**  
   Both dot notation (`.`) for direct struct access and arrow notation (`->`) for pointer-to-struct access are supported.
 
@@ -87,7 +89,7 @@ LaCC does **not** support the following:
 - Ternary conditional operator (`?:`)  
 - `union` types  
 - Extended primitive types: `unsigned`, `long`, `float`, `double`, etc.  
-- Type qualifiers & storage-class specifiers: `const`, `volatile`, `static`, `register`, `auto`, etc.  
+- Type qualifiers & storage-class specifiers: `register`, `auto`, etc.  
 - No initializer lists for structs (e.g.,  `struct AB p = {.a = 1, .b = 2};`)  
 - Inline assembly  
 - Preprocessor directives: `#define`, `#ifdef`, etc.  
