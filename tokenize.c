@@ -250,6 +250,12 @@ void tokenize() {
       continue;
     }
 
+    if (startswith(p, "goto") && !is_alnum(p[4])) {
+      new_token(TK_GOTO, p, 4);
+      p += 4;
+      continue;
+    }
+
     if (startswith(p, "extern") && !is_alnum(p[6])) {
       new_token(TK_EXTERN, p, 6);
       p += 6;
@@ -344,7 +350,12 @@ void tokenize() {
              ('0' <= *(p + i) && *(p + i) <= '9') || *(p + i) == '_') {
         i++;
       }
-      new_token(TK_IDENT, p, i);
+      if (*(p + i) == ':') {
+        new_token(TK_LABEL, p, i);
+        i++;
+      } else {
+        new_token(TK_IDENT, p, i);
+      }
       p += i;
       continue;
     }

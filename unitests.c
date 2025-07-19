@@ -522,6 +522,25 @@ int test78_sub(int n) {
 
 int test78() { return test78_sub(3) * test78_sub(4) + test78_sub(2); }
 
+int test79() {
+  int i = 0;
+start:
+  i++;
+  if (i < 5) {
+    goto start;
+  }
+  return i;
+}
+
+int test80() {
+  int n = 0;
+  goto ahead;
+  n += 10;
+ahead:
+  n += 20;
+  return n;
+}
+
 void check(int result, int id, int ans) {
   if (result != ans) {
     printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
@@ -609,6 +628,8 @@ int main() {
   check(test76(), 76, 11);
   check(test77(), 77, 0);
   check(test78(), 78, 30);
+  check(test79(), 79, 5);
+  check(test80(), 80, 20);
 
   if (failures == 0) {
     printf("\033[1;32mAll tests passed!\033[0m\n");

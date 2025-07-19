@@ -68,3 +68,26 @@ EOF
 cat "$output_c"
 ./laccs "$output_c"
 printf "\n"
+
+printf "\e[1;36mTest case 7:\e[0m\n"
+cat <<EOF > "$output_c"
+int main() {
+  int x = 5;
+  {
+    int x = 10; // 標準Cでは合法だが、LaCCではエラー
+    return x;
+  }
+}
+EOF
+cat "$output_c"
+./laccs "$output_c"
+printf "\n"
+
+printf "\e[1;36mTest case 8:\e[0m\n"
+cat <<EOF > "$output_c"
+int main(void) { // 標準Cでは合法だが、LaCCではエラー
+    return 0;
+}
+EOF
+cat "$output_c"
+./laccs "$output_c"

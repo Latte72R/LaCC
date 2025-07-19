@@ -324,6 +324,8 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   fn->type = type;
   fn->offset = 0;
   fn->is_static = is_static;
+  fn->labels = malloc(sizeof(Label));
+  fn->labels->next = NULL;
   Function *prev_fn = current_fn;
   current_fn = fn;
   Node *node = new_node(ND_FUNCDEF);
@@ -718,6 +720,30 @@ Node *stmt() {
     }
     node->body[i] = new_node(ND_NONE);
     expect(";", "after line", "global variable declaration");
+  } else if (token->kind == TK_GOTO) {
+    free_token();
+    tok = consume_ident();
+    if (!tok) {
+      error_at(token->str, "expected an identifier but got \"%.*s\" [in goto statement]", token->len, token->str);
+    }
+    node = new_node(ND_GOTO);
+    node->label = malloc(sizeof(Label));
+    node->label->name = tok->str;
+    node->label->len = tok->len;
+    node->fn = current_fn;
+    node->endline = TRUE;
+    expect(";", "after line", "goto statement");
+  } else if (token->kind == TK_LABEL) {
+    Label *label = malloc(sizeof(Label));
+    label->name = token->str;
+    label->len = token->len;
+    label->id = label_cnt++;
+    label->next = current_fn->labels;
+    current_fn->labels = label;
+    node = new_node(ND_LABEL);
+    node->label = label;
+    free_token();
+    node->endline = TRUE;
   } else if (token->kind == TK_STATIC) {
     free_token();
     node = vardec_and_funcdef(TRUE);

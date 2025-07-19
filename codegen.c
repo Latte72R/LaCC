@@ -106,6 +106,16 @@ void asm_memcpy(Node *lhs, Node *rhs) {
   printf("  push rdi\n");
 }
 
+Label *find_label(Function *fn, char *name, int len) {
+  for (Label *label = fn->labels; label->next; label = label->next) {
+    if (label->len == len && !memcmp(label->name, name, len)) {
+      return label;
+    }
+  }
+  error_at(name, "undefined label: %.*s [in find_label]", len, name);
+  return NULL; // Unreachable, but avoids compiler warning.
+}
+
 void gen(Node *node) {
   if (node->kind == ND_NUM) {
     if (!node->endline)
@@ -306,6 +316,13 @@ void gen(Node *node) {
     return;
   } else if (node->kind == ND_CONTINUE) {
     printf("  jmp .Lstep%d\n", node->id);
+    return;
+  } else if (node->kind == ND_GOTO) {
+    Label *label = find_label(node->fn, node->label->name, node->label->len);
+    printf("  jmp .L%d\n", label->id);
+    return;
+  } else if (node->kind == ND_LABEL) {
+    printf(".L%d:\n", node->label->id);
     return;
   } else if (node->kind == ND_FUNCDEF) {
     if (node->fn->is_static) {

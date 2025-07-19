@@ -21,6 +21,8 @@ typedef enum {
   TK_BREAK,
   TK_CONTINUE,
   TK_DO,
+  TK_GOTO,    // GOTO
+  TK_LABEL,   // ラベル
   TK_STRING,  // 文字列
   TK_TYPEDEF, // typedef
   TK_ENUM,    // enum
@@ -105,6 +107,15 @@ struct Type {
   int const_; // constかどうか
 };
 
+// Label
+typedef struct Label Label;
+struct Label {
+  Label *next; // 次のラベルかNULL
+  char *name;  // ラベルの名前
+  int len;     // 名前の長さ
+  int id;      // ラベルのID
+};
+
 // 関数の型
 typedef struct Function Function;
 struct Function {
@@ -115,6 +126,7 @@ struct Function {
   int offset;     // RBPからのオフセット
   Type *type;     // 関数の型
   int is_static;  // staticかどうか
+  Label *labels;  // ラベルのリスト
 };
 
 //
@@ -159,6 +171,8 @@ typedef enum {
   ND_BREAK,    // break
   ND_CONTINUE, // continue
   ND_DOWHILE,  // do-while
+  ND_GOTO,     // goto
+  ND_LABEL,    // ラベル
   ND_RETURN,   // return
   ND_FUNCDEF,  // 関数定義
   ND_FUNCALL,  // 関数呼び出し
@@ -189,6 +203,7 @@ struct Node {
   Function *fn;  // kindがND_FUNCDEF, ND_FUNCALLの場合のみ使う
   LVar *var;     // kindがND_LVAR, ND_GVARの場合のみ使う
   Type *type;
+  Label *label;
 };
 
 Node *stmt();
