@@ -4,7 +4,7 @@ SRC_DIR:=./src
 TEST_DIR:=./tests
 EXAMPLE_DIR:=./examples
 BUILD_DIR:=./build
-SRCS:=$(SRC_DIR)/main.c $(SRC_DIR)/tokenize.c $(SRC_DIR)/parse.c $(SRC_DIR)/codegen.c
+SRCS:=$(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/**/*.c)
 ASMS:=$(SRCS:.c=.s)
 BOOSTSTRAP:=$(BUILD_DIR)/lacc
 SELFHOST:=$(BUILD_DIR)/laccs
@@ -32,15 +32,16 @@ runfile: $(SELFHOST) ## Run a file with the self-hosted compiler
 	$(call runfile, $(SELFHOST), $(FILE))
 
 $(BOOSTSTRAP): $(SRCS) | $(BUILD_DIR)
-	@$(CC) $(CC_FLAGS) -o $(BOOSTSTRAP) $(SRCS) $(SRC_DIR)/extention.c
+	@$(CC) $(CC_FLAGS) -o $(BOOSTSTRAP) $(SRCS) extention.c
 	@echo "Bootstrap compiler created at $(BOOSTSTRAP)."
 
 $(SELFHOST): $(BOOSTSTRAP) | $(BUILD_DIR)
-	@$(BOOSTSTRAP) $(LACC_FLAGS) $(SRC_DIR)/main.c > $(BUILD_DIR)/main.s 
-	@$(BOOSTSTRAP) $(LACC_FLAGS) $(SRC_DIR)/tokenize.c > $(BUILD_DIR)/tokenize.s
-	@$(BOOSTSTRAP) $(LACC_FLAGS) $(SRC_DIR)/parse.c > $(BUILD_DIR)/parse.s
-	@$(BOOSTSTRAP) $(LACC_FLAGS) $(SRC_DIR)/codegen.c > $(BUILD_DIR)/codegen.s
-	@$(CC) -o $(SELFHOST) $(BUILD_DIR)/main.s $(BUILD_DIR)/tokenize.s $(BUILD_DIR)/parse.s $(BUILD_DIR)/codegen.s $(SRC_DIR)/extention.c $(CC_FLAGS)
+	@for src in $(SRCS); do \
+		base=$$(basename $$src .c); \
+		out=$(BUILD_DIR)/$$base.s; \
+		$(BOOSTSTRAP) $(LACC_FLAGS) $$src > $$out; \
+	done
+	@$(CC) -o $(SELFHOST) $(BUILD_DIR)/*.s extention.c $(CC_FLAGS)
 	@echo "Self-hosted compiler created at $(SELFHOST)."
 
 cc-test: $(BUILD_DIR) ## Run tests with the default C compiler

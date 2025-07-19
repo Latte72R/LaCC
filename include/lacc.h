@@ -140,6 +140,10 @@ struct Function {
   Label *labels;  // ラベルのリスト
 };
 
+void tokenize();
+void new_token(TokenKind kind, char *str, int len);
+int startswith(char *p, char *q);
+
 //
 // Parser
 //
@@ -217,39 +221,104 @@ struct Node {
   Label *label;
 };
 
-Node *stmt();
-Node *assign_sub(Node *lhs, Node *rhs, char *ptr);
-Node *assign();
-Node *expr();
-Node *equality();
-Node *relational();
-Node *new_add(Node *lhs, Node *rhs, char *consumed_ptr);
-Node *new_sub(Node *lhs, Node *rhs, char *consumed_ptr);
-Node *add();
-Node *mul();
-Node *logical_and();
-Node *logical_or();
-Node *bit_or();
-Node *bit_and();
-Node *bit_xor();
-Node *bit_shift();
-Node *increment_decrement();
-Node *access_member();
-Node *unary();
-Node *primary();
-int get_type_size(Type *type);
-int get_sizeof(Type *type);
+// symbol.c
+LVar *find_lvar(Token *tok);
+LVar *find_gvar(Token *tok);
+Struct *find_struct(Token *tok);
+Enum *find_enum(Token *tok);
+LVar *find_enum_member(Token *tok);
+LVar *find_struct_member(Struct *struct_, Token *tok);
+StructTag *find_struct_tag(Token *tok);
+Function *find_fn(Token *tok);
 
+// token.c
+int peek(char *op);
+int consume(char *op);
+Token *consume_ident();
+Token *expect_ident(const char *context);
+void expect(char *op, char *err, char *st);
+int expect_number();
+int parse_sign();
+int expect_signed_number();
+
+// type.c
+Type *parse_base_type_internal(int should_consume);
+Type *check_base_type();
+Type *parse_pointer_qualifiers(Type *base_type);
+Type *consume_type();
+int is_type(Token *tok);
+int is_ptr_or_arr(Type *type);
+int is_number(Type *type);
+int get_sizeof(Type *type);
 Type *new_type(TypeKind ty);
 Type *new_type_ptr(Type *ptr_to);
-int is_ptr_or_arr(Type *type);
+Type *new_type_arr(Type *ptr_to, int array_size);
+Type *new_type_struct(Struct *struct_);
+Type *parse_array_dimensions(Type *base_type);
 
-int startswith(char *p, char *q);
+// ast.c
+Node *new_node(NodeKind kind);
+Node *new_num(int val);
+Node *new_deref(Node *lhs);
+Node *new_binary(NodeKind kind, Node *lhs, Node *rhs);
+LVar *new_lvar(Token *tok, Type *type, int is_static, int is_extern);
 
-void tokenize();
-void new_token(TokenKind kind, char *str, int len);
+// decl.c
+Node *function_definition(Token *tok, Type *type, int is_static);
+Node *local_variable_declaration(Token *tok, Type *type, int is_static);
+Node *global_variable_declaration(Token *tok, Type *type, int is_static);
+Node *vardec_and_funcdef_stmt(int is_static);
+Node *extern_declaration(Token *tok, Type *type);
+Node *extern_stmt();
+Node *struct_stmt();
+Node *typedef_stmt();
+Node *handle_array_initialization(Node *node, Type *type, Type *org_type);
+Node *handle_scalar_initialization(Node *node, Type *type);
+Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, Type *org_type, int set_offset);
 
+// stmt.c
+Node *block_stmt();
+Node *goto_stmt();
+Node *label_stmt();
+Node *if_stmt();
+Node *while_stmt();
+Node *do_while_stmt();
+Node *for_stmt();
+Node *break_stmt();
+Node *continue_stmt();
+Node *return_stmt();
+Node *stmt();
+
+// parse.c
+void error_duplicate_name(Token *tok, const char *type);
+void *safe_realloc_array(void *ptr, int element_size, int new_size);
 void program();
+
+// expr.c
+Node *expr();
+Node *assign_sub(Node *lhs, Node *rhs, char *ptr);
+Node *assign();
+Node *logical_or();
+Node *logical_and();
+Node *bit_or();
+Node *bit_xor();
+Node *bit_and();
+Node *equality();
+Node *relational();
+Node *bit_shift();
+Node *new_add(Node *lhs, Node *rhs, char *ptr);
+Node *new_sub(Node *lhs, Node *rhs, char *ptr);
+Node *add();
+Type *resolve_type_mul(Type *left, Type *right, char *ptr);
+Node *mul();
+Node *unary();
+Node *increment_decrement();
+Node *access_member();
+Node *primary();
+
+//
+// Code generation
+//
 
 void gen(Node *node);
 
