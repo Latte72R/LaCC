@@ -122,15 +122,7 @@ There are no code-generation optimizations beyond what's needed to make it work.
 
   After that, you have a few `make` targets to build and test your compiler:
 
-### 2. Build the bootstrap compiler
-
-  ```bash
-  make bootstrap
-  ```
-
-  This invokes the default target, compiling all sources into the `lacc` executable.   
-
-### 3. Build the self-hosted compiler
+### 2. Build the self-hosted compiler
 
   ```bash
   make selfhost
@@ -139,42 +131,32 @@ There are no code-generation optimizations beyond what's needed to make it work.
   Here, `lacc` is used to recompile the compiler source itself, producing a second-stage compiler named `laccs`.  
   This ensures that your compiler can correctly compile its own code.  
 
-### 4. Run primary tests
+### 3. Run specific files with the self-hosted compiler
 
   ```bash
-  make test
+  make runfile FILE=./examples/lifegame.c
+  make runfile FILE=./examples/rotate.c
   ```
 
-  Similarly, this runs
+  This command compiles and runs the specified C file using the self-hosted compiler `laccs`.
 
-  ```bash
-  ./multitest.sh ./lacc
-  ```
-
-  to validate the first-stage compiler `lacc` against the same test suite.
-
-### 5. Run self-host tests
+### 4. Run self-host tests
 
   ```bash
   make selfhost-test
   ```
 
-  Internally this runs
-
-  ```bash
-  ./multitest.sh ./laccs
-  ```
-
-  and executes a suite of example programs (unit tests, `prime.c`, `fizzbuzz.c`, etc.) using `laccs`.  
   Passing all tests confirms that your self-hosted compiler behaves as expected.  
+  `unitest.c` is a simple test file that checks basic functionality.
+  `fizzbuzz.c` and `prime.c` are examples of more complex programs that the compiler should handle correctly.
 
-### 6. Clean up build artifacts
+### 5. Clean up build artifacts
 
   ```bash
   make clean
   ```
 
-  Removes the `lacc` and `laccs` binaries, object files (`*.o`), assembly files (`*.s`) and any temporary files (`tmp*`), letting you start from a clean slate.
+  Removes the `lacc` and `laccs` binaries, assembly files, and temporary files from the build directory.
 
 
 ## About the Author  

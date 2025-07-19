@@ -72,14 +72,6 @@ selfhost-test: $(SELFHOST) ## Run tests with the self-hosted compiler
 error-test: $(SELFHOST) ## Run error tests with the self-hosted compiler
 	$(TEST_DIR)/error_test.sh $(BUILD_DIR) $(SELFHOST)
 
-lifegame: $(SELFHOST) ## Run Life Game Example
-	@echo "Running Life Game Example"
-	$(call runfile, $(SELFHOST), $(EXAMPLE_DIR)/lifegame.c)
-
-rotate: $(SELFHOST) ## Run Rotate Example
-	@echo "Running Rotate Example"
-	$(call runfile, $(SELFHOST), $(EXAMPLE_DIR)/rotate.c)
-
 clean: ## Clean up generated files
 	rm -f ./$(BOOSTSTRAP) $(SELFHOST) $(ASMS) $(BUILD_DIR)/tmp.s $(BUILD_DIR)/tmp
 
