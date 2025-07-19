@@ -1,16 +1,9 @@
 
 #include "lacc.h"
 
-extern char *user_input;
 extern Token *token;
-extern Node **code;
-extern int label_cnt;
 extern int array_cnt;
-extern int loop_cnt;
-extern int variable_cnt;
-extern int logical_cnt;
 extern int block_cnt;
-extern int loop_id;
 extern Function *functions;
 extern Function *current_fn;
 extern LVar *globals;
@@ -19,7 +12,6 @@ extern Struct *structs;
 extern StructTag *struct_tags;
 extern Enum *enums;
 extern LVar *enum_members;
-extern String *strings;
 extern Array *arrays;
 extern char *consumed_ptr;
 
