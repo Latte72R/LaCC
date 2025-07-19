@@ -1,4 +1,11 @@
 
+// Main
+typedef struct IncludePath IncludePath;
+struct IncludePath {
+  char *path;
+  IncludePath *next;
+};
+
 //
 // Tokenizer
 //

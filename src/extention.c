@@ -95,7 +95,7 @@ char *read_file(char *path) {
   // ファイルを開く
   FILE *fp = fopen(path, "r");
   if (!fp)
-    error("cannot open %s", path);
+    return NULL;
 
   // ファイルの長さを調べる
   if (fseek(fp, 0, SEEK_END) == -1)

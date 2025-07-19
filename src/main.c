@@ -25,6 +25,8 @@ String *filenames;
 char *filename;
 char *consumed_ptr;
 
+IncludePath *include_paths;
+
 const int TRUE = 1;
 const int FALSE = 0;
 void *NULL = 0;
@@ -69,24 +71,44 @@ void init_global_variables() {
   token->next = NULL;
   token->str = NULL;
   token->len = 0;
+
+  // Includeパスの初期化
+  include_paths = malloc(sizeof(IncludePath));
 }
 
 int main(int argc, char **argv) {
-  if (argc != 2) {
-    error("引数の個数が正しくありません");
-    return 1;
+  init_global_variables();
+  Token *token_cpy;
+  filename = NULL;
+
+  if (argc < 2) {
+    error("Invalid number of arguments. Usage: lacc [options] <source file>");
   }
 
-  init_global_variables();
+  for (int i = 1; i < argc; i++) {
+    if (!memcmp(argv[i], "-I", 2) && i + 1 < argc) {
+      IncludePath *ip = malloc(sizeof *ip);
+      ip->path = argv[++i]; // "./include" など
+      ip->next = include_paths;
+      include_paths = ip;
+    } else {
+      if (argv[i][0] == '-') {
+        error("Unknown option: %s", argv[i]);
+      }
+      token_cpy = token;
+      filename = argv[i];
+      filenames = malloc(sizeof(String));
+      filenames->text = filename;
+      filenames->len = strlen(filename);
+      filenames->next = NULL;
+    }
+  }
 
   // トークナイズしてパースする
   // 結果はcodeに保存される
-  Token *token_cpy = token;
-  filename = argv[1];
-  filenames = malloc(sizeof(String));
-  filenames->text = filename;
-  filenames->len = strlen(filename);
-  filenames->next = NULL;
+  if (!filename) {
+    error("No source file specified.");
+  }
   user_input = read_file(filename);
 
   tokenize();
