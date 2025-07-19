@@ -522,7 +522,7 @@ int test78_sub(int n) {
 
 int test78() { return test78_sub(3) * test78_sub(4) + test78_sub(2); }
 
-int test79() {
+int test79(void) {
   int i = 0;
 start:
   i++;
@@ -532,7 +532,7 @@ start:
   return i;
 }
 
-int test80() {
+int test80(void) {
   int n = 0;
   goto ahead;
   n += 10;

@@ -350,13 +350,17 @@ void tokenize() {
              ('0' <= *(p + i) && *(p + i) <= '9') || *(p + i) == '_') {
         i++;
       }
-      if (*(p + i) == ':') {
+      int j = i;
+      while (isspace(*(p + j))) {
+        j++;
+      }
+      if (*(p + j) == ':') {
         new_token(TK_LABEL, p, i);
-        i++;
+        j++;
       } else {
         new_token(TK_IDENT, p, i);
       }
-      p += i;
+      p += j;
       continue;
     }
 

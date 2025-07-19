@@ -330,48 +330,56 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   current_fn = fn;
   Node *node = new_node(ND_FUNCDEF);
   node->fn = fn;
-  if (!consume(")")) {
-    int n = 0;
-    for (int i = 0; i < 6; i++) {
-      type = consume_type();
-      Token *tok_lvar = consume_ident();
-      if (!tok_lvar) {
-        error_at(consumed_ptr, "expected an identifier [in variable declaration]");
+  int n = 0;
+  for (int i = 0; i < 6; i++) {
+    type = consume_type();
+    if (!type) {
+      if (i != 0) {
+        error_at(consumed_ptr, "expected a type [in function definition]");
       }
-      while (consume("[")) {
-        type = new_type_arr(type, expect_number());
-        expect("]", "after number", "array declaration");
+      break;
+    } else if (type->ty == TY_VOID) {
+      if (i != 0) {
+        error_at(consumed_ptr, "void type is only allowed for the first argument [in function definition]");
       }
-      if (type->ty == TY_ARR) {
-        type->ty = TY_ARGARR;
-      }
-      Node *nd_lvar = new_node(ND_LVAR);
-      node->args[i] = nd_lvar;
-      LVar *lvar = malloc(sizeof(LVar));
-      lvar->next = fn->locals;
-      lvar->name = tok_lvar->str;
-      lvar->len = tok_lvar->len;
-      lvar->ext = FALSE;
-      lvar->is_static = FALSE;
-      if (is_ptr_or_arr(type)) {
-        lvar->offset = fn->locals->offset + 8;
-      } else {
-        lvar->offset = fn->locals->offset + get_sizeof(type);
-      }
-      fn->offset = lvar->offset;
-      lvar->type = type;
-      nd_lvar->var = lvar;
-      nd_lvar->type = type;
-      fn->locals = lvar;
-      n += 1;
-      if (!consume(","))
-        break;
+      break;
     }
-    node->val = n;
-    expect(")", "after arguments", "function definition");
-  } else {
-    node->val = 0;
+    Token *tok_lvar = consume_ident();
+    if (!tok_lvar) {
+      error_at(consumed_ptr, "expected an identifier [in variable declaration]");
+    }
+    while (consume("[")) {
+      type = new_type_arr(type, expect_number());
+      expect("]", "after number", "array declaration");
+    }
+    if (type->ty == TY_ARR) {
+      type->ty = TY_ARGARR;
+    }
+    Node *nd_lvar = new_node(ND_LVAR);
+    node->args[i] = nd_lvar;
+    LVar *lvar = malloc(sizeof(LVar));
+    lvar->next = fn->locals;
+    lvar->name = tok_lvar->str;
+    lvar->len = tok_lvar->len;
+    lvar->ext = FALSE;
+    lvar->is_static = FALSE;
+    if (is_ptr_or_arr(type)) {
+      lvar->offset = fn->locals->offset + 8;
+    } else {
+      lvar->offset = fn->locals->offset + get_sizeof(type);
+    }
+    fn->offset = lvar->offset;
+    lvar->type = type;
+    nd_lvar->var = lvar;
+    nd_lvar->type = type;
+    fn->locals = lvar;
+    n += 1;
+    if (!consume(","))
+      break;
   }
+  node->val = n;
+  expect(")", "after arguments", "function definition");
+
   if (!(token->kind == TK_RESERVED && !memcmp(token->str, "{", token->len))) {
     node->kind = ND_EXTERN;
     expect(";", "after line", "function definition");
