@@ -137,25 +137,20 @@ git clone https://github.com/Latte72R/LaCC
 cd LaCC
 ```
 
-### 2. コンパイラのビルド
+### 2. Bootstrap コンパイラのビルド
 
 ```bash
-make
+make bootstrap
 ```
 
-これで `lacc` バイナリが生成されます.   
-変更がなければ, 
-
-```bash
-'lacc' is up to date.
-```
+これで `lacc` バイナリが生成されます. 
 
 と表示されます. 
 
 ### 3. セルフホストコンパイラのビルド
 
 ```bash
-make laccs
+make selfhost
 ```
 
 `lacc` で自身のソースを再コンパイルし, 第二段階（セルフホスト）コンパイラ `laccs` を生成します. 

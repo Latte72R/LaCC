@@ -122,23 +122,18 @@ There are no code-generation optimizations beyond what's needed to make it work.
 
   After that, you have a few `make` targets to build and test your compiler:
 
-### 2. Build the compiler
+### 2. Build the bootstrap compiler
 
   ```bash
-  make
+  make bootstrap
   ```
 
   This invokes the default target, compiling all sources into the `lacc` executable.   
-  If nothing has changed, you'll see
-
-  ```bash
-  'lacc' is up to date.
-  ```
 
 ### 3. Build the self-hosted compiler
 
   ```bash
-  make laccs
+  make selfhost
   ```
 
   Here, `lacc` is used to recompile the compiler source itself, producing a second-stage compiler named `laccs`.  
