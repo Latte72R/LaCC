@@ -44,7 +44,7 @@ $(SELFHOST): $(BOOSTSTRAP) | $(BUILD_DIR)
 	@$(CC) -o $(SELFHOST) $(BUILD_DIR)/*.s extention.c $(CC_FLAGS)
 	@echo "Self-hosted compiler created at $(SELFHOST)."
 
-cc-test: $(BUILD_DIR) ## Run tests with the default C compiler
+cc-test: $(BUILD_DIR)
 	@echo \[unitests.c\]
 	@cc -w  -o $(BUILD_DIR)/tmp $(TEST_DIR)/unitests.c $(CC_FLAGS)
 	@./$(BUILD_DIR)/tmp
@@ -64,7 +64,7 @@ define multitest
 	$(call runfile, $(1), $(TEST_DIR)/fizzbuzz.c)
 endef
 
-bootstrap-test: $(BOOSTSTRAP) ## Run tests with the bootstrap compiler
+bootstrap-test: $(BOOSTSTRAP)
 	$(call multitest, $(BOOSTSTRAP))
 
 selfhost-test: $(SELFHOST) ## Run tests with the self-hosted compiler
@@ -74,7 +74,7 @@ error-test: $(SELFHOST) ## Run error tests with the self-hosted compiler
 	@$(TEST_DIR)/error_test.sh $(BUILD_DIR) $(SELFHOST)
 
 clean: ## Clean up generated files
-	@rm -f ./$(BOOSTSTRAP) $(SELFHOST) $(ASMS) $(BUILD_DIR)/tmp.s $(BUILD_DIR)/tmp
+	@rm -rf $(BUILD_DIR)
 	@echo "Cleaned up generated files."
 
 .PHONY: bootstrap-test selfhost-test lifegame rotate clean cc-test help runfile
