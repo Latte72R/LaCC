@@ -1,4 +1,4 @@
-CC_FLAGS:=-std=c99 -I include -Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option
+CC_FLAGS:=-std=c99 -I include -Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option -g
 LACC_FLAGS:=-I include
 SRC_DIR:=./src
 TEST_DIR:=./tests
@@ -18,10 +18,8 @@ $(BUILD_DIR):
 	@echo "Build directory created at $(BUILD_DIR)."
 
 bootstrap: $(BOOSTSTRAP) ## Build the bootstrap compiler
-	@echo "Bootstrap compiler built successfully."
 
 selfhost: $(SELFHOST) ## Build the self-hosted compiler
-	@echo "Self-hosted compiler built successfully."
 
 define runfile
 	@mkdir -p ${BUILD_DIR}

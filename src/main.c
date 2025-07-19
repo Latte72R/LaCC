@@ -74,6 +74,7 @@ void init_global_variables() {
 
   // Includeパスの初期化
   include_paths = malloc(sizeof(IncludePath));
+  include_paths->next = NULL;
 }
 
 int main(int argc, char **argv) {
@@ -82,7 +83,7 @@ int main(int argc, char **argv) {
   filename = NULL;
 
   if (argc < 2) {
-    error("Invalid number of arguments. Usage: lacc [options] <source file>");
+    error("Invalid number of arguments.");
   }
 
   for (int i = 1; i < argc; i++) {

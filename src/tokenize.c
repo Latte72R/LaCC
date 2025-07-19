@@ -11,12 +11,12 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
-static char *find_file_includes(const char *name) {
+char *find_file_includes(const char *name) {
   char *src = read_file(name);
   if (src)
     return src;
 
-  for (IncludePath *ip = include_paths; ip; ip = ip->next) {
+  for (IncludePath *ip = include_paths; ip->next; ip = ip->next) {
     int plen = strlen(ip->path);
     int nlen = strlen(name);
     char *full = malloc(plen + 1 + nlen + 1);
