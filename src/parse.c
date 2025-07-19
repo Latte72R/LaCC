@@ -27,6 +27,10 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
+void error_duplicate_name(Token *tok, const char *type) {
+  error_at(tok->str, "duplicated %s name: %.*s", type, tok->len, tok->str);
+}
+
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_lvar(Token *tok) {
   for (LVar *var = current_fn->locals; var->next; var = var->next)
@@ -106,6 +110,14 @@ Token *consume_ident() {
   Token *tok = token;
   consumed_ptr = token->str;
   token = token->next;
+  return tok;
+}
+
+Token *consume_ident_safe(const char *context) {
+  Token *tok = consume_ident();
+  if (!tok) {
+    error_at(token->str, "expected an identifier but got \"%.*s\" [in %s]", token->len, token->str, context);
+  }
   return tok;
 }
 
@@ -346,10 +358,7 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
       }
       break;
     }
-    Token *tok_lvar = consume_ident();
-    if (!tok_lvar) {
-      error_at(consumed_ptr, "expected an identifier [in variable declaration]");
-    }
+    Token *tok_lvar = consume_ident_safe("function definition");
     type = parse_array_dimensions(type);
     if (type->ty == TY_ARR) {
       type->ty = TY_ARGARR;
@@ -387,7 +396,7 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
 Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
   LVar *lvar = find_lvar(tok);
   if (lvar) {
-    error_at(tok->str, "duplicated variable name: %.*s [in variable declaration]", tok->len, tok->str);
+    error_duplicate_name(tok, "local variable declaration");
   }
   Node *node = new_node(ND_VARDEC);
   lvar = new_lvar(tok, type, is_static, FALSE);
@@ -428,7 +437,7 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
     if (consume("=")) {
       if (consume("{")) {
         if (type->ty != TY_ARR) {
-          error_at(token->str, "array initializer is only allowed for array type [in variable declaration]");
+          error_at(token->str, "array initializer is only allowed for array type [in local variable declaration]");
         }
         Array *array = malloc(sizeof(Array));
         array->next = arrays;
@@ -447,7 +456,7 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
           }
         }
         array->len = i;
-        expect("}", "after array initializer", "variable declaration");
+        expect("}", "after array initializer", "local variable declaration");
         Node *arr = new_node(ND_ARRAY);
         arr->type = type;
         arr->id = array->id;
@@ -470,7 +479,7 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
 Node *global_variable_declaration(Token *tok, Type *type, int is_static) {
   LVar *lvar = find_gver(tok);
   if (lvar) {
-    error_at(token->str, "duplicated variable name: %.*s [in global variable declaration]", tok->len, tok->str);
+    error_duplicate_name(tok, "global variable declaration");
   }
   Node *node = new_node(ND_GLBDEC);
   type = parse_array_dimensions(type);
@@ -498,75 +507,56 @@ Node *global_variable_declaration(Token *tok, Type *type, int is_static) {
 
 Node *vardec_and_funcdef_stmt(int is_static) {
   // 変数宣言または関数定義
-  Node *node;
   Type *ch_type = check_base_type();
   Type *type = consume_type();
-  Token *tok = consume_ident();
-  if (!tok) {
-    error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len, token->str);
-  }
+  Token *tok = consume_ident_safe("variable declaration");
+
+  // 関数定義
   if (consume("(")) {
-    // 関数定義
     if (current_fn->next) {
       error_at(token->str, "nested function is not supported [in function definition]");
+    } else {
+      return function_definition(tok, type, is_static);
     }
-    node = function_definition(tok, type, is_static);
-  } else if (current_fn->next) {
-    // ローカル変数宣言
-    node = new_node(ND_BLOCK);
-    node->body = malloc(sizeof(Node *));
-    int i = 0;
-    node->body[i++] = local_variable_declaration(tok, type, is_static);
-    while (consume(",")) {
-      type = ch_type;
-      while (consume("*")) {
-        Type *ptr = malloc(sizeof(Type));
-        ptr->ty = TY_PTR;
-        ptr->ptr_to = type;
-        type = ptr;
-        if (token->kind == TK_CONST) {
-          type->const_ = TRUE;
-        }
-      }
-      tok = consume_ident();
-      if (!tok) {
-        error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len,
-                 token->str);
-      }
-      node->body[i++] = local_variable_declaration(tok, type, is_static);
-      node->body = realloc(node->body, sizeof(Node *) * (i + 1));
-      if (!node->body)
-        error("realloc failed");
-    }
-    node->body[i] = new_node(ND_NONE);
-    expect(";", "after line", "variable declaration");
-  } else {
-    // グローバル変数宣言
-    node = new_node(ND_BLOCK);
-    node->body = malloc(sizeof(Node *));
-    int i = 0;
-    node->body[i++] = global_variable_declaration(tok, type, is_static);
-    while (consume(",")) {
-      type = ch_type;
-      while (consume("*")) {
-        Type *ptr = malloc(sizeof(Type));
-        ptr->ty = TY_PTR;
-        ptr->ptr_to = type;
-        type = ptr;
-      }
-      tok = consume_ident();
-      if (!tok) {
-        error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len,
-                 token->str);
-      }
-      node->body[i++] = global_variable_declaration(tok, type, is_static);
-      node->body = realloc(node->body, sizeof(Node *) * (i + 1));
-      if (!node->body)
-        error("realloc failed");
-    }
-    node->body[i] = new_node(ND_NONE);
-    expect(";", "after line", "variable declaration");
   }
+
+  Node *node = new_node(ND_BLOCK);
+  node->body = malloc(sizeof(Node *));
+  int i = 0;
+
+  // 最初の変数
+  if (current_fn->next) {
+    node->body[i++] = local_variable_declaration(tok, type, is_static);
+  } else {
+    node->body[i++] = global_variable_declaration(tok, type, is_static);
+  }
+
+  // 追加の変数
+  while (consume(",")) {
+    type = ch_type;
+    while (consume("*")) {
+      Type *ptr = malloc(sizeof(Type));
+      ptr->ty = TY_PTR;
+      ptr->ptr_to = type;
+      type = ptr;
+      if (token->kind == TK_CONST) {
+        type->const_ = TRUE;
+      }
+    }
+    tok = consume_ident_safe("variable declaration");
+    if (current_fn->next) {
+      node->body[i++] = local_variable_declaration(tok, type, is_static);
+    } else {
+      node->body[i++] = global_variable_declaration(tok, type, is_static);
+    }
+    node->body = realloc(node->body, sizeof(Node *) * (i + 1));
+    if (!node->body)
+      error("realloc failed");
+  }
+  node->body[i] = new_node(ND_NONE);
+  expect(";", "after line", "variable declaration");
+  node->endline = TRUE;
+
   return node;
 }
 
@@ -588,10 +578,7 @@ Node *extern_declaration(Token *tok, Type *type) {
 
 Node *struct_stmt() {
   token = token->next;
-  Token *tok = consume_ident();
-  if (!tok) {
-    error_at(token->str, "expected an identifier but got \"%.*s\" [in struct definition]", token->len, token->str);
-  }
+  Token *tok = consume_ident_safe("struct declaration");
   Node *node = new_node(ND_STRUCT);
   StructTag *struct_tag = find_struct_tag(tok);
   if (!struct_tag) {
@@ -605,10 +592,7 @@ Node *struct_stmt() {
   expect("{", "before struct members", "struct");
   while (token->kind != TK_EOF && !(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
     Type *type = consume_type();
-    Token *member_tok = consume_ident();
-    if (!member_tok) {
-      error_at(token->str, "expected an identifier but got \"%.*s\" [in struct declaration]", token->len, token->str);
-    }
+    Token *member_tok = consume_ident_safe("struct member declaration");
     Type *org_type = type;
     type = parse_array_dimensions(type);
     LVar *member_var = new_lvar(member_tok, type, FALSE, FALSE);
@@ -655,10 +639,7 @@ Node *extern_stmt() {
   token = token->next;
   Type *ch_type = check_base_type();
   Type *type = consume_type();
-  Token *tok = consume_ident();
-  if (!tok) {
-    error_at(token->str, "expected an identifier but got \"%.*s\" [in extern declaration]", token->len, token->str);
-  }
+  Token *tok = consume_ident_safe("extern declaration");
   Node *node = new_node(ND_BLOCK);
   node->body = malloc(sizeof(Node *));
   int i = 0;
@@ -674,10 +655,7 @@ Node *extern_stmt() {
         error_at(token->str, "constant pointer is not allowed [in extern declaration]");
       }
     }
-    tok = consume_ident();
-    if (!tok) {
-      error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len, token->str);
-    }
+    tok = consume_ident_safe("variable declaration");
     node->body[i++] = extern_declaration(tok, type);
     node->body = realloc(node->body, sizeof(Node *) * (i + 1));
     if (!node->body)
@@ -690,10 +668,7 @@ Node *extern_stmt() {
 
 Node *goto_stmt() {
   token = token->next;
-  Token *tok = consume_ident();
-  if (!tok) {
-    error_at(token->str, "expected an identifier but got \"%.*s\" [in goto statement]", token->len, token->str);
-  }
+  Token *tok = consume_ident_safe("goto statement");
   Node *node = new_node(ND_GOTO);
   node->label = malloc(sizeof(Label));
   node->label->name = tok->str;
@@ -723,19 +698,13 @@ Node *typedef_stmt() {
   if (token->kind == TK_STRUCT) {
     token = token->next;
     node = new_node(ND_TYPEDEF);
-    Token *tok1 = consume_ident();
-    if (!tok1) {
-      error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
-    }
-    Token *tok2 = consume_ident();
-    if (!tok2) {
-      error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
-    }
+    Token *tok1 = consume_ident_safe("typedef");
+    Token *tok2 = consume_ident_safe("typedef");
     if (find_struct_tag(tok1)) {
-      error_at(tok1->str, "duplicated tag name: %.*s [in typedef]", tok1->len, tok1->str);
+      error_duplicate_name(tok1, "typedef");
     }
     if (find_struct(tok2)) {
-      error_at(tok2->str, "duplicated struct name: %.*s [in typedef]", tok2->len, tok2->str);
+      error_duplicate_name(tok2, "typedef");
     }
     Struct *var = malloc(sizeof(Struct));
     var->name = tok2->str;
@@ -754,10 +723,7 @@ Node *typedef_stmt() {
     int offset = 0;
     expect("{", "before enum members", "enum");
     while (token->kind != TK_EOF && !(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
-      Token *member_tok = consume_ident();
-      if (!member_tok) {
-        error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
-      }
+      Token *member_tok = consume_ident_safe("typedef");
       LVar *member_var = new_lvar(member_tok, new_type(TY_INT), FALSE, FALSE);
       member_var->offset = offset++;
       member_var->next = enum_members;
@@ -770,11 +736,9 @@ Node *typedef_stmt() {
         error_at(token->str, "expected ',' after member declaration [in typedef]");
       }
     }
-    Token *tok = consume_ident();
-    if (!tok) {
-      error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
-    } else if (find_enum(tok)) {
-      error_at(tok->str, "duplicated enum name: %.*s [in typedef]", tok->len, tok->str);
+    Token *tok = consume_ident_safe("typedef");
+    if (find_enum(tok)) {
+      error_duplicate_name(tok, "typedef");
     }
     Enum *enum_ = malloc(sizeof(Enum));
     enum_->name = tok->str;
@@ -855,10 +819,7 @@ Node *for_stmt() {
     init = FALSE;
   } else if (is_type(token)) {
     Type *type = consume_type();
-    Token *tok = consume_ident();
-    if (!tok) {
-      error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len, token->str);
-    }
+    Token *tok = consume_ident_safe("variable declaration");
     node->init = local_variable_declaration(tok, type, FALSE);
     expect(";", "after initialization", "for");
     node->init->endline = TRUE;
@@ -1342,10 +1303,7 @@ Node *access_member() {
       if (node->type->ty != TY_STRUCT) {
         error_at(prev_tok->str, "%.*s is not a struct [in struct reference]", prev_tok->len, prev_tok->str);
       }
-      tok = consume_ident();
-      if (!tok) {
-        error_at(token->str, "expected an identifier but got \"%.*s\" [in struct reference]", token->len, token->str);
-      }
+      tok = consume_ident_safe("struct reference");
       struct_ = node->type->struct_;
       if (!struct_) {
         error_at(prev_tok->str, "unknown struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
@@ -1368,10 +1326,7 @@ Node *access_member() {
         error_at(prev_tok->str, "%.*s is not a pointer of a struct [in struct reference]", prev_tok->len,
                  prev_tok->str);
       }
-      tok = consume_ident();
-      if (!tok) {
-        error_at(token->str, "expected an identifier but got \"%.*s\" [in struct reference]", token->len, token->str);
-      }
+      tok = consume_ident_safe("struct reference");
       struct_ = node->type->ptr_to->struct_;
       if (!struct_) {
         error_at(prev_tok->str, "unknown struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
@@ -1430,11 +1385,7 @@ Node *primary() {
     return node;
   }
 
-  tok = consume_ident();
-  if (!tok) {
-    error_at(token->str, "expected an identifier but got \"%.*s\" [in primary]", token->len, token->str);
-    return NULL;
-  }
+  tok = consume_ident_safe("primary");
 
   // enumのメンバー
   LVar *member = find_enum_member(tok);
@@ -1455,7 +1406,6 @@ Node *primary() {
       node = new_node(ND_GVAR);
       node->var = gvar;
       node->type = gvar->type;
-
     } else {
       error_at(tok->str, "undefined variable: %.*s [in primary]", tok->len, tok->str);
     }
