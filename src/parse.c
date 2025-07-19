@@ -31,6 +31,13 @@ void error_duplicate_name(Token *tok, const char *type) {
   error_at(tok->str, "duplicated %s name: %.*s", type, tok->len, tok->str);
 }
 
+void *safe_realloc_array(void *ptr, int element_size, int new_size) {
+  void *new_ptr = realloc(ptr, element_size * new_size);
+  if (!new_ptr)
+    error("realloc failed");
+  return new_ptr;
+}
+
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_lvar(Token *tok) {
   for (LVar *var = current_fn->locals; var->next; var = var->next)
@@ -217,6 +224,20 @@ int expect_number() {
   int val = token->val;
   token = token->next;
   return val;
+}
+
+int parse_sign() {
+  if (consume("-"))
+    return -1;
+  if (consume("+"))
+    return 1;
+  return 1;
+}
+
+// 数値の期待値取得（符号付き）
+int expect_signed_number() {
+  int sign = parse_sign();
+  return expect_number() * sign;
 }
 
 int is_ptr_or_arr(Type *type) { return type->ty == TY_PTR || type->ty == TY_ARR || type->ty == TY_ARGARR; }
@@ -423,13 +444,7 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
   // 要修正
   if (is_static) {
     if (consume("=")) {
-      int sign = 1;
-      if (consume("-")) {
-        sign = -1;
-      } else if (consume("+")) {
-        sign = 1;
-      }
-      lvar->offset = expect_number() * sign;
+      lvar->offset = expect_signed_number();
     } else {
       lvar->offset = 0;
     }
@@ -446,15 +461,10 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
         array->byte = get_sizeof(org_type);
         array->val = NULL;
         int i = 0;
-        while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
-          array->val = realloc(array->val, array->byte * ++i);
-          array->val[i - 1] = expect_number();
-          if (!array->val)
-            error("realloc failed");
-          if (!consume(",")) {
-            break;
-          }
-        }
+        do {
+          array->val = safe_realloc_array(array->val, sizeof(int), i + 1);
+          array->val[i++] = expect_number();
+        } while (consume(","));
         array->len = i;
         expect("}", "after array initializer", "local variable declaration");
         Node *arr = new_node(ND_ARRAY);
@@ -491,13 +501,7 @@ Node *global_variable_declaration(Token *tok, Type *type, int is_static) {
 
   // 要修正
   if (consume("=")) {
-    int sign = 1;
-    if (consume("-")) {
-      sign = -1;
-    } else if (consume("+")) {
-      sign = 1;
-    }
-    lvar->offset = expect_number() * sign;
+    lvar->offset = expect_signed_number();
   } else {
     lvar->offset = 0;
   }
@@ -544,14 +548,12 @@ Node *vardec_and_funcdef_stmt(int is_static) {
       }
     }
     tok = consume_ident_safe("variable declaration");
+    node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
     if (current_fn->next) {
       node->body[i++] = local_variable_declaration(tok, type, is_static);
     } else {
       node->body[i++] = global_variable_declaration(tok, type, is_static);
     }
-    node->body = realloc(node->body, sizeof(Node *) * (i + 1));
-    if (!node->body)
-      error("realloc failed");
   }
   node->body[i] = new_node(ND_NONE);
   expect(";", "after line", "variable declaration");
@@ -590,7 +592,7 @@ Node *struct_stmt() {
   struct_->var->type = new_type(TY_NONE);
   int offset = 0;
   expect("{", "before struct members", "struct");
-  while (token->kind != TK_EOF && !(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
+  while (!consume("}")) {
     Type *type = consume_type();
     Token *member_tok = consume_ident_safe("struct member declaration");
     Type *org_type = type;
@@ -611,7 +613,6 @@ Node *struct_stmt() {
     }
   }
   struct_->size = offset;
-  expect("}", "after struct members", "struct");
   expect(";", "after struct definition", "struct");
   node->type = new_type_struct(struct_);
   node->endline = TRUE;
@@ -623,11 +624,9 @@ Node *block_stmt() {
   LVar *var = current_fn->locals;
   node->body = malloc(sizeof(Node *));
   int i = 0;
-  while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
+  while (!consume("}")) {
+    node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
     node->body[i++] = stmt();
-    node->body = realloc(node->body, sizeof(Node *) * (i + 1));
-    if (!node->body)
-      error("realloc failed");
   }
   node->body[i] = new_node(ND_NONE);
   current_fn->locals = var;
@@ -656,10 +655,8 @@ Node *extern_stmt() {
       }
     }
     tok = consume_ident_safe("variable declaration");
+    node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
     node->body[i++] = extern_declaration(tok, type);
-    node->body = realloc(node->body, sizeof(Node *) * (i + 1));
-    if (!node->body)
-      error("realloc failed");
   }
   node->body[i] = new_node(ND_NONE);
   node->endline = TRUE;
@@ -722,20 +719,14 @@ Node *typedef_stmt() {
     node = new_node(ND_TYPEDEF);
     int offset = 0;
     expect("{", "before enum members", "enum");
-    while (token->kind != TK_EOF && !(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
+    do {
       Token *member_tok = consume_ident_safe("typedef");
       LVar *member_var = new_lvar(member_tok, new_type(TY_INT), FALSE, FALSE);
       member_var->offset = offset++;
       member_var->next = enum_members;
       enum_members = member_var;
-      if (consume(",")) {
-        continue;
-      } else if (consume("}")) {
-        break;
-      } else {
-        error_at(token->str, "expected ',' after member declaration [in typedef]");
-      }
-    }
+    } while (consume(","));
+    expect("}", "after enum members", "enum");
     Token *tok = consume_ident_safe("typedef");
     if (find_enum(tok)) {
       error_duplicate_name(tok, "typedef");
@@ -897,7 +888,6 @@ Node *stmt() {
   Node *node;
   if (consume("{")) {
     node = block_stmt();
-    expect("}", "after block", "block");
   } else if (token->kind == TK_EXTERN) {
     node = extern_stmt();
     expect(";", "after line", "extern declaration");
@@ -941,10 +931,8 @@ void program() {
   int i = 0;
   code = NULL;
   while (token->kind != TK_EOF) {
-    code = realloc(code, sizeof(Node *) * ++i);
-    code[i - 1] = stmt();
-    if (!code)
-      error("realloc failed");
+    code = safe_realloc_array(code, sizeof(Node *), i + 1);
+    code[i++] = stmt();
   }
   code[i] = new_node(ND_NONE);
 }
