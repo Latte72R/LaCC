@@ -30,7 +30,7 @@ extern void *NULL;
 void free_token() {
   Token *tok = token;
   token = tok->next;
-  // free(tok);
+  free(tok);
 }
 
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
@@ -522,7 +522,7 @@ Node *global_variable_declaration(Token *tok, Type *type, int is_static) {
   return node;
 }
 
-Node *vardec_and_funcdef(int is_static) {
+Node *vardec_and_funcdef_stmt(int is_static) {
   // 変数宣言または関数定義
   Node *node;
   Type *ch_type = check_base_type();
@@ -620,7 +620,12 @@ Node *extern_declaration(Token *tok, Type *type) {
   return node;
 }
 
-Node *new_struct(Token *tok) {
+Node *struct_stmt() {
+  free_token();
+  Token *tok = consume_ident();
+  if (!tok) {
+    error_at(token->str, "expected an identifier but got \"%.*s\" [in struct definition]", token->len, token->str);
+  }
   Node *node = new_node(ND_STRUCT);
   StructTag *struct_tag = find_struct_tag(tok);
   if (!struct_tag) {
@@ -671,296 +676,346 @@ Node *new_struct(Token *tok) {
   return node;
 }
 
+Node *block_stmt() {
+  Node *node = new_node(ND_BLOCK);
+  LVar *var = current_fn->locals;
+  node->body = malloc(sizeof(Node *));
+  int i = 0;
+  while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
+    node->body[i++] = stmt();
+    node->body = realloc(node->body, sizeof(Node *) * (i + 1));
+    if (!node->body)
+      error("realloc failed");
+  }
+  node->body[i] = new_node(ND_NONE);
+  current_fn->locals = var;
+  block_cnt++;
+  return node;
+}
+
+Node *extern_stmt() {
+  free_token();
+  Type *ch_type = check_base_type();
+  Type *type = consume_type();
+  Token *tok = consume_ident();
+  if (!tok) {
+    error_at(token->str, "expected an identifier but got \"%.*s\" [in extern declaration]", token->len, token->str);
+  }
+  Node *node = new_node(ND_BLOCK);
+  node->body = malloc(sizeof(Node *));
+  int i = 0;
+  node->body[i++] = extern_declaration(tok, type);
+  while (consume(",")) {
+    type = ch_type;
+    while (consume("*")) {
+      Type *ptr = malloc(sizeof(Type));
+      ptr->ty = TY_PTR;
+      ptr->ptr_to = type;
+      type = ptr;
+      if (type->const_) {
+        error_at(token->str, "constant pointer is not allowed [in extern declaration]");
+      }
+    }
+    tok = consume_ident();
+    if (!tok) {
+      error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len, token->str);
+    }
+    node->body[i++] = extern_declaration(tok, type);
+    node->body = realloc(node->body, sizeof(Node *) * (i + 1));
+    if (!node->body)
+      error("realloc failed");
+  }
+  node->body[i] = new_node(ND_NONE);
+  node->endline = TRUE;
+  return node;
+}
+
+Node *goto_stmt() {
+  free_token();
+  Token *tok = consume_ident();
+  if (!tok) {
+    error_at(token->str, "expected an identifier but got \"%.*s\" [in goto statement]", token->len, token->str);
+  }
+  Node *node = new_node(ND_GOTO);
+  node->label = malloc(sizeof(Label));
+  node->label->name = tok->str;
+  node->label->len = tok->len;
+  node->fn = current_fn;
+  node->endline = TRUE;
+  return node;
+}
+
+Node *label_stmt() {
+  Label *label = malloc(sizeof(Label));
+  label->name = token->str;
+  label->len = token->len;
+  label->id = label_cnt++;
+  label->next = current_fn->labels;
+  current_fn->labels = label;
+  Node *node = new_node(ND_LABEL);
+  node->label = label;
+  free_token();
+  node->endline = TRUE;
+  return node;
+}
+
+Node *typedef_stmt() {
+  free_token();
+  Node *node;
+  if (token->kind == TK_STRUCT) {
+    free_token();
+    node = new_node(ND_TYPEDEF);
+    Token *tok1 = consume_ident();
+    if (!tok1) {
+      error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
+    }
+    Token *tok2 = consume_ident();
+    if (!tok2) {
+      error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
+    }
+    if (find_struct_tag(tok1)) {
+      error_at(tok1->str, "duplicated tag name: %.*s [in typedef]", tok1->len, tok1->str);
+    }
+    if (find_struct(tok2)) {
+      error_at(tok2->str, "duplicated struct name: %.*s [in typedef]", tok2->len, tok2->str);
+    }
+    Struct *var = malloc(sizeof(Struct));
+    var->name = tok2->str;
+    var->len = tok2->len;
+    var->next = structs;
+    structs = var;
+    StructTag *tag = malloc(sizeof(StructTag));
+    tag->name = tok1->str;
+    tag->len = tok1->len;
+    tag->main = var;
+    tag->next = struct_tags;
+    struct_tags = tag;
+  } else if (token->kind == TK_ENUM) {
+    free_token();
+    node = new_node(ND_TYPEDEF);
+    int offset = 0;
+    expect("{", "before enum members", "enum");
+    while (token->kind != TK_EOF && !(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
+      Token *member_tok = consume_ident();
+      if (!member_tok) {
+        error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
+      }
+      LVar *member_var = malloc(sizeof(LVar));
+      member_var->name = member_tok->str;
+      member_var->len = member_tok->len;
+      member_var->type = new_type(TY_INT);
+      member_var->offset = offset;
+      member_var->ext = FALSE;
+      member_var->is_static = FALSE;
+      offset++;
+      member_var->next = enum_members;
+      enum_members = member_var;
+      if (consume(",")) {
+        continue;
+      } else if (consume("}")) {
+        break;
+      } else {
+        error_at(token->str, "expected ',' after member declaration [in typedef]");
+      }
+    }
+    Token *tok = consume_ident();
+    if (!tok) {
+      error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
+    } else if (find_enum(tok)) {
+      error_at(tok->str, "duplicated enum name: %.*s [in typedef]", tok->len, tok->str);
+    }
+    Enum *enum_ = malloc(sizeof(Enum));
+    enum_->name = tok->str;
+    enum_->len = tok->len;
+    enum_->next = enums;
+    enums = enum_;
+  } else {
+    error_at(token->str, "expected a struct but got \"%.*s\" [in typedef]", token->len, token->str);
+  }
+  expect(";", "after line", "typedef");
+  node->endline = TRUE;
+  return node;
+}
+
+Node *if_stmt() {
+  free_token();
+  Node *node = new_node(ND_IF);
+  node->id = loop_cnt++;
+  expect("(", "before condition", "if");
+  node->cond = expr();
+  node->cond->endline = FALSE;
+  expect(")", "after equality", "if");
+  node->then = stmt();
+  if (token->kind == TK_ELSE) {
+    free_token();
+    node->els = stmt();
+  } else {
+    node->els = NULL;
+  }
+  return node;
+}
+
+Node *while_stmt() {
+  free_token();
+  expect("(", "before condition", "while");
+  Node *node = new_node(ND_WHILE);
+  node->id = loop_cnt++;
+  node->cond = expr();
+  node->cond->endline = FALSE;
+  expect(")", "after equality", "while");
+  int loop_id_prev = loop_id;
+  loop_id = node->id;
+  node->then = stmt();
+  loop_id = loop_id_prev;
+  return node;
+}
+
+Node *do_while_stmt() {
+  free_token();
+  Node *node = new_node(ND_DOWHILE);
+  node->id = loop_cnt++;
+  node->then = stmt();
+  if (token->kind != TK_WHILE) {
+    error_at(token->str, "expected 'while' but got \"%.*s\" [in do-while statement]", token->len, token->str);
+  }
+  free_token();
+  expect("(", "before condition", "do-while");
+  node->cond = expr();
+  node->cond->endline = FALSE;
+  expect(")", "after equality", "do-while");
+  int loop_id_prev = loop_id;
+  loop_id = node->id;
+  loop_id = loop_id_prev;
+  expect(";", "after line", "do-while");
+  node->endline = TRUE;
+  return node;
+}
+
+Node *for_stmt() {
+  int init;
+  free_token();
+  expect("(", "before initialization", "for");
+  Node *node = new_node(ND_FOR);
+  node->id = loop_cnt++;
+  if (consume(";")) {
+    node->init = new_node(ND_NONE);
+    node->init->endline = TRUE;
+    init = FALSE;
+  } else if (is_type(token)) {
+    Type *type = consume_type();
+    Token *tok = consume_ident();
+    if (!tok) {
+      error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len, token->str);
+    }
+    node->init = local_variable_declaration(tok, type, FALSE);
+    expect(";", "after initialization", "for");
+    node->init->endline = TRUE;
+    init = TRUE;
+  } else {
+    node->init = expr();
+    expect(";", "after initialization", "for");
+    node->init->endline = TRUE;
+    init = FALSE;
+  }
+  if (consume(";")) {
+    node->cond = new_num(1);
+    node->cond->endline = FALSE;
+  } else {
+    node->cond = expr();
+    node->cond->endline = FALSE;
+    expect(";", "after condition", "for");
+  }
+  if (consume(")")) {
+    node->step = new_node(ND_NONE);
+    node->step->endline = TRUE;
+  } else {
+    node->step = expr();
+    node->step->endline = TRUE;
+    expect(")", "after step expression", "for");
+  }
+  int loop_id_prev = loop_id;
+  loop_id = node->id;
+  node->then = stmt();
+  if (init) {
+    current_fn->locals = current_fn->locals->next;
+  }
+  loop_id = loop_id_prev;
+  return node;
+}
+
+Node *break_stmt() {
+  if (loop_id == -1) {
+    error_at(token->str, "stray break statement [in break statement]");
+  }
+  free_token();
+  expect(";", "after line", "break");
+  Node *node = new_node(ND_BREAK);
+  node->endline = TRUE;
+  node->id = loop_id;
+  return node;
+}
+
+Node *continue_stmt() {
+  if (loop_id == -1) {
+    error_at(token->str, "stray continue statement [in continue statement]");
+  }
+  free_token();
+  expect(";", "after line", "continue");
+  Node *node = new_node(ND_CONTINUE);
+  node->endline = TRUE;
+  node->id = loop_id;
+  return node;
+}
+
+Node *return_stmt() {
+  free_token();
+  Node *node = new_node(ND_RETURN);
+  if (consume(";")) {
+    node->rhs = new_num(0);
+  } else {
+    node->rhs = expr();
+    expect(";", "after line", "return");
+  }
+  node->endline = TRUE;
+  return node;
+}
+
 Node *stmt() {
   Node *node;
-  Token *tok;
-  Type *type;
-  int loop_id_prev;
   if (consume("{")) {
-    // ブロック
-    node = new_node(ND_BLOCK);
-    LVar *var = current_fn->locals;
-    node->body = malloc(sizeof(Node *));
-    int i = 0;
-    while (!(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
-      node->body[i++] = stmt();
-      node->body = realloc(node->body, sizeof(Node *) * (i + 1));
-      if (!node->body)
-        error("realloc failed");
-    }
-    node->body[i] = new_node(ND_NONE);
-    current_fn->locals = var;
-    block_cnt++;
+    node = block_stmt();
     expect("}", "after block", "block");
   } else if (token->kind == TK_EXTERN) {
-    // extern宣言
-    free_token();
-    Type *ch_type = check_base_type();
-    type = consume_type();
-    tok = consume_ident();
-    if (!tok) {
-      error_at(token->str, "expected an identifier but got \"%.*s\" [in extern declaration]", token->len, token->str);
-    }
-    node = new_node(ND_BLOCK);
-    node->body = malloc(sizeof(Node *));
-    int i = 0;
-    node->body[i++] = extern_declaration(tok, type);
-    while (consume(",")) {
-      type = ch_type;
-      while (consume("*")) {
-        Type *ptr = malloc(sizeof(Type));
-        ptr->ty = TY_PTR;
-        ptr->ptr_to = type;
-        type = ptr;
-        if (type->const_) {
-          error_at(token->str, "constant pointer is not allowed [in extern declaration]");
-        }
-      }
-      tok = consume_ident();
-      if (!tok) {
-        error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len,
-                 token->str);
-      }
-      node->body[i++] = extern_declaration(tok, type);
-      node->body = realloc(node->body, sizeof(Node *) * (i + 1));
-      if (!node->body)
-        error("realloc failed");
-    }
-    node->body[i] = new_node(ND_NONE);
-    expect(";", "after line", "global variable declaration");
+    node = extern_stmt();
+    expect(";", "after line", "extern declaration");
   } else if (token->kind == TK_GOTO) {
-    free_token();
-    tok = consume_ident();
-    if (!tok) {
-      error_at(token->str, "expected an identifier but got \"%.*s\" [in goto statement]", token->len, token->str);
-    }
-    node = new_node(ND_GOTO);
-    node->label = malloc(sizeof(Label));
-    node->label->name = tok->str;
-    node->label->len = tok->len;
-    node->fn = current_fn;
-    node->endline = TRUE;
+    node = goto_stmt();
     expect(";", "after line", "goto statement");
   } else if (token->kind == TK_LABEL) {
-    Label *label = malloc(sizeof(Label));
-    label->name = token->str;
-    label->len = token->len;
-    label->id = label_cnt++;
-    label->next = current_fn->labels;
-    current_fn->labels = label;
-    node = new_node(ND_LABEL);
-    node->label = label;
-    free_token();
-    node->endline = TRUE;
+    node = label_stmt();
   } else if (token->kind == TK_STATIC) {
     free_token();
-    node = vardec_and_funcdef(TRUE);
+    node = vardec_and_funcdef_stmt(TRUE);
   } else if (is_type(token)) {
-    node = vardec_and_funcdef(FALSE);
+    node = vardec_and_funcdef_stmt(FALSE);
   } else if (token->kind == TK_STRUCT) {
-    free_token();
-    tok = consume_ident();
-    if (!tok) {
-      error_at(token->str, "expected an identifier but got \"%.*s\" [in struct definition]", token->len, token->str);
-    }
-    node = new_struct(tok);
+    node = struct_stmt();
   } else if (token->kind == TK_TYPEDEF) {
-    free_token();
-    if (token->kind == TK_STRUCT) {
-      free_token();
-      node = new_node(ND_TYPEDEF);
-      Token *tok1 = consume_ident();
-      if (!tok1) {
-        error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
-      }
-      Token *tok2 = consume_ident();
-      if (!tok2) {
-        error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
-      }
-      if (find_struct_tag(tok1)) {
-        error_at(tok1->str, "duplicated tag name: %.*s [in typedef]", tok1->len, tok1->str);
-      }
-      if (find_struct(tok2)) {
-        error_at(tok2->str, "duplicated struct name: %.*s [in typedef]", tok2->len, tok2->str);
-      }
-      Struct *var = malloc(sizeof(Struct));
-      var->name = tok2->str;
-      var->len = tok2->len;
-      var->next = structs;
-      structs = var;
-      StructTag *tag = malloc(sizeof(StructTag));
-      tag->name = tok1->str;
-      tag->len = tok1->len;
-      tag->main = var;
-      tag->next = struct_tags;
-      struct_tags = tag;
-    } else if (token->kind == TK_ENUM) {
-      free_token();
-      node = new_node(ND_TYPEDEF);
-      int offset = 0;
-      expect("{", "before enum members", "enum");
-      while (token->kind != TK_EOF && !(token->kind == TK_RESERVED && !memcmp(token->str, "}", token->len))) {
-        Token *member_tok = consume_ident();
-        if (!member_tok) {
-          error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
-        }
-        LVar *member_var = malloc(sizeof(LVar));
-        member_var->name = member_tok->str;
-        member_var->len = member_tok->len;
-        member_var->type = new_type(TY_INT);
-        member_var->offset = offset;
-        member_var->ext = FALSE;
-        member_var->is_static = FALSE;
-        offset++;
-        member_var->next = enum_members;
-        enum_members = member_var;
-        if (consume(",")) {
-          continue;
-        } else if (consume("}")) {
-          break;
-        } else {
-          error_at(token->str, "expected ',' after member declaration [in typedef]");
-        }
-      }
-      tok = consume_ident();
-      if (!tok) {
-        error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
-      } else if (find_enum(tok)) {
-        error_at(tok->str, "duplicated enum name: %.*s [in typedef]", tok->len, tok->str);
-      }
-      Enum *enum_ = malloc(sizeof(Enum));
-      enum_->name = tok->str;
-      enum_->len = tok->len;
-      enum_->next = enums;
-      enums = enum_;
-    } else {
-      error_at(token->str, "expected a struct but got \"%.*s\" [in typedef]", token->len, token->str);
-    }
-    node->endline = TRUE;
-    expect(";", "after line", "typedef");
+    node = typedef_stmt();
   } else if (token->kind == TK_IF) {
-    free_token();
-    node = new_node(ND_IF);
-    node->id = loop_cnt++;
-    expect("(", "before condition", "if");
-    node->cond = expr();
-    node->cond->endline = FALSE;
-    expect(")", "after equality", "if");
-    node->then = stmt();
-    if (token->kind == TK_ELSE) {
-      free_token();
-      node->els = stmt();
-    } else {
-      node->els = NULL;
-    }
+    node = if_stmt();
   } else if (token->kind == TK_WHILE) {
-    free_token();
-    expect("(", "before condition", "while");
-    node = new_node(ND_WHILE);
-    node->id = loop_cnt++;
-    node->cond = expr();
-    node->cond->endline = FALSE;
-    expect(")", "after equality", "while");
-    loop_id_prev = loop_id;
-    loop_id = node->id;
-    node->then = stmt();
-    loop_id = loop_id_prev;
+    node = while_stmt();
   } else if (token->kind == TK_DO) {
-    free_token();
-    node = new_node(ND_DOWHILE);
-    node->id = loop_cnt++;
-    node->then = stmt();
-    if (token->kind != TK_WHILE) {
-      error_at(token->str, "expected 'while' but got \"%.*s\" [in do-while statement]", token->len, token->str);
-    }
-    free_token();
-    expect("(", "before condition", "do-while");
-    node->cond = expr();
-    node->cond->endline = FALSE;
-    expect(")", "after equality", "do-while");
-    loop_id_prev = loop_id;
-    loop_id = node->id;
-    loop_id = loop_id_prev;
-    expect(";", "after line", "do-while");
-    node->endline = TRUE;
+    node = do_while_stmt();
   } else if (token->kind == TK_FOR) {
-    int init;
-    free_token();
-    expect("(", "before initialization", "for");
-    node = new_node(ND_FOR);
-    node->id = loop_cnt++;
-    if (consume(";")) {
-      node->init = new_node(ND_NONE);
-      node->init->endline = TRUE;
-      init = FALSE;
-    } else if (is_type(token)) {
-      type = consume_type();
-      tok = consume_ident();
-      if (!tok) {
-        error_at(token->str, "expected an identifier but got \"%.*s\" [in variable declaration]", token->len,
-                 token->str);
-      }
-      node->init = local_variable_declaration(tok, type, FALSE);
-      expect(";", "after initialization", "for");
-      node->init->endline = TRUE;
-      init = TRUE;
-    } else {
-      node->init = expr();
-      expect(";", "after initialization", "for");
-      node->init->endline = TRUE;
-      init = FALSE;
-    }
-    if (consume(";")) {
-      node->cond = new_num(1);
-      node->cond->endline = FALSE;
-    } else {
-      node->cond = expr();
-      node->cond->endline = FALSE;
-      expect(";", "after condition", "for");
-    }
-    if (consume(")")) {
-      node->step = new_node(ND_NONE);
-      node->step->endline = TRUE;
-    } else {
-      node->step = expr();
-      node->step->endline = TRUE;
-      expect(")", "after step expression", "for");
-    }
-    loop_id_prev = loop_id;
-    loop_id = node->id;
-    node->then = stmt();
-    if (init) {
-      current_fn->locals = current_fn->locals->next;
-    }
-    loop_id = loop_id_prev;
+    node = for_stmt();
   } else if (token->kind == TK_BREAK) {
-    if (loop_id == -1) {
-      error_at(token->str, "stray break statement [in break statement]");
-    }
-    free_token();
-    expect(";", "after line", "break");
-    node = new_node(ND_BREAK);
-    node->endline = TRUE;
-    node->id = loop_id;
+    node = break_stmt();
   } else if (token->kind == TK_CONTINUE) {
-    if (loop_id == -1) {
-      error_at(token->str, "stray continue statement [in continue statement]");
-    }
-    free_token();
-    expect(";", "after line", "continue");
-    node = new_node(ND_CONTINUE);
-    node->endline = TRUE;
-    node->id = loop_id;
+    node = continue_stmt();
   } else if (token->kind == TK_RETURN) {
-    free_token();
-    node = new_node(ND_RETURN);
-    if (consume(";")) {
-      node->rhs = new_num(0);
-    } else {
-      node->rhs = expr();
-      expect(";", "after line", "return");
-    }
-    node->endline = TRUE;
+    node = return_stmt();
   } else {
     node = expr();
     expect(";", "after line", "expression");
