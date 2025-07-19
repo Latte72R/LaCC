@@ -67,6 +67,9 @@ Both global and local (stack) variable declarations are supported.
 
 - **Type qualifiers & storage-class specifiers:** `const`, `volatile`, `static`
 
+- **`goto` statement and labels**  
+  LaCC supports `goto` statements and label definitions, allowing for non-linear control flow.
+
 - **Struct member access**  
   Both dot notation (`.`) for direct struct access and arrow notation (`->`) for pointer-to-struct access are supported.
 
@@ -85,7 +88,6 @@ LaCC does **not** support the following:
 
 - Nested functions (functions defined within other functions)  
 - `switch` statements and `case` / `default` labels  
-- `goto` statement and labels
 - Ternary conditional operator (`?:`)  
 - `union` types  
 - Extended primitive types: `unsigned`, `long`, `float`, `double`, etc.  
