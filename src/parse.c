@@ -27,12 +27,6 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
-void free_token() {
-  Token *tok = token;
-  token = tok->next;
-  free(tok);
-}
-
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_lvar(Token *tok) {
   for (LVar *var = current_fn->locals; var->next; var = var->next)
@@ -102,7 +96,7 @@ int consume(char *op) {
   if (token->kind != TK_RESERVED || strlen(op) != token->len || memcmp(token->str, op, token->len))
     return FALSE;
   consumed_ptr = token->str;
-  free_token();
+  token = token->next;
   return TRUE;
 }
 
@@ -111,19 +105,23 @@ Token *consume_ident() {
     return NULL;
   Token *tok = token;
   consumed_ptr = token->str;
-  free_token();
+  token = token->next;
   return tok;
 }
 
-Type *check_base_type() {
+Type *parse_base_type_internal(int should_consume) {
   Token *tok = token;
   Type *type = malloc(sizeof(Type));
+
+  // const修飾子の処理
   if (token->kind == TK_CONST) {
     type->const_ = TRUE;
     token = token->next;
   } else {
     type->const_ = FALSE;
   }
+
+  // 型の判定
   if (token->kind == TK_IDENT) {
     Struct *struct_ = find_struct(token);
     Enum *enum_ = find_enum(token);
@@ -140,45 +138,28 @@ Type *check_base_type() {
   } else {
     type->ty = token->ty;
   }
+
   token = token->next;
+
+  // 後続のconst
   if (token->kind == TK_CONST) {
     type->const_ = TRUE;
     token = token->next;
   }
-  token = tok;
+
+  if (!should_consume)
+    token = tok;
   return type;
 }
 
+Type *check_base_type() { return parse_base_type_internal(FALSE); }
+
 Type *consume_type() {
-  Type *type = malloc(sizeof(Type));
-  if (token->kind == TK_CONST) {
-    type->const_ = TRUE;
-    free_token();
-  } else {
-    type->const_ = FALSE;
-  }
-  if (token->kind == TK_IDENT) {
-    Struct *struct_ = find_struct(token);
-    Enum *enum_ = find_enum(token);
-    if (struct_) {
-      type->ty = TY_STRUCT;
-      type->struct_ = struct_;
-    } else if (enum_) {
-      type->ty = TY_INT;
-    } else {
-      return NULL;
-    }
-  } else if (token->kind != TK_TYPE) {
+  Type *type = parse_base_type_internal(TRUE);
+  if (!type)
     return NULL;
-  } else {
-    type->ty = token->ty;
-  }
-  consumed_ptr = token->str;
-  free_token();
-  if (token->kind == TK_CONST) {
-    type->const_ = TRUE;
-    free_token();
-  }
+
+  // ポインタ修飾子の処理
   while (consume("*")) {
     Type *ptr = malloc(sizeof(Type));
     ptr->ty = TY_PTR;
@@ -186,7 +167,7 @@ Type *consume_type() {
     type = ptr;
     if (token->kind == TK_CONST) {
       type->const_ = TRUE;
-      free_token();
+      token = token->next;
     } else {
       type->const_ = FALSE;
     }
@@ -214,7 +195,7 @@ int is_type(Token *tok) {
 void expect(char *op, char *err, char *st) {
   if (token->kind != TK_RESERVED || strlen(op) != token->len || memcmp(token->str, op, token->len))
     error_at(token->str, "expected \"%s\":\n  %s  [in %s statement]", op, err, st);
-  free_token();
+  token = token->next;
 }
 
 // Ensure that the current token is TK_NUM.
@@ -222,7 +203,7 @@ int expect_number() {
   if (token->kind != TK_NUM)
     error_at(token->str, "expected a number but got \"%.*s\" [in expect_number]", token->len, token->str);
   int val = token->val;
-  free_token();
+  token = token->next;
   return val;
 }
 
@@ -306,6 +287,27 @@ Node *new_binary(NodeKind kind, Node *lhs, Node *rhs) {
   return node;
 }
 
+// 共通の変数作成処理
+static LVar *new_lvar(Token *tok, Type *type, int is_static, int is_extern) {
+  LVar *lvar = malloc(sizeof(LVar));
+  lvar->name = tok->str;
+  lvar->len = tok->len;
+  lvar->ext = is_extern;
+  lvar->is_static = is_static;
+  lvar->type = type;
+  return lvar;
+}
+
+// 配列サイズ解析の共通処理
+Type *parse_array_dimensions(Type *base_type) {
+  Type *type = base_type;
+  while (consume("[")) {
+    type = new_type_arr(type, expect_number());
+    expect("]", "after number", "array declaration");
+  }
+  return type;
+}
+
 Node *function_definition(Token *tok, Type *type, int is_static) {
   Function *fn = find_fn(tok);
   if (fn) {
@@ -348,28 +350,20 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
     if (!tok_lvar) {
       error_at(consumed_ptr, "expected an identifier [in variable declaration]");
     }
-    while (consume("[")) {
-      type = new_type_arr(type, expect_number());
-      expect("]", "after number", "array declaration");
-    }
+    type = parse_array_dimensions(type);
     if (type->ty == TY_ARR) {
       type->ty = TY_ARGARR;
     }
     Node *nd_lvar = new_node(ND_LVAR);
     node->args[i] = nd_lvar;
-    LVar *lvar = malloc(sizeof(LVar));
+    LVar *lvar = new_lvar(tok_lvar, type, FALSE, FALSE);
     lvar->next = fn->locals;
-    lvar->name = tok_lvar->str;
-    lvar->len = tok_lvar->len;
-    lvar->ext = FALSE;
-    lvar->is_static = FALSE;
     if (is_ptr_or_arr(type)) {
       lvar->offset = fn->locals->offset + 8;
     } else {
       lvar->offset = fn->locals->offset + get_sizeof(type);
     }
     fn->offset = lvar->offset;
-    lvar->type = type;
     nd_lvar->var = lvar;
     nd_lvar->type = type;
     fn->locals = lvar;
@@ -396,24 +390,12 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
     error_at(tok->str, "duplicated variable name: %.*s [in variable declaration]", tok->len, tok->str);
   }
   Node *node = new_node(ND_VARDEC);
-  lvar = malloc(sizeof(LVar));
-  lvar->name = tok->str;
-  lvar->len = tok->len;
-  lvar->ext = FALSE;
-  lvar->is_static = is_static;
+  lvar = new_lvar(tok, type, is_static, FALSE);
   Type *org_type = type;
-  while (consume("[")) {
-    type = new_type_arr(type, expect_number());
-    expect("]", "after number", "array declaration");
-  }
+  type = parse_array_dimensions(type);
   if (is_static) {
     lvar->block = block_cnt;
-    LVar *static_lvar = malloc(sizeof(LVar));
-    static_lvar->name = lvar->name;
-    static_lvar->len = lvar->len;
-    static_lvar->ext = FALSE;
-    static_lvar->is_static = TRUE;
-    static_lvar->type = type;
+    LVar *static_lvar = new_lvar(tok, type, TRUE, FALSE);
     static_lvar->block = lvar->block;
     static_lvar->next = statics;
     statics = static_lvar;
@@ -491,20 +473,12 @@ Node *global_variable_declaration(Token *tok, Type *type, int is_static) {
     error_at(token->str, "duplicated variable name: %.*s [in global variable declaration]", tok->len, tok->str);
   }
   Node *node = new_node(ND_GLBDEC);
-  lvar = malloc(sizeof(LVar));
-  lvar->name = tok->str;
-  lvar->len = tok->len;
-  while (consume("[")) {
-    type = new_type_arr(type, expect_number());
-    expect("]", "after number", "array declaration");
-  }
+  type = parse_array_dimensions(type);
+  lvar = new_lvar(tok, type, is_static, FALSE);
+  lvar->next = globals;
+  globals = lvar;
   node->var = lvar;
   node->type = type;
-  lvar->type = type;
-  lvar->ext = FALSE;
-  lvar->next = globals;
-  lvar->is_static = is_static;
-  globals = lvar;
 
   // 要修正
   if (consume("=")) {
@@ -602,26 +576,18 @@ Node *extern_declaration(Token *tok, Type *type) {
   if (lvar) {
     return node;
   }
-  lvar = malloc(sizeof(LVar));
-  lvar->name = tok->str;
-  lvar->len = tok->len;
-  while (consume("[")) {
-    type = new_type_arr(type, expect_number());
-    expect("]", "after number", "extern declaration");
-  }
-  node->var = lvar;
-  node->type = type;
-  lvar->type = type;
-  lvar->ext = TRUE;
-  lvar->is_static = FALSE;
+  type = parse_array_dimensions(type);
+  lvar = new_lvar(tok, type, FALSE, TRUE);
   lvar->next = globals;
   globals = lvar;
+  node->var = lvar;
+  node->type = type;
   node->endline = TRUE;
   return node;
 }
 
 Node *struct_stmt() {
-  free_token();
+  token = token->next;
   Token *tok = consume_ident();
   if (!tok) {
     error_at(token->str, "expected an identifier but got \"%.*s\" [in struct definition]", token->len, token->str);
@@ -644,17 +610,9 @@ Node *struct_stmt() {
       error_at(token->str, "expected an identifier but got \"%.*s\" [in struct declaration]", token->len, token->str);
     }
     Type *org_type = type;
-    while (consume("[")) {
-      type = new_type_arr(type, expect_number());
-      expect("]", "after number", "array declaration");
-    }
-    LVar *member_var = malloc(sizeof(LVar));
-    member_var->name = member_tok->str;
-    member_var->len = member_tok->len;
-    member_var->type = type;
+    type = parse_array_dimensions(type);
+    LVar *member_var = new_lvar(member_tok, type, FALSE, FALSE);
     member_var->next = struct_->var;
-    member_var->ext = FALSE;
-    member_var->is_static = FALSE;
     struct_->var = member_var;
     int single_size = get_sizeof(org_type);
     if (offset % single_size != 0) {
@@ -694,7 +652,7 @@ Node *block_stmt() {
 }
 
 Node *extern_stmt() {
-  free_token();
+  token = token->next;
   Type *ch_type = check_base_type();
   Type *type = consume_type();
   Token *tok = consume_ident();
@@ -731,7 +689,7 @@ Node *extern_stmt() {
 }
 
 Node *goto_stmt() {
-  free_token();
+  token = token->next;
   Token *tok = consume_ident();
   if (!tok) {
     error_at(token->str, "expected an identifier but got \"%.*s\" [in goto statement]", token->len, token->str);
@@ -754,16 +712,16 @@ Node *label_stmt() {
   current_fn->labels = label;
   Node *node = new_node(ND_LABEL);
   node->label = label;
-  free_token();
+  token = token->next;
   node->endline = TRUE;
   return node;
 }
 
 Node *typedef_stmt() {
-  free_token();
+  token = token->next;
   Node *node;
   if (token->kind == TK_STRUCT) {
-    free_token();
+    token = token->next;
     node = new_node(ND_TYPEDEF);
     Token *tok1 = consume_ident();
     if (!tok1) {
@@ -791,7 +749,7 @@ Node *typedef_stmt() {
     tag->next = struct_tags;
     struct_tags = tag;
   } else if (token->kind == TK_ENUM) {
-    free_token();
+    token = token->next;
     node = new_node(ND_TYPEDEF);
     int offset = 0;
     expect("{", "before enum members", "enum");
@@ -800,14 +758,8 @@ Node *typedef_stmt() {
       if (!member_tok) {
         error_at(token->str, "expected an identifier but got \"%.*s\" [in typedef]", token->len, token->str);
       }
-      LVar *member_var = malloc(sizeof(LVar));
-      member_var->name = member_tok->str;
-      member_var->len = member_tok->len;
-      member_var->type = new_type(TY_INT);
-      member_var->offset = offset;
-      member_var->ext = FALSE;
-      member_var->is_static = FALSE;
-      offset++;
+      LVar *member_var = new_lvar(member_tok, new_type(TY_INT), FALSE, FALSE);
+      member_var->offset = offset++;
       member_var->next = enum_members;
       enum_members = member_var;
       if (consume(",")) {
@@ -838,7 +790,7 @@ Node *typedef_stmt() {
 }
 
 Node *if_stmt() {
-  free_token();
+  token = token->next;
   Node *node = new_node(ND_IF);
   node->id = loop_cnt++;
   expect("(", "before condition", "if");
@@ -847,7 +799,7 @@ Node *if_stmt() {
   expect(")", "after equality", "if");
   node->then = stmt();
   if (token->kind == TK_ELSE) {
-    free_token();
+    token = token->next;
     node->els = stmt();
   } else {
     node->els = NULL;
@@ -856,7 +808,7 @@ Node *if_stmt() {
 }
 
 Node *while_stmt() {
-  free_token();
+  token = token->next;
   expect("(", "before condition", "while");
   Node *node = new_node(ND_WHILE);
   node->id = loop_cnt++;
@@ -871,14 +823,14 @@ Node *while_stmt() {
 }
 
 Node *do_while_stmt() {
-  free_token();
+  token = token->next;
   Node *node = new_node(ND_DOWHILE);
   node->id = loop_cnt++;
   node->then = stmt();
   if (token->kind != TK_WHILE) {
     error_at(token->str, "expected 'while' but got \"%.*s\" [in do-while statement]", token->len, token->str);
   }
-  free_token();
+  token = token->next;
   expect("(", "before condition", "do-while");
   node->cond = expr();
   node->cond->endline = FALSE;
@@ -893,7 +845,7 @@ Node *do_while_stmt() {
 
 Node *for_stmt() {
   int init;
-  free_token();
+  token = token->next;
   expect("(", "before initialization", "for");
   Node *node = new_node(ND_FOR);
   node->id = loop_cnt++;
@@ -947,7 +899,7 @@ Node *break_stmt() {
   if (loop_id == -1) {
     error_at(token->str, "stray break statement [in break statement]");
   }
-  free_token();
+  token = token->next;
   expect(";", "after line", "break");
   Node *node = new_node(ND_BREAK);
   node->endline = TRUE;
@@ -959,7 +911,7 @@ Node *continue_stmt() {
   if (loop_id == -1) {
     error_at(token->str, "stray continue statement [in continue statement]");
   }
-  free_token();
+  token = token->next;
   expect(";", "after line", "continue");
   Node *node = new_node(ND_CONTINUE);
   node->endline = TRUE;
@@ -968,7 +920,7 @@ Node *continue_stmt() {
 }
 
 Node *return_stmt() {
-  free_token();
+  token = token->next;
   Node *node = new_node(ND_RETURN);
   if (consume(";")) {
     node->rhs = new_num(0);
@@ -994,7 +946,7 @@ Node *stmt() {
   } else if (token->kind == TK_LABEL) {
     node = label_stmt();
   } else if (token->kind == TK_STATIC) {
-    free_token();
+    token = token->next;
     node = vardec_and_funcdef_stmt(TRUE);
   } else if (is_type(token)) {
     node = vardec_and_funcdef_stmt(FALSE);
@@ -1306,7 +1258,7 @@ Node *mul() {
 Node *unary() {
   Node *node;
   if (token->kind == TK_SIZEOF) {
-    free_token();
+    token = token->next;
     return new_num(get_sizeof(unary()->type));
   }
   if (consume("+"))
@@ -1463,7 +1415,7 @@ Node *primary() {
     str->id = label_cnt++;
     str->next = strings;
     strings = str;
-    free_token();
+    token = token->next;
     node = new_node(ND_STRING);
     node->id = str->id;
     node->type = new_type_ptr(new_type(TY_CHAR));
