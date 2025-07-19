@@ -102,9 +102,14 @@ Function *find_fn(Token *tok) {
   return NULL;
 }
 
-// Consumes the current token if it matches `op`.
-int consume(char *op) {
+int peek(char *op) {
   if (token->kind != TK_RESERVED || strlen(op) != token->len || memcmp(token->str, op, token->len))
+    return FALSE;
+  return TRUE;
+}
+
+int consume(char *op) {
+  if (!peek(op))
     return FALSE;
   consumed_ptr = token->str;
   token = token->next;
@@ -120,7 +125,7 @@ Token *consume_ident() {
   return tok;
 }
 
-Token *consume_ident_safe(const char *context) {
+Token *expect_ident(const char *context) {
   Token *tok = consume_ident();
   if (!tok) {
     error_at(token->str, "expected an identifier but got \"%.*s\" [in %s]", token->len, token->str, context);
@@ -173,24 +178,27 @@ Type *parse_base_type_internal(int should_consume) {
 
 Type *check_base_type() { return parse_base_type_internal(FALSE); }
 
+// ポインタ修飾子を解析
+Type *parse_pointer_qualifiers(Type *base_type) {
+  Type *type = base_type;
+  while (consume("*")) {
+    Type *ptr = new_type_ptr(type);
+    if (token->kind == TK_CONST) {
+      ptr->const_ = TRUE;
+      token = token->next;
+    } else {
+      ptr->const_ = FALSE;
+    }
+    type = ptr;
+  }
+  return type;
+}
+
 Type *consume_type() {
   Type *type = parse_base_type_internal(TRUE);
   if (!type)
     return NULL;
-
-  // ポインタ修飾子の処理
-  while (consume("*")) {
-    Type *ptr = malloc(sizeof(Type));
-    ptr->ty = TY_PTR;
-    ptr->ptr_to = type;
-    type = ptr;
-    if (token->kind == TK_CONST) {
-      type->const_ = TRUE;
-      token = token->next;
-    } else {
-      type->const_ = FALSE;
-    }
-  }
+  type = parse_pointer_qualifiers(type);
   return type;
 }
 
@@ -341,6 +349,60 @@ Type *parse_array_dimensions(Type *base_type) {
   return type;
 }
 
+Node *handle_array_initialization(Node *node, Type *type, Type *org_type) {
+  if (type->ty != TY_ARR) {
+    error_at(token->str, "array initializer is only allowed for array type [in variable declaration]");
+  }
+  Array *array = malloc(sizeof(Array));
+  array->next = arrays;
+  arrays = array;
+  array->id = array_cnt++;
+  array->byte = get_sizeof(org_type);
+  array->val = NULL;
+  int i = 0;
+  do {
+    array->val = safe_realloc_array(array->val, sizeof(int), i + 1);
+    array->val[i++] = expect_number();
+  } while (consume(","));
+  array->len = i;
+  expect("}", "after array initializer", "local variable declaration");
+  Node *arr = new_node(ND_ARRAY);
+  arr->type = type;
+  arr->id = array->id;
+  node = new_binary(ND_ASSIGN, node, arr);
+  node->type = type;
+  node->val = TRUE;
+  return node;
+}
+
+Node *handle_scalar_initialization(Node *node, Type *type) {
+  node = new_binary(ND_ASSIGN, node, expr());
+  node->type = type;
+  if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR) {
+    node->val = node->lhs->type->ptr_to->ty == TY_CHAR;
+  }
+  return node;
+}
+
+// 変数初期化の共通処理
+Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, Type *org_type, int set_offset) {
+  if (!consume("=")) {
+    if (set_offset)
+      lvar->offset = 0;
+    return node;
+  }
+  if (set_offset) {
+    lvar->offset = expect_signed_number();
+    return node;
+  }
+  if (consume("{")) {
+    node = handle_array_initialization(node, type, org_type);
+  } else {
+    node = handle_scalar_initialization(node, type);
+  }
+  return node;
+}
+
 Node *function_definition(Token *tok, Type *type, int is_static) {
   Function *fn = find_fn(tok);
   if (fn) {
@@ -379,7 +441,7 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
       }
       break;
     }
-    Token *tok_lvar = consume_ident_safe("function definition");
+    Token *tok_lvar = expect_ident("function definition");
     type = parse_array_dimensions(type);
     if (type->ty == TY_ARR) {
       type->ty = TY_ARGARR;
@@ -404,7 +466,7 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   node->val = n;
   expect(")", "after arguments", "function definition");
 
-  if (!(token->kind == TK_RESERVED && !memcmp(token->str, "{", token->len))) {
+  if (!peek("{")) {
     node->kind = ND_EXTERN;
     expect(";", "after line", "function definition");
   } else {
@@ -442,46 +504,7 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
   current_fn->locals = lvar;
 
   // 要修正
-  if (is_static) {
-    if (consume("=")) {
-      lvar->offset = expect_signed_number();
-    } else {
-      lvar->offset = 0;
-    }
-  } else {
-    if (consume("=")) {
-      if (consume("{")) {
-        if (type->ty != TY_ARR) {
-          error_at(token->str, "array initializer is only allowed for array type [in local variable declaration]");
-        }
-        Array *array = malloc(sizeof(Array));
-        array->next = arrays;
-        arrays = array;
-        array->id = array_cnt++;
-        array->byte = get_sizeof(org_type);
-        array->val = NULL;
-        int i = 0;
-        do {
-          array->val = safe_realloc_array(array->val, sizeof(int), i + 1);
-          array->val[i++] = expect_number();
-        } while (consume(","));
-        array->len = i;
-        expect("}", "after array initializer", "local variable declaration");
-        Node *arr = new_node(ND_ARRAY);
-        arr->type = type;
-        arr->id = array->id;
-        node = new_binary(ND_ASSIGN, node, arr);
-        node->type = type;
-        node->val = TRUE;
-      } else {
-        node = new_binary(ND_ASSIGN, node, expr());
-        node->type = type;
-        if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR) {
-          node->val = node->lhs->type->ptr_to->ty == TY_CHAR;
-        }
-      }
-    }
-  }
+  node = handle_variable_initialization(node, lvar, type, org_type, is_static);
   node->endline = TRUE;
   return node;
 }
@@ -500,11 +523,7 @@ Node *global_variable_declaration(Token *tok, Type *type, int is_static) {
   node->type = type;
 
   // 要修正
-  if (consume("=")) {
-    lvar->offset = expect_signed_number();
-  } else {
-    lvar->offset = 0;
-  }
+  node = handle_variable_initialization(node, lvar, type, NULL, TRUE);
   node->endline = TRUE;
   return node;
 }
@@ -513,7 +532,7 @@ Node *vardec_and_funcdef_stmt(int is_static) {
   // 変数宣言または関数定義
   Type *ch_type = check_base_type();
   Type *type = consume_type();
-  Token *tok = consume_ident_safe("variable declaration");
+  Token *tok = expect_ident("variable declaration");
 
   // 関数定義
   if (consume("(")) {
@@ -537,17 +556,8 @@ Node *vardec_and_funcdef_stmt(int is_static) {
 
   // 追加の変数
   while (consume(",")) {
-    type = ch_type;
-    while (consume("*")) {
-      Type *ptr = malloc(sizeof(Type));
-      ptr->ty = TY_PTR;
-      ptr->ptr_to = type;
-      type = ptr;
-      if (token->kind == TK_CONST) {
-        type->const_ = TRUE;
-      }
-    }
-    tok = consume_ident_safe("variable declaration");
+    type = parse_pointer_qualifiers(ch_type);
+    tok = expect_ident("variable declaration");
     node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
     if (current_fn->next) {
       node->body[i++] = local_variable_declaration(tok, type, is_static);
@@ -580,7 +590,7 @@ Node *extern_declaration(Token *tok, Type *type) {
 
 Node *struct_stmt() {
   token = token->next;
-  Token *tok = consume_ident_safe("struct declaration");
+  Token *tok = expect_ident("struct declaration");
   Node *node = new_node(ND_STRUCT);
   StructTag *struct_tag = find_struct_tag(tok);
   if (!struct_tag) {
@@ -594,7 +604,7 @@ Node *struct_stmt() {
   expect("{", "before struct members", "struct");
   while (!consume("}")) {
     Type *type = consume_type();
-    Token *member_tok = consume_ident_safe("struct member declaration");
+    Token *member_tok = expect_ident("struct member declaration");
     Type *org_type = type;
     type = parse_array_dimensions(type);
     LVar *member_var = new_lvar(member_tok, type, FALSE, FALSE);
@@ -638,23 +648,14 @@ Node *extern_stmt() {
   token = token->next;
   Type *ch_type = check_base_type();
   Type *type = consume_type();
-  Token *tok = consume_ident_safe("extern declaration");
+  Token *tok = expect_ident("extern declaration");
   Node *node = new_node(ND_BLOCK);
   node->body = malloc(sizeof(Node *));
   int i = 0;
   node->body[i++] = extern_declaration(tok, type);
   while (consume(",")) {
-    type = ch_type;
-    while (consume("*")) {
-      Type *ptr = malloc(sizeof(Type));
-      ptr->ty = TY_PTR;
-      ptr->ptr_to = type;
-      type = ptr;
-      if (type->const_) {
-        error_at(token->str, "constant pointer is not allowed [in extern declaration]");
-      }
-    }
-    tok = consume_ident_safe("variable declaration");
+    type = parse_pointer_qualifiers(ch_type);
+    tok = expect_ident("variable declaration");
     node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
     node->body[i++] = extern_declaration(tok, type);
   }
@@ -665,7 +666,7 @@ Node *extern_stmt() {
 
 Node *goto_stmt() {
   token = token->next;
-  Token *tok = consume_ident_safe("goto statement");
+  Token *tok = expect_ident("goto statement");
   Node *node = new_node(ND_GOTO);
   node->label = malloc(sizeof(Label));
   node->label->name = tok->str;
@@ -695,8 +696,8 @@ Node *typedef_stmt() {
   if (token->kind == TK_STRUCT) {
     token = token->next;
     node = new_node(ND_TYPEDEF);
-    Token *tok1 = consume_ident_safe("typedef");
-    Token *tok2 = consume_ident_safe("typedef");
+    Token *tok1 = expect_ident("typedef");
+    Token *tok2 = expect_ident("typedef");
     if (find_struct_tag(tok1)) {
       error_duplicate_name(tok1, "typedef");
     }
@@ -720,14 +721,14 @@ Node *typedef_stmt() {
     int offset = 0;
     expect("{", "before enum members", "enum");
     do {
-      Token *member_tok = consume_ident_safe("typedef");
+      Token *member_tok = expect_ident("typedef");
       LVar *member_var = new_lvar(member_tok, new_type(TY_INT), FALSE, FALSE);
       member_var->offset = offset++;
       member_var->next = enum_members;
       enum_members = member_var;
     } while (consume(","));
     expect("}", "after enum members", "enum");
-    Token *tok = consume_ident_safe("typedef");
+    Token *tok = expect_ident("typedef");
     if (find_enum(tok)) {
       error_duplicate_name(tok, "typedef");
     }
@@ -810,7 +811,7 @@ Node *for_stmt() {
     init = FALSE;
   } else if (is_type(token)) {
     Type *type = consume_type();
-    Token *tok = consume_ident_safe("variable declaration");
+    Token *tok = expect_ident("variable declaration");
     node->init = local_variable_declaration(tok, type, FALSE);
     expect(";", "after initialization", "for");
     node->init->endline = TRUE;
@@ -1291,7 +1292,7 @@ Node *access_member() {
       if (node->type->ty != TY_STRUCT) {
         error_at(prev_tok->str, "%.*s is not a struct [in struct reference]", prev_tok->len, prev_tok->str);
       }
-      tok = consume_ident_safe("struct reference");
+      tok = expect_ident("struct reference");
       struct_ = node->type->struct_;
       if (!struct_) {
         error_at(prev_tok->str, "unknown struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
@@ -1314,7 +1315,7 @@ Node *access_member() {
         error_at(prev_tok->str, "%.*s is not a pointer of a struct [in struct reference]", prev_tok->len,
                  prev_tok->str);
       }
-      tok = consume_ident_safe("struct reference");
+      tok = expect_ident("struct reference");
       struct_ = node->type->ptr_to->struct_;
       if (!struct_) {
         error_at(prev_tok->str, "unknown struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
@@ -1373,7 +1374,7 @@ Node *primary() {
     return node;
   }
 
-  tok = consume_ident_safe("primary");
+  tok = expect_ident("primary");
 
   // enumのメンバー
   LVar *member = find_enum_member(tok);
