@@ -1,3 +1,5 @@
+-std=c99
 -Wno-incompatible-library-redeclaration
 -Wno-deprecated-non-prototype
--I include
+-I 
+include
