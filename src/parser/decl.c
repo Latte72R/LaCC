@@ -3,7 +3,7 @@
 
 extern Token *token;
 extern int array_cnt;
-extern int block_cnt;
+extern int block_id;
 extern Function *functions;
 extern Function *current_fn;
 extern LVar *globals;
@@ -148,7 +148,7 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
 
 Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
   LVar *lvar = find_lvar(tok);
-  if (lvar) {
+  if (lvar && lvar->block == block_id) {
     error_duplicate_name(tok, "local variable declaration");
   }
   Node *node = new_node(ND_VARDEC);
@@ -156,7 +156,7 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
   Type *org_type = type;
   type = parse_array_dimensions(type);
   if (is_static) {
-    lvar->block = block_cnt;
+    lvar->block = block_id;
     LVar *static_lvar = new_lvar(tok, type, TRUE, FALSE);
     static_lvar->block = lvar->block;
     static_lvar->next = statics;

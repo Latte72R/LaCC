@@ -140,6 +140,7 @@ struct Function {
   Label *labels;  // ラベルのリスト
 };
 
+// tokenize.c
 void tokenize();
 void new_token(TokenKind kind, char *str, int len);
 int startswith(char *p, char *q);

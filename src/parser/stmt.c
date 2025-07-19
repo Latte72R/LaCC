@@ -4,8 +4,9 @@
 extern Token *token;
 extern int label_cnt;
 extern int loop_cnt;
-extern int block_cnt;
 extern int loop_id;
+extern int block_cnt;
+extern int block_id;
 extern Function *current_fn;
 extern char *consumed_ptr;
 
@@ -15,7 +16,9 @@ extern void *NULL;
 
 Node *block_stmt() {
   Node *node = new_node(ND_BLOCK);
-  LVar *var = current_fn->locals;
+  LVar *locals_prev = current_fn->locals;
+  int block_id_prev = block_id;
+  block_id = block_cnt++;
   node->body = malloc(sizeof(Node *));
   int i = 0;
   while (!consume("}")) {
@@ -23,8 +26,8 @@ Node *block_stmt() {
     node->body[i++] = stmt();
   }
   node->body[i] = new_node(ND_NONE);
-  current_fn->locals = var;
-  block_cnt++;
+  current_fn->locals = locals_prev;
+  block_id = block_id_prev;
   return node;
 }
 
