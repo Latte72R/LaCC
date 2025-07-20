@@ -103,16 +103,20 @@ void tokenize() {
 
       if (*p == '\\') {
         p++;
-        if (*p == 'n') {
-          val = '\n';
-        } else if (*p == 't') {
-          val = '\t';
-        } else if (*p == 'r') {
-          val = '\r';
+        if (*p == 'a') {
+          val = '\a';
         } else if (*p == 'b') {
           val = '\b';
+        } else if (*p == 'e') {
+          val = '\e';
         } else if (*p == 'f') {
           val = '\f';
+        } else if (*p == 'n') {
+          val = '\n';
+        } else if (*p == 'r') {
+          val = '\r';
+        } else if (*p == 't') {
+          val = '\t';
         } else if (*p == 'v') {
           val = '\v';
         } else if (*p == '\\') {
@@ -147,22 +151,28 @@ void tokenize() {
     if (*p == '"') {
       p++;
       q = p;
+      int len = 0;
+      char *buf = malloc(sizeof(char) * 1024);
       while (*p != '"') {
-        if (*p == '\0') {
-          error_at(q - 1, "unclosed string literal [in tokenize]");
-        }
-        if (*p == '\\') {
-          p += 2;
+        if (*p == '\0' || *p == '\n') {
+          error_at(p, "unclosed string literal [in tokenize]");
+        } else if (*p == '\\' && *(p + 1) == '\n') {
+          p += 2; // 行継続をスキップ
+        } else if (*p == '\\') {
+          buf[len++] = *p++;
+          buf[len++] = *p++;
         } else {
-          p++;
+          buf[len++] = *p++;
         }
       }
       if (token->kind == TK_STRING) {
-        memcpy(token->str + token->len, q, p - q);
-        token->len += p - q;
+        memcpy(token->str + token->len, buf, len);
+        token->len += len;
       } else {
-        new_token(TK_STRING, q, p - q);
+        memcpy(q, buf, len);
+        new_token(TK_STRING, q, len);
       }
+      free(buf);
       p++;
       continue;
     }
@@ -180,6 +190,13 @@ void tokenize() {
       q = p;
       new_token(TK_NUM, p, 0);
       token->val = strtol(p, &p, 16);
+      token->len = p - q + 2;
+      continue;
+    } else if (startswith(p, "0")) {
+      new_token(TK_NUM, p, 0);
+      p++;
+      q = p;
+      token->val = strtol(p, &p, 8);
       token->len = p - q + 2;
       continue;
     } else if (isdigit(*p)) {

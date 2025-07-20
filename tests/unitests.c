@@ -476,10 +476,12 @@ int test69() {
 }
 
 int test70() {
-  return 0b0101 * 0x3f; // 5 * 63 = 315
+  // hexadecimal literal
+  return 0x5 * 0x3f; // 5 * 63 = 315
 }
 
 int test71() {
+  // binary literal (GCC拡張)
   return 0b010110 | 0b001011 & 0b110011; // 0b010111 = 23
 }
 
@@ -541,100 +543,149 @@ ahead:
   return n;
 }
 
-void check(int result, int id, int ans) {
+int test81() {
+  return sizeof('A'); // C標準ではint(4)
+}
+
+int test82() {
+  /* 文字リテラルのエスケープシーケンス処理 */
+  return '\a' + '\v'; // BEL(7) + VT(11) = 18
+}
+
+int test83() {
+  // octal literal
+  return 010 + 011; // 8 + 9 = 17
+}
+
+int test84() {
+  /* 連続する文字列リテラルの連結 */
+  char *s = "Hello"
+            " "
+            "World";
+  return s[5]; /* ' ' = 32 - 文字列連結の実装 */
+}
+
+int test85() {
+  /* 長い識別子名の処理 */
+  int very_very_very_very_very_very_very_very_very_very_long_variable_name = 42;
+  return very_very_very_very_very_very_very_very_very_very_long_variable_name;
+}
+
+int test86() {
+  // 改行を含む文字列リテラル
+  char *s = "line1\
+line2";
+  return s[6]; // '\' - 行継続の処理
+}
+
+int test87() {
+  /* 演算子の優先順位の微妙なケース */
+  return sizeof(int) + 1; /* sizeof演算子の優先順位 */
+}
+
+int test_id = 0;
+void check(int result, int ans) {
+  test_id++;
   if (result != ans) {
-    printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
+    printf("test%d failed (expected: %d / result: %d)\n", test_id, ans, result);
     failures++;
   }
 }
 
 int main() {
   failures = 0;
-  check(test1(), 1, 13);
-  check(test2(), 2, 2);
-  check(test3(), 3, 13);
-  check(test4(), 4, 1);
-  check(test5(), 5, 0);
-  check(test6(), 6, 1);
-  check(test7(), 7, 0);
-  check(test8(), 8, 10);
-  check(test9(), 9, 10);
-  check(test10(), 10, 2);
-  check(test11(), 11, 12);
-  check(test12(), 12, 3);
-  check(test13(), 13, 5);
-  check(test14(), 14, 25);
-  check(test15(), 15, 4);
-  check(test16(), 16, 28);
-  check(test17(), 17, 4);
-  check(test18(), 18, 34);
-  check(test19(), 19, 27);
-  check(test20(), 20, 7);
-  check(test21(), 21, 104);
-  check(test22(), 22, 12);
-  check(test23(), 23, 35);
-  check(test24(), 24, 2);
-  check(test25(), 25, 97);
-  check(test26(), 26, 37);
-  check(test27(), 27, 8);
-  check(test28(), 28, 67);
-  check(test29(), 29, 12);
-  check(test30(), 30, 7);
-  check(test31(), 31, 7);
-  check(test32(), 32, 2);
-  check(test33(), 33, 7);
-  check(test34(), 34, 5);
-  check(test35(), 35, -6);
-  check(test36(), 36, 16);
-  check(test37(), 37, 4);
-  check(test38(), 38, 11);
-  check(test39(), 39, 28);
-  check(test40(), 40, 2);
-  check(test41(), 41, 12);
-  check(test42(), 42, -2);
-  check(test43(), 43, 1);
-  check(test44(), 44, 36);
-  check(test45(), 45, 11);
-  check(test46(), 46, 56);
-  check(test47(), 47, 7);
-  check(test48(), 48, 1);
-  check(test49(), 49, 26);
-  check(test50(), 50, -4);
-  check(test51(), 51, 45);
-  check(test52(), 52, 15);
-  check(test53(), 53, 10);
-  check(test54(), 54, 40);
-  check(test55(), 55, 60);
-  check(test56(), 56, 10);
-  check(test57(), 57, 15);
-  check(test58(), 58, 8);
-  check(test59(), 59, 98);
-  check(test60(), 60, 3);
-  check(test61(), 61, 10);
-  check(test62(), 62, 10);
-  check(test63(), 63, 0);
-  check(test64(), 64, 6);
-  check(test65(), 65, 12);
-  check(test66(), 66, 10);
-  check(test67(), 67, 7);
-  check(test68(), 68, 0);
-  check(test69(), 69, 22);
-  check(test70(), 70, 315);
-  check(test71(), 71, 23);
-  check(test72(), 72, 21);
-  check(test73(), 73, 5);
-  check(test74(), 74, 7);
-  check(test75(), 75, 16);
-  check(test76(), 76, 11);
-  check(test77(), 77, 0);
-  check(test78(), 78, 30);
-  check(test79(), 79, 5);
-  check(test80(), 80, 20);
+  check(test1(), 13);
+  check(test2(), 2);
+  check(test3(), 13);
+  check(test4(), 1);
+  check(test5(), 0);
+  check(test6(), 1);
+  check(test7(), 0);
+  check(test8(), 10);
+  check(test9(), 10);
+  check(test10(), 2);
+  check(test11(), 12);
+  check(test12(), 3);
+  check(test13(), 5);
+  check(test14(), 25);
+  check(test15(), 4);
+  check(test16(), 28);
+  check(test17(), 4);
+  check(test18(), 34);
+  check(test19(), 27);
+  check(test20(), 7);
+  check(test21(), 104);
+  check(test22(), 12);
+  check(test23(), 35);
+  check(test24(), 2);
+  check(test25(), 97);
+  check(test26(), 37);
+  check(test27(), 8);
+  check(test28(), 67);
+  check(test29(), 12);
+  check(test30(), 7);
+  check(test31(), 7);
+  check(test32(), 2);
+  check(test33(), 7);
+  check(test34(), 5);
+  check(test35(), -6);
+  check(test36(), 16);
+  check(test37(), 4);
+  check(test38(), 11);
+  check(test39(), 28);
+  check(test40(), 2);
+  check(test41(), 12);
+  check(test42(), -2);
+  check(test43(), 1);
+  check(test44(), 36);
+  check(test45(), 11);
+  check(test46(), 56);
+  check(test47(), 7);
+  check(test48(), 1);
+  check(test49(), 26);
+  check(test50(), -4);
+  check(test51(), 45);
+  check(test52(), 15);
+  check(test53(), 10);
+  check(test54(), 40);
+  check(test55(), 60);
+  check(test56(), 10);
+  check(test57(), 15);
+  check(test58(), 8);
+  check(test59(), 98);
+  check(test60(), 3);
+  check(test61(), 10);
+  check(test62(), 10);
+  check(test63(), 0);
+  check(test64(), 6);
+  check(test65(), 12);
+  check(test66(), 10);
+  check(test67(), 7);
+  check(test68(), 0);
+  check(test69(), 22);
+  check(test70(), 315);
+  check(test71(), 23);
+  check(test72(), 21);
+  check(test73(), 5);
+  check(test74(), 7);
+  check(test75(), 16);
+  check(test76(), 11);
+  check(test77(), 0);
+  check(test78(), 30);
+  check(test79(), 5);
+  check(test80(), 20);
+  check(test81(), 4);
+  check(test82(), 18);
+  check(test83(), 17);
+  check(test84(), 32);
+  check(test85(), 42);
+  check(test86(), 105);
+  check(test87(), 5);
 
   if (failures == 0) {
-    printf("\033[1;32mAll tests passed!\033[0m\n");
+    printf("All %d tests passed!\n", test_id);
   } else {
-    printf("\033[1;31m %d tests failed\033[0m\n", failures);
+    printf("\033[1;31m %d of %d tests failed\033[0m\n", failures, test_id);
   }
   return failures;
 }
