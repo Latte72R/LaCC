@@ -143,21 +143,21 @@ There are no code-generation optimizations beyond what's needed to make it work.
 ### 4. Run unit tests with the self-hosted compiler
 
   ```bash
-  make unitests
+  make unittest
   ```
 
   Passing all tests confirms that your self-hosted compiler behaves as expected.  
-  The unit tests are located in the `tests/unitests.c` file.  
+  The unit tests are located in the `tests/unittest.c` file.  
   They cover various features of the compiler to ensure it behaves correctly.
 
 ### 5. Run error tests with the self-hosted compiler
 
   ```bash
-  make errortests
+  make errortest
   ```
 
   This command runs error tests to ensure that the compiler correctly identifies and reports errors.
-  The error tests are located in the `tests/errortests.sh` file.  
+  The error tests are located in the `tests/errortest.sh` file.  
   They cover various features of the compiler to ensure it behaves correctly in error scenarios.
 
 ### 6. Clean up build artifacts
