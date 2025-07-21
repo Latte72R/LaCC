@@ -356,6 +356,7 @@ void gen(Node *node) {
     }
     gen(node->lhs);
     if (node->fn->type->ty == TY_VOID || startswith(node->fn->name, "main") && node->fn->len == 4) {
+      printf("  mov rax, 0\n");
       printf("  mov rsp, rbp\n");
       printf("  pop rbp\n");
       printf("  ret\n");

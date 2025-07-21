@@ -5,7 +5,7 @@ TEST_DIR:=./tests
 EXAMPLE_DIR:=./examples
 BUILD_DIR:=./build
 SRCS:=$(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/**/*.c)
-ASMS:=$(SRCS:.c=.s)
+OBJ_S := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.s,$(SRCS))
 CC:=cc
 BOOSTSTRAP:=$(BUILD_DIR)/lacc
 SELFHOST:=$(BUILD_DIR)/laccs
@@ -16,7 +16,7 @@ help:
 
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
-	@echo "Build directory created at $(BUILD_DIR)."
+	@echo "Build directory created at $(BUILD_DIR)"
 
 .bootstrap: $(BOOSTSTRAP)
 
@@ -31,7 +31,7 @@ endef
 
 run: .run-selfhost ## Run a file with the self-hosted compiler
 
-.run-cc: $(SELFHOST)
+.run-cc: $(CC)
 	@$(call runfile, $(CC), $(FILE))
 	
 .run-bootstrap: $(BOOSTSTRAP)
@@ -42,16 +42,15 @@ run: .run-selfhost ## Run a file with the self-hosted compiler
 
 $(BOOSTSTRAP): $(SRCS) | $(BUILD_DIR)
 	@$(CC) $(CC_FLAGS) -o $(BOOSTSTRAP) $(SRCS) extension.c
-	@echo "Bootstrap compiler created at $(BOOSTSTRAP)."
+	@echo "Bootstrap compiler created at $(BOOSTSTRAP)"
 
-$(SELFHOST): $(BOOSTSTRAP) | $(BUILD_DIR)
-	@for src in $(SRCS); do \
-		base=$$(basename $$src .c); \
-		out=$(BUILD_DIR)/$$base.s; \
-		$(BOOSTSTRAP) $(LACC_FLAGS) $$src > $$out; \
-	done
-	@$(CC) -o $(SELFHOST) $(BUILD_DIR)/*.s extension.c $(CC_FLAGS)
-	@echo "Self-hosted compiler created at $(SELFHOST)."
+$(BUILD_DIR)/%.s: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	@$(BOOSTSTRAP) $(LACC_FLAGS) $< > $@
+
+$(SELFHOST): $(BOOSTSTRAP) $(OBJ_S) | $(BUILD_DIR)
+	@$(CC) -o $@ $(OBJ_S) extension.c $(CC_FLAGS)
+	@echo "Self-hosted compiler created at $@"
 
 define unittest
 	@$(call runfile, $(1), $(TEST_DIR)/unittest.c)
