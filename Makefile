@@ -6,6 +6,7 @@ EXAMPLE_DIR:=./examples
 BUILD_DIR:=./build
 SRCS:=$(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/**/*.c)
 ASMS:=$(SRCS:.c=.s)
+CC:=cc
 BOOSTSTRAP:=$(BUILD_DIR)/lacc
 SELFHOST:=$(BUILD_DIR)/laccs
 
@@ -44,34 +45,35 @@ $(SELFHOST): $(BOOSTSTRAP) | $(BUILD_DIR)
 	@$(CC) -o $(SELFHOST) $(BUILD_DIR)/*.s extention.c $(CC_FLAGS)
 	@echo "Self-hosted compiler created at $(SELFHOST)."
 
-cc-test: $(BUILD_DIR)
-	@echo \[unitests.c\]
-	@cc -w  -o $(BUILD_DIR)/tmp $(TEST_DIR)/unitests.c $(CC_FLAGS)
-	@./$(BUILD_DIR)/tmp
-	@echo \[prime.c\]
-	@cc -w  -o $(BUILD_DIR)/tmp $(TEST_DIR)/prime.c $(CC_FLAGS)
-	@./$(BUILD_DIR)/tmp
-	@echo \[fizzbuzz.c\]
-	@cc -w  -o $(BUILD_DIR)/tmp $(TEST_DIR)/fizzbuzz.c $(CC_FLAGS)
-	@./$(BUILD_DIR)/tmp
-
-define multitest
-	@echo \[unitests.c\]
+define unittests
 	$(call runfile, $(1), $(TEST_DIR)/unitests.c)
-	@echo \[prime.c\]
-	$(call runfile, $(1), $(TEST_DIR)/prime.c)
-	@echo \[fizzbuzz.c\]
-	$(call runfile, $(1), $(TEST_DIR)/fizzbuzz.c)
 endef
 
-bootstrap-test: $(BOOSTSTRAP)
-	$(call multitest, $(BOOSTSTRAP))
+define errortests
+	@$(TEST_DIR)/errortests.sh $(BUILD_DIR) $(1)
+endef
 
-selfhost-test: $(SELFHOST) ## Run tests with the self-hosted compiler
-	$(call multitest, $(SELFHOST))
+unittests: .unittests-selfhost ## Run unit tests with the self-hosted compiler
 
-error-test: $(SELFHOST) ## Run error tests with the self-hosted compiler
-	@$(TEST_DIR)/error_test.sh $(BUILD_DIR) $(SELFHOST)
+errortests: .errortests-selfhost ## Run error tests with the self-hosted compiler
+
+.unittests-cc:
+	$(call unittests, $(CC))
+
+.unittests-bootstrap: $(BOOSTSTRAP)
+	$(call unittests, $(BOOSTSTRAP))
+
+.unittests-selfhost: $(SELFHOST)
+	$(call unittests, $(SELFHOST))
+
+.errortests-cc:
+	$(call errortests, $(CC))
+
+.errortests-bootstrap: $(BOOSTSTRAP)
+	$(call errortests, $(BOOSTSTRAP))
+
+.errortests-selfhost: $(SELFHOST)
+	$(call errortests, $(SELFHOST))
 
 clean: ## Clean up generated files
 	@rm -rf $(BUILD_DIR)

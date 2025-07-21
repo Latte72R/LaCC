@@ -683,7 +683,7 @@ int main() {
   check(test87(), 5);
 
   if (failures == 0) {
-    printf("All %d tests passed!\n", test_id);
+    printf("\033[1;36mAll %d tests passed!\033[0m\n", test_id);
   } else {
     printf("\033[1;31m %d of %d tests failed\033[0m\n", failures, test_id);
   }
