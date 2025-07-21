@@ -128,8 +128,8 @@ There are no code-generation optimizations beyond what's needed to make it work.
   make selfhost
   ```
 
-  Here, a bootstrap compiler `lacc` is used to recompile the compiler source itself, 
-  producing a self-hosted compiler named `laccs`.  
+  Here, a bootstrap compiler `bootstrap` is used to recompile the compiler source itself, 
+  producing a self-hosted compiler named `lacc`.  
   This ensures that your compiler can correctly compile its own code.  
 
 ### 3. Run specific files with the self-hosted compiler
@@ -139,7 +139,7 @@ There are no code-generation optimizations beyond what's needed to make it work.
   make run FILE=./examples/rotate.c
   ```
 
-  This command compiles and runs the specified C file using the self-hosted compiler `laccs`.
+  This command compiles and runs the specified C file using the self-hosted compiler `lacc`.
 
 ### 4. Run unit tests with the self-hosted compiler
 

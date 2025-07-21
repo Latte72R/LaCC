@@ -7,8 +7,8 @@ BUILD_DIR:=./build
 SRCS:=$(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/**/*.c)
 OBJ_S := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.s,$(SRCS))
 CC:=cc
-BOOSTSTRAP:=$(BUILD_DIR)/lacc
-SELFHOST:=$(BUILD_DIR)/laccs
+BOOSTSTRAP:=$(BUILD_DIR)/bootstrap
+SELFHOST:=$(BUILD_DIR)/lacc
 
 .DEFAULT_GOAL := help
 help:
@@ -16,7 +16,7 @@ help:
 
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
-	@echo "Build directory created at $(BUILD_DIR)"
+	@echo "Build directory created at '$@'."
 
 .bootstrap: $(BOOSTSTRAP)
 
@@ -42,7 +42,7 @@ run: .run-selfhost ## Run a file with the self-hosted compiler
 
 $(BOOSTSTRAP): $(SRCS) | $(BUILD_DIR)
 	@$(CC) $(CC_FLAGS) -o $(BOOSTSTRAP) $(SRCS) extension.c
-	@echo "Bootstrap compiler created at $(BOOSTSTRAP)"
+	@echo "Bootstrap compiler created at '$@'."
 
 $(BUILD_DIR)/%.s: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
@@ -50,7 +50,7 @@ $(BUILD_DIR)/%.s: $(SRC_DIR)/%.c | $(BUILD_DIR)
 
 $(SELFHOST): $(BOOSTSTRAP) $(OBJ_S) | $(BUILD_DIR)
 	@$(CC) -o $@ $(OBJ_S) extension.c $(CC_FLAGS)
-	@echo "Self-hosted compiler created at $@"
+	@echo "Self-hosted compiler created at '$@'."
 
 define unittest
 	@$(call runfile, $(1), $(TEST_DIR)/unittest.c)
