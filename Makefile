@@ -33,7 +33,7 @@ runfile: $(SELFHOST) ## Run a file with the self-hosted compiler
 	$(call runfile, $(SELFHOST), $(FILE))
 
 $(BOOSTSTRAP): $(SRCS) | $(BUILD_DIR)
-	@$(CC) $(CC_FLAGS) -o $(BOOSTSTRAP) $(SRCS) extention.c
+	@$(CC) $(CC_FLAGS) -o $(BOOSTSTRAP) $(SRCS) extension.c
 	@echo "Bootstrap compiler created at $(BOOSTSTRAP)."
 
 $(SELFHOST): $(BOOSTSTRAP) | $(BUILD_DIR)
@@ -42,38 +42,38 @@ $(SELFHOST): $(BOOSTSTRAP) | $(BUILD_DIR)
 		out=$(BUILD_DIR)/$$base.s; \
 		$(BOOSTSTRAP) $(LACC_FLAGS) $$src > $$out; \
 	done
-	@$(CC) -o $(SELFHOST) $(BUILD_DIR)/*.s extention.c $(CC_FLAGS)
+	@$(CC) -o $(SELFHOST) $(BUILD_DIR)/*.s extension.c $(CC_FLAGS)
 	@echo "Self-hosted compiler created at $(SELFHOST)."
 
-define unittests
-	$(call runfile, $(1), $(TEST_DIR)/unitests.c)
+define unittest
+	$(call runfile, $(1), $(TEST_DIR)/unittest.c)
 endef
 
-define errortests
-	@$(TEST_DIR)/errortests.sh $(BUILD_DIR) $(1)
+define errortest
+	@$(TEST_DIR)/errortest.sh $(BUILD_DIR) $(1)
 endef
 
-unittests: .unittests-selfhost ## Run unit tests with the self-hosted compiler
+unittest: .unittest-selfhost ## Run unit tests with the self-hosted compiler
 
-errortests: .errortests-selfhost ## Run error tests with the self-hosted compiler
+errortest: .errortest-selfhost ## Run error tests with the self-hosted compiler
 
-.unittests-cc:
-	$(call unittests, $(CC))
+.unittest-cc:
+	$(call unittest, $(CC))
 
-.unittests-bootstrap: $(BOOSTSTRAP)
-	$(call unittests, $(BOOSTSTRAP))
+.unittest-bootstrap: $(BOOSTSTRAP)
+	$(call unittest, $(BOOSTSTRAP))
 
-.unittests-selfhost: $(SELFHOST)
-	$(call unittests, $(SELFHOST))
+.unittest-selfhost: $(SELFHOST)
+	$(call unittest, $(SELFHOST))
 
-.errortests-cc:
-	$(call errortests, $(CC))
+.errortest-cc:
+	$(call errortest, $(CC))
 
-.errortests-bootstrap: $(BOOSTSTRAP)
-	$(call errortests, $(BOOSTSTRAP))
+.errortest-bootstrap: $(BOOSTSTRAP)
+	$(call errortest, $(BOOSTSTRAP))
 
-.errortests-selfhost: $(SELFHOST)
-	$(call errortests, $(SELFHOST))
+.errortest-selfhost: $(SELFHOST)
+	$(call errortest, $(SELFHOST))
 
 clean: ## Clean up generated files
 	@rm -rf $(BUILD_DIR)
