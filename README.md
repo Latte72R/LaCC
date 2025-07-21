@@ -128,14 +128,15 @@ There are no code-generation optimizations beyond what's needed to make it work.
   make selfhost
   ```
 
-  Here, `lacc` is used to recompile the compiler source itself, producing a second-stage compiler named `laccs`.  
+  Here, a bootstrap compiler `lacc` is used to recompile the compiler source itself, 
+  producing a self-hosted compiler named `laccs`.  
   This ensures that your compiler can correctly compile its own code.  
 
 ### 3. Run specific files with the self-hosted compiler
 
   ```bash
-  make runfile FILE=./examples/lifegame.c
-  make runfile FILE=./examples/rotate.c
+  make run FILE=./examples/lifegame.c
+  make run FILE=./examples/rotate.c
   ```
 
   This command compiles and runs the specified C file using the self-hosted compiler `laccs`.

@@ -18,7 +18,7 @@ $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 	@echo "Build directory created at $(BUILD_DIR)."
 
-bootstrap: $(BOOSTSTRAP) ## Build the bootstrap compiler
+.bootstrap: $(BOOSTSTRAP)
 
 selfhost: $(SELFHOST) ## Build the self-hosted compiler
 
@@ -29,8 +29,16 @@ define runfile
 	@${BUILD_DIR}/tmp
 endef
 
-runfile: $(SELFHOST) ## Run a file with the self-hosted compiler
-	$(call runfile, $(SELFHOST), $(FILE))
+run: .run-selfhost ## Run a file with the self-hosted compiler
+
+.run-cc: $(SELFHOST)
+	@$(call runfile, $(CC), $(FILE))
+	
+.run-bootstrap: $(BOOSTSTRAP)
+	@$(call runfile, $(BOOSTSTRAP), $(FILE))
+
+.run-selfhost: $(SELFHOST)
+	@$(call runfile, $(SELFHOST), $(FILE))
 
 $(BOOSTSTRAP): $(SRCS) | $(BUILD_DIR)
 	@$(CC) $(CC_FLAGS) -o $(BOOSTSTRAP) $(SRCS) extension.c
@@ -46,7 +54,7 @@ $(SELFHOST): $(BOOSTSTRAP) | $(BUILD_DIR)
 	@echo "Self-hosted compiler created at $(SELFHOST)."
 
 define unittest
-	$(call runfile, $(1), $(TEST_DIR)/unittest.c)
+	@$(call runfile, $(1), $(TEST_DIR)/unittest.c)
 endef
 
 define errortest
@@ -58,22 +66,22 @@ unittest: .unittest-selfhost ## Run unit tests with the self-hosted compiler
 errortest: .errortest-selfhost ## Run error tests with the self-hosted compiler
 
 .unittest-cc:
-	$(call unittest, $(CC))
+	@$(call unittest, $(CC))
 
 .unittest-bootstrap: $(BOOSTSTRAP)
-	$(call unittest, $(BOOSTSTRAP))
+	@$(call unittest, $(BOOSTSTRAP))
 
 .unittest-selfhost: $(SELFHOST)
-	$(call unittest, $(SELFHOST))
+	@$(call unittest, $(SELFHOST))
 
 .errortest-cc:
-	$(call errortest, $(CC))
+	@$(call errortest, $(CC))
 
 .errortest-bootstrap: $(BOOSTSTRAP)
-	$(call errortest, $(BOOSTSTRAP))
+	@$(call errortest, $(BOOSTSTRAP))
 
 .errortest-selfhost: $(SELFHOST)
-	$(call errortest, $(SELFHOST))
+	@$(call errortest, $(SELFHOST))
 
 clean: ## Clean up generated files
 	@rm -rf $(BUILD_DIR)

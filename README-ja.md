@@ -146,14 +146,15 @@ LaCC は, C コンパイラの仕様やメモリ構造の理解を目的とし�
   make selfhost
   ```
 
-  この操作では、`lacc`（ブーストラップコンパイラ）を使ってソースコードを再コンパイルし、`laccs`（セルフホストコンパイラ）を生成します。  
+  この操作では、`lacc`（ブーストラップコンパイラ）を使ってソースコードを再コンパイルし、
+  `laccs`（セルフホストコンパイラ）を生成します。  
   これにより、コンパイラのソースコード自身を正しくコンパイルできることを確認できます。
 
 ### 3. セルフホストコンパイラでプログラムを実行する
 
   ```bash
-  make runfile FILE=./examples/lifegame.c
-  make runfile FILE=./examples/rotate.c
+  make run FILE=./examples/lifegame.c
+  make run FILE=./examples/rotate.c
   ```
 
   これらのコマンドを実行することで、`laccs` を使って指定した C 言語のプログラムをコンパイルし実行できます。
