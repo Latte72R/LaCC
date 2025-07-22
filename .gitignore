@@ -1,12 +1,12 @@
 *~
 *.o
 *.s
-lacc
-laccs
 tmp*
 *.out
 *.exe
 *.a
 *.so
 *.Identifier
+*.ini
 .vscode/*
+build/*
