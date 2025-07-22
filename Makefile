@@ -18,9 +18,11 @@ $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 	@echo "Build directory created at '$@'."
 
+build: .selfhost ## Build the self-hosted compiler
+
 .bootstrap: $(BOOSTSTRAP)
 
-selfhost: $(SELFHOST) ## Build the self-hosted compiler
+.selfhost: $(SELFHOST)
 
 define runfile
 	@mkdir -p ${BUILD_DIR}
@@ -86,4 +88,7 @@ clean: ## Clean up generated files
 	@rm -rf $(BUILD_DIR)
 	@echo "Cleaned up generated files."
 
-.PHONY: bootstrap-test selfhost-test lifegame rotate clean cc-test help runfile
+.PHONY: help build run unittest errortest clean \
+        .bootstrap .selfhost .run-cc .run-bootstrap .run-selfhost \
+        .unittest-cc .unittest-bootstrap .unittest-selfhost \
+        .errortest-cc .errortest-bootstrap .errortest-selfhost

@@ -125,7 +125,7 @@ There are no code-generation optimizations beyond what's needed to make it work.
 ### 2. Build the self-hosted compiler
 
   ```bash
-  make selfhost
+  make build
   ```
 
   Here, a bootstrap compiler `bootstrap` is used to recompile the compiler source itself, 
