@@ -167,7 +167,7 @@ There are no code-generation optimizations beyond what's needed to make it work.
   make clean
   ```
 
-  Removes the `lacc` and `laccs` binaries, assembly files, and temporary files from the build directory.
+  Removes the generated binaries and assembly files created during the build process.
 
 ### 7. Show help
 
