@@ -31,13 +31,14 @@ endef
 
 run: .run-selfhost ## Run a file with the self-hosted compiler
 
-.run-cc: $(CC)
-	@$(call runfile, $(CC), $(FILE))
+.run-cc: | $(BUILD_DIR)
+	@$(CC) $(CC_FLAGS) -o $(BUILD_DIR)/tmp $(FILE)
+	@${BUILD_DIR}/tmp
 	
-.run-bootstrap: $(BOOSTSTRAP)
+.run-bootstrap: $(BOOSTSTRAP) | $(BUILD_DIR)
 	@$(call runfile, $(BOOSTSTRAP), $(FILE))
 
-.run-selfhost: $(SELFHOST)
+.run-selfhost: $(SELFHOST) | $(BUILD_DIR)
 	@$(call runfile, $(SELFHOST), $(FILE))
 
 $(BOOSTSTRAP): $(SRCS) | $(BUILD_DIR)
@@ -64,29 +65,29 @@ unittest: .unittest-selfhost ## Run unit tests with the self-hosted compiler
 
 errortest: .errortest-selfhost ## Run error tests with the self-hosted compiler
 
-.unittest-cc:
+.unittest-cc: | $(BUILD_DIR)
 	@$(call unittest, $(CC))
 
-.unittest-bootstrap: $(BOOSTSTRAP)
+.unittest-bootstrap: $(BOOSTSTRAP) | $(BUILD_DIR)
 	@$(call unittest, $(BOOSTSTRAP))
 
-.unittest-selfhost: $(SELFHOST)
+.unittest-selfhost: $(SELFHOST) | $(BUILD_DIR)
 	@$(call unittest, $(SELFHOST))
 
-.errortest-cc:
+.errortest-cc: | $(BUILD_DIR)
 	@$(call errortest, $(CC))
 
-.errortest-bootstrap: $(BOOSTSTRAP)
+.errortest-bootstrap: $(BOOSTSTRAP) | $(BUILD_DIR)
 	@$(call errortest, $(BOOSTSTRAP))
 
-.errortest-selfhost: $(SELFHOST)
+.errortest-selfhost: $(SELFHOST) | $(BUILD_DIR)
 	@$(call errortest, $(SELFHOST))
 
 clean: ## Clean up generated files
 	@rm -rf $(BUILD_DIR)
 	@echo "Cleaned up generated files."
 
-.PHONY: help build run unittest errortest clean \
+.PHONY: help run unittest errortest clean \
         bootstrap selfhost .run-cc .run-bootstrap .run-selfhost \
         .unittest-cc .unittest-bootstrap .unittest-selfhost \
         .errortest-cc .errortest-bootstrap .errortest-selfhost
