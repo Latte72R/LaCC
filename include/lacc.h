@@ -17,6 +17,7 @@ struct IncludePath {
 typedef enum {
   TK_EOF,      // 入力の終わりを表すトークン
   TK_RESERVED, // 記号
+  TK_ELLIPSIS, // ...
   TK_IDENT,    // 識別子
   TK_TYPE,     // 型
   TK_NUM,      // 整数トークン
@@ -268,9 +269,8 @@ LVar *new_lvar(Token *tok, Type *type, int is_static, int is_extern);
 Node *function_definition(Token *tok, Type *type, int is_static);
 Node *local_variable_declaration(Token *tok, Type *type, int is_static);
 Node *global_variable_declaration(Token *tok, Type *type, int is_static);
-Node *vardec_and_funcdef_stmt(int is_static);
-Node *extern_declaration(Token *tok, Type *type);
-Node *extern_stmt();
+Node *extern_variable_declaration(Token *tok, Type *type);
+Node *vardec_and_funcdef_stmt(int is_static, int is_extern);
 Node *struct_stmt();
 Node *typedef_stmt();
 Node *handle_array_initialization(Node *node, Type *type, Type *org_type);
@@ -321,17 +321,32 @@ Node *primary();
 // Code generation
 //
 
+void generate_assembly();
 void gen(Node *node);
 
-// extention.c
-void error();
-void error_at();
-void warning_at();
+// globals.c
+void init_global_variables();
+
+// file.c
+typedef enum { SEEK_SET, SEEK_CUR, SEEK_END } SeekWhence;
 char *read_file();
-void init();
+char *find_file_includes(char *name);
+
+// extention.c
+extern void write_file(char *fmt, ...);
+extern void error(char *fmt, ...);
+extern void error_at(char *loc, char *fmt, ...);
+extern void warning_at(char *loc, char *fmt, ...);
 
 // stdio.h
-void printf();
+extern int printf(char *fmt, ...);
+typedef struct _IO_FILE FILE;
+extern FILE *fopen(const char *filename, const char *mode);
+int fprintf();
+int fclose();
+int fseek();
+int ftell();
+int fread();
 
 // ctype.h
 int isspace();

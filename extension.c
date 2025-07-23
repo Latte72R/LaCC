@@ -1,11 +1,21 @@
-
+// extension.c
+// 可変長引数を扱う関数群を定義
 
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 extern char *user_input;
-extern char *filename;
+extern char *input_file;
+extern FILE *fp;
+
+// Write formatted output to the output file.
+void write_file(char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  vfprintf(fp, fmt, args);
+  va_end(args);
+}
 
 // Reports an error and exit.
 void error(char *fmt, ...) {
@@ -42,7 +52,7 @@ void error_at(char *loc, char *fmt, ...) {
       line_num++;
 
   // 見つかった行を、ファイル名と行番号と一緒に表示
-  int indent = fprintf(stderr, "\033[1m\033[32m %s:%d\033[0m: ", filename, line_num) - 13;
+  int indent = fprintf(stderr, "\033[1m\033[32m %s:%d\033[0m: ", input_file, line_num) - 13;
   fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
   // エラー箇所を"^"で指し示して、エラーメッセージを表示
@@ -79,7 +89,7 @@ void warning_at(char *loc, char *fmt, ...) {
       line_num++;
 
   // 見つかった行を、ファイル名と行番号と一緒に表示
-  int indent = fprintf(stderr, "\033[1m\033[32m %s:%d\033[0m: ", filename, line_num) - 13;
+  int indent = fprintf(stderr, "\033[1m\033[32m %s:%d\033[0m: ", input_file, line_num) - 13;
   fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
   // エラー箇所を"^"で指し示して、エラーメッセージを表示
@@ -88,30 +98,4 @@ void warning_at(char *loc, char *fmt, ...) {
   sprintf(fmt2, "\033[1m\033[33m^\033[0m %s\n", fmt);
   fprintf(stderr, "%*s", pos, ""); // pos個の空白を出力
   vfprintf(stderr, fmt2, ap);
-}
-
-// 指定されたファイルの内容を返す
-char *read_file(char *path) {
-  // ファイルを開く
-  FILE *fp = fopen(path, "r");
-  if (!fp)
-    return NULL;
-
-  // ファイルの長さを調べる
-  if (fseek(fp, 0, SEEK_END) == -1)
-    error("%s: fseek", path);
-  size_t size = ftell(fp);
-  if (fseek(fp, 0, SEEK_SET) == -1)
-    error("%s: fseek", path);
-
-  // ファイル内容を読み込む
-  char *buf = calloc(1, size + 2);
-  fread(buf, size, 1, fp);
-
-  // ファイルが必ず"\n\0"で終わっているようにする
-  if (size == 0 || buf[size - 1] != '\n')
-    buf[size++] = '\n';
-  buf[size] = '\0';
-  fclose(fp);
-  return buf;
 }

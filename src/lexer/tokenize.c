@@ -4,32 +4,11 @@
 extern char *user_input;
 extern Token *token;
 extern String *filenames;
-extern char *filename;
-extern IncludePath *include_paths;
+extern char *input_file;
 
 extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
-
-char *find_file_includes(const char *name) {
-  char *src = read_file(name);
-  if (src)
-    return src;
-
-  for (IncludePath *ip = include_paths; ip->next; ip = ip->next) {
-    int plen = strlen(ip->path);
-    int nlen = strlen(name);
-    char *full = malloc(plen + 1 + nlen + 1);
-    memcpy(full, ip->path, plen);
-    full[plen] = '/';
-    memcpy(full + plen + 1, name, nlen + 1);
-    src = read_file(full);
-    free(full);
-    if (src)
-      return src;
-  }
-  return NULL;
-}
 
 // Create a new token and add it as the next token of `cur`.
 void new_token(TokenKind kind, char *str, int len) {
@@ -74,6 +53,13 @@ void tokenize() {
       if (!q)
         error_at(p, "unclosed block comment [in tokenize]");
       p = q + 2;
+      continue;
+    }
+
+    // Multi-letter punctuator
+    if (startswith(p, "...")) {
+      new_token(TK_ELLIPSIS, p, 3);
+      p += 3;
       continue;
     }
 
@@ -246,10 +232,10 @@ void tokenize() {
         free(name);
         continue;
       }
-      filename = name;
+      input_file = name;
       filenames = malloc(sizeof(String));
-      filenames->text = filename;
-      filenames->len = strlen(filename);
+      filenames->text = input_file;
+      filenames->len = strlen(input_file);
       filenames->next = NULL;
       char *user_input_cpy = user_input;
       char *new_input = find_file_includes(name);

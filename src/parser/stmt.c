@@ -201,19 +201,19 @@ Node *stmt() {
   Node *node;
   if (consume("{")) {
     node = block_stmt();
-  } else if (token->kind == TK_EXTERN) {
-    node = extern_stmt();
-    expect(";", "after line", "extern declaration");
   } else if (token->kind == TK_GOTO) {
     node = goto_stmt();
     expect(";", "after line", "goto statement");
   } else if (token->kind == TK_LABEL) {
     node = label_stmt();
+  } else if (token->kind == TK_EXTERN) {
+    token = token->next;
+    node = vardec_and_funcdef_stmt(FALSE, TRUE);
   } else if (token->kind == TK_STATIC) {
     token = token->next;
-    node = vardec_and_funcdef_stmt(TRUE);
+    node = vardec_and_funcdef_stmt(TRUE, FALSE);
   } else if (is_type(token)) {
-    node = vardec_and_funcdef_stmt(FALSE);
+    node = vardec_and_funcdef_stmt(FALSE, FALSE);
   } else if (token->kind == TK_STRUCT) {
     node = struct_stmt();
   } else if (token->kind == TK_TYPEDEF) {

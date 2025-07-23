@@ -84,7 +84,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C > $TMP_S
+$CC $TMP_C -S -o $TMP_S
 cc $TMP_S -o $TMP_OUT
 $TMP_OUT
 printf "\n"

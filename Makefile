@@ -29,7 +29,7 @@ selfhost: $(SELFHOST) ## Build the self-hosted compiler
 
 define runfile
 	@mkdir -p ${BUILD_DIR}
-	@$(1) $(LACC_FLAGS) $(2) > $(TMP_S)
+	@$(1) $(LACC_FLAGS) $(2) -S -o $(TMP_S)
 	@cc -o ${BUILD_DIR}/tmp $(TMP_S)
 	@${BUILD_DIR}/tmp
 endef
@@ -37,8 +37,7 @@ endef
 run: .run-selfhost ## Run a file with the self-hosted compiler
 
 .run-cc: | $(BUILD_DIR)
-	@$(CC) $(CC_FLAGS) -o $(TMP_OUT) $(FILE)
-	@$(TMP_OUT)
+	@$(call runfile, $(CC), $(FILE))
 
 .run-bootstrap: $(BOOSTSTRAP) | $(BUILD_DIR)
 	@$(call runfile, $(BOOSTSTRAP), $(FILE))
@@ -52,7 +51,7 @@ $(BOOSTSTRAP): $(SRCS) | $(BUILD_DIR)
 
 $(BUILD_DIR)/%.s: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
-	@$(BOOSTSTRAP) $(LACC_FLAGS) $< > $@
+	@$(BOOSTSTRAP) $(LACC_FLAGS) $< -o $@
 
 $(SELFHOST): $(BOOSTSTRAP) $(OBJ_S) | $(BUILD_DIR)
 	@$(CC) -o $@ $(OBJ_S) extension.c $(CC_FLAGS)

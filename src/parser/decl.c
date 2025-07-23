@@ -99,6 +99,10 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   node->fn = fn;
   int n = 0;
   for (int i = 0; i < 6; i++) {
+    if (token->kind == TK_ELLIPSIS) {
+      token = token->next;
+      break;
+    }
     type = consume_type();
     if (!type) {
       if (i != 0) {
@@ -198,7 +202,23 @@ Node *global_variable_declaration(Token *tok, Type *type, int is_static) {
   return node;
 }
 
-Node *vardec_and_funcdef_stmt(int is_static) {
+Node *extern_variable_declaration(Token *tok, Type *type) {
+  LVar *lvar = find_gvar(tok);
+  Node *node = new_node(ND_EXTERN);
+  if (lvar) {
+    return node;
+  }
+  type = parse_array_dimensions(type);
+  lvar = new_lvar(tok, type, FALSE, TRUE);
+  lvar->next = globals;
+  globals = lvar;
+  node->var = lvar;
+  node->type = type;
+  node->endline = TRUE;
+  return node;
+}
+
+Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   // 変数宣言または関数定義
   Type *ch_type = check_base_type();
   Type *type = consume_type();
@@ -218,7 +238,9 @@ Node *vardec_and_funcdef_stmt(int is_static) {
   int i = 0;
 
   // 最初の変数
-  if (current_fn->next) {
+  if (is_extern) {
+    node->body[i++] = extern_variable_declaration(tok, type);
+  } else if (current_fn->next) {
     node->body[i++] = local_variable_declaration(tok, type, is_static);
   } else {
     node->body[i++] = global_variable_declaration(tok, type, is_static);
@@ -229,7 +251,9 @@ Node *vardec_and_funcdef_stmt(int is_static) {
     type = parse_pointer_qualifiers(ch_type);
     tok = expect_ident("variable declaration");
     node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
-    if (current_fn->next) {
+    if (is_extern) {
+      node->body[i++] = extern_variable_declaration(tok, type);
+    } else if (current_fn->next) {
       node->body[i++] = local_variable_declaration(tok, type, is_static);
     } else {
       node->body[i++] = global_variable_declaration(tok, type, is_static);
@@ -239,22 +263,6 @@ Node *vardec_and_funcdef_stmt(int is_static) {
   expect(";", "after line", "variable declaration");
   node->endline = TRUE;
 
-  return node;
-}
-
-Node *extern_declaration(Token *tok, Type *type) {
-  LVar *lvar = find_gvar(tok);
-  Node *node = new_node(ND_EXTERN);
-  if (lvar) {
-    return node;
-  }
-  type = parse_array_dimensions(type);
-  lvar = new_lvar(tok, type, FALSE, TRUE);
-  lvar->next = globals;
-  globals = lvar;
-  node->var = lvar;
-  node->type = type;
-  node->endline = TRUE;
   return node;
 }
 
@@ -295,26 +303,6 @@ Node *struct_stmt() {
   struct_->size = offset;
   expect(";", "after struct definition", "struct");
   node->type = new_type_struct(struct_);
-  node->endline = TRUE;
-  return node;
-}
-
-Node *extern_stmt() {
-  token = token->next;
-  Type *ch_type = check_base_type();
-  Type *type = consume_type();
-  Token *tok = expect_ident("extern declaration");
-  Node *node = new_node(ND_BLOCK);
-  node->body = malloc(sizeof(Node *));
-  int i = 0;
-  node->body[i++] = extern_declaration(tok, type);
-  while (consume(",")) {
-    type = parse_pointer_qualifiers(ch_type);
-    tok = expect_ident("variable declaration");
-    node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
-    node->body[i++] = extern_declaration(tok, type);
-  }
-  node->body[i] = new_node(ND_NONE);
   node->endline = TRUE;
   return node;
 }
