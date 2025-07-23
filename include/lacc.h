@@ -340,35 +340,43 @@ typedef enum { SEEK_SET, SEEK_CUR, SEEK_END } SeekWhence;
 char *read_file();
 char *find_file_includes(char *name);
 
-// extention.c
+//
+// Extensions
+//
+
+// extension.c
 extern void write_file(char *fmt, ...);
 extern void error(char *fmt, ...);
 extern void error_at(char *loc, char *fmt, ...);
 extern void warning_at(char *loc, char *fmt, ...);
 
+//
+// Standard library functions
+//
+
 // stdio.h
 extern int printf(char *fmt, ...);
 typedef struct _IO_FILE FILE;
 extern FILE *fopen(const char *filename, const char *mode);
-int fprintf();
-int fclose();
-int fseek();
-int ftell();
-int fread();
+extern int fprintf();
+extern int fclose();
+extern int fseek();
+extern int ftell();
+extern int fread();
 
 // ctype.h
-int isspace();
-int isdigit();
+extern int isspace();
+extern int isdigit();
 
 // string.h
-int memcmp();
-int memcpy();
-int strlen();
-int strtol();
-char *strstr();
-char *strchr();
+extern int memcmp();
+extern int memcpy();
+extern int strlen();
+extern int strtol();
+extern char *strstr();
+extern char *strchr();
 
 // stdlib.h
-void *malloc();
-void *realloc();
-void free();
+extern void *malloc();
+extern void *realloc();
+extern void free();
