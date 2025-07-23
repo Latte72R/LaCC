@@ -321,6 +321,14 @@ Node *primary();
 // Code generation
 //
 
+char *regs1(int i);
+char *regs4(int i);
+char *regs8(int i);
+void gen_rodata_section();
+void gen_data_section();
+void gen_text_section();
+void gen_lval(Node *node);
+void asm_memcpy(Node *lhs, Node *rhs);
 void generate_assembly();
 void gen(Node *node);
 
