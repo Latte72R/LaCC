@@ -1,4 +1,5 @@
-CC_FLAGS:=-std=c99 -I include -Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option -g
+# CC_FLAGS:=-std=c99 -I include -Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option -g
+CC_FLAGS:=-std=c99 -I include -w
 LACC_FLAGS:=-I include
 SRC_DIR:=./src
 TEST_DIR:=./tests
@@ -6,9 +7,13 @@ EXAMPLE_DIR:=./examples
 BUILD_DIR:=./build
 SRCS:=$(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/**/*.c)
 OBJ_S := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.s,$(SRCS))
-CC:=cc
+CC:=clang
 BOOSTSTRAP:=$(BUILD_DIR)/bootstrap
 SELFHOST:=$(BUILD_DIR)/lacc
+UNIT_TEST:=$(TEST_DIR)/unittest.c
+TMP_C:=$(BUILD_DIR)/tmp.c
+TMP_S:=$(BUILD_DIR)/tmp.s
+TMP_OUT:=$(BUILD_DIR)/tmp
 
 .DEFAULT_GOAL := help
 help:
@@ -24,17 +29,17 @@ selfhost: $(SELFHOST) ## Build the self-hosted compiler
 
 define runfile
 	@mkdir -p ${BUILD_DIR}
-	@$(1) $(LACC_FLAGS) $(2) > ${BUILD_DIR}/tmp.s
-	@cc -o ${BUILD_DIR}/tmp ${BUILD_DIR}/tmp.s
+	@$(1) $(LACC_FLAGS) $(2) > $(TMP_S)
+	@cc -o ${BUILD_DIR}/tmp $(TMP_S)
 	@${BUILD_DIR}/tmp
 endef
 
 run: .run-selfhost ## Run a file with the self-hosted compiler
 
 .run-cc: | $(BUILD_DIR)
-	@$(CC) $(CC_FLAGS) -o $(BUILD_DIR)/tmp $(FILE)
-	@${BUILD_DIR}/tmp
-	
+	@$(CC) $(CC_FLAGS) -o $(TMP_OUT) $(FILE)
+	@$(TMP_OUT)
+
 .run-bootstrap: $(BOOSTSTRAP) | $(BUILD_DIR)
 	@$(call runfile, $(BOOSTSTRAP), $(FILE))
 
@@ -54,11 +59,11 @@ $(SELFHOST): $(BOOSTSTRAP) $(OBJ_S) | $(BUILD_DIR)
 	@echo "Self-hosted compiler created at '$@'."
 
 define unittest
-	@$(call runfile, $(1), $(TEST_DIR)/unittest.c)
+	@$(call runfile, $(1), $(UNIT_TEST))
 endef
 
 define errortest
-	@$(TEST_DIR)/errortest.sh $(BUILD_DIR) $(1)
+	@$(TEST_DIR)/errortest.sh $(BUILD_DIR) $(1) $(TMP_C) $(TMP_S) $(TMP_OUT)
 endef
 
 unittest: .unittest-selfhost ## Run unit tests with the self-hosted compiler
@@ -66,7 +71,8 @@ unittest: .unittest-selfhost ## Run unit tests with the self-hosted compiler
 errortest: .errortest-selfhost ## Run error tests with the self-hosted compiler
 
 .unittest-cc: | $(BUILD_DIR)
-	@$(call unittest, $(CC))
+	@$(CC) $(CC_FLAGS) -o $(TMP_OUT) $(UNIT_TEST)
+	@$(TMP_OUT)
 
 .unittest-bootstrap: $(BOOSTSTRAP) | $(BUILD_DIR)
 	@$(call unittest, $(BOOSTSTRAP))

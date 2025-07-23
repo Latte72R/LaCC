@@ -369,10 +369,14 @@ int test53() {
   return a;
 }
 
+/*
+int test54_sub(int n) { return n * 4; }
 int test54() {
+  // 未定義動作 (Clang と LaCC では 40, GCCでは 16)
   int n = 5;
-  return n * foo_test11(n = n - 3);
+  return n * test54_sub(n = n - 3);
 }
+*/
 
 int test55() {
   int nn = 4;
@@ -583,6 +587,19 @@ int test87() {
   return sizeof(int) + 1; /* sizeof演算子の優先順位 */
 }
 
+int test88() {
+  // 複雑な式の評価
+  int a = 1, b = 2, c = 3;
+  int result = a + b * c << 1 & 7;
+  return result; // 1 + 2 * 3 << 1 & 7 = 1 + 6 << 1 & 7 = 14 & 7 = 6
+}
+
+int test89() {
+  // ビット演算と比較演算の組み合わせ
+  int result = 5 & 3 == 1;
+  return result; // 5 & 3 == 1 は false (0) なので 0
+}
+
 int test_id = 0;
 void check(int result, int ans) {
   test_id++;
@@ -647,7 +664,7 @@ int main() {
   check(test51(), 45);
   check(test52(), 15);
   check(test53(), 10);
-  check(test54(), 40);
+  // check(test54(), 40);
   check(test55(), 60);
   check(test56(), 10);
   check(test57(), 15);
@@ -681,6 +698,8 @@ int main() {
   check(test85(), 42);
   check(test86(), 105);
   check(test87(), 5);
+  check(test88(), 6);
+  check(test89(), 0);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_id);
