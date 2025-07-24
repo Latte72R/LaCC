@@ -81,7 +81,7 @@ struct LVar {
   char *name;    // 変数の名前
   int len;       // 名前の長さ
   int offset;    // RBPからのオフセット
-  int ext;       // externかどうか
+  int is_extern; // externかどうか
   Type *type;    // 変数の型
   int is_static; // staticかどうか
   int block;     // ブロックのID
@@ -115,8 +115,8 @@ struct Type {
   TypeKind ty;
   Type *ptr_to;
   int array_size;
-  Struct *struct_;
-  int const_; // constかどうか
+  Struct *is_struct;
+  int is_const; // constかどうか
 };
 
 // Label

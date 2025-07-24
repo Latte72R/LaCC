@@ -40,7 +40,7 @@ LVar *new_lvar(Token *tok, Type *type, int is_static, int is_extern) {
   LVar *lvar = malloc(sizeof(LVar));
   lvar->name = tok->str;
   lvar->len = tok->len;
-  lvar->ext = is_extern;
+  lvar->is_extern = is_extern;
   lvar->is_static = is_static;
   lvar->type = type;
   return lvar;

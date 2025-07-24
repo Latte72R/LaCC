@@ -22,7 +22,7 @@ void gen_string_literal() {
 // グローバル変数の生成
 void gen_global_variables() {
   for (LVar *var = globals; var->next; var = var->next) {
-    if (var->ext) {
+    if (var->is_extern) {
       continue;
     }
     if (var->is_static) {

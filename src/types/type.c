@@ -13,10 +13,10 @@ Type *parse_base_type_internal(int should_consume) {
 
   // const修飾子の処理
   if (token->kind == TK_CONST) {
-    type->const_ = TRUE;
+    type->is_const = TRUE;
     token = token->next;
   } else {
-    type->const_ = FALSE;
+    type->is_const = FALSE;
   }
 
   // 型の判定
@@ -25,7 +25,7 @@ Type *parse_base_type_internal(int should_consume) {
     Enum *enum_ = find_enum(token);
     if (struct_) {
       type->ty = TY_STRUCT;
-      type->struct_ = struct_;
+      type->is_struct = struct_;
     } else if (enum_) {
       type->ty = TY_INT;
     } else {
@@ -41,7 +41,7 @@ Type *parse_base_type_internal(int should_consume) {
 
   // 後続のconst
   if (token->kind == TK_CONST) {
-    type->const_ = TRUE;
+    type->is_const = TRUE;
     token = token->next;
   }
 
@@ -58,10 +58,10 @@ Type *parse_pointer_qualifiers(Type *base_type) {
   while (consume("*")) {
     Type *ptr = new_type_ptr(type);
     if (token->kind == TK_CONST) {
-      ptr->const_ = TRUE;
+      ptr->is_const = TRUE;
       token = token->next;
     } else {
-      ptr->const_ = FALSE;
+      ptr->is_const = FALSE;
     }
     type = ptr;
   }
@@ -103,7 +103,7 @@ int get_sizeof(Type *type) {
   } else if (type->ty == TY_ARR || type->ty == TY_ARGARR) {
     return get_sizeof(type->ptr_to) * type->array_size;
   } else if (type->ty == TY_STRUCT) {
-    return type->struct_->size;
+    return type->is_struct->size;
   } else {
     error_at(token->str, "invalid type [in get_sizeof]");
     return 0;
@@ -135,7 +135,7 @@ Type *new_type_arr(Type *ptr_to, int array_size) {
 Type *new_type_struct(Struct *struct_) {
   Type *type = malloc(sizeof(Type));
   type->ty = TY_STRUCT;
-  type->struct_ = struct_;
+  type->is_struct = struct_;
   return type;
 }
 

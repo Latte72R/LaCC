@@ -15,7 +15,7 @@ extern void *NULL;
 Node *expr() { return assign(); }
 
 Node *assign_sub(Node *lhs, Node *rhs, char *ptr) {
-  if (lhs->type->const_) {
+  if (lhs->type->is_const) {
     error_at(ptr, "constant variable cannot be assigned [in assign_sub]");
   }
   Node *node = new_binary(ND_ASSIGN, lhs, rhs);
@@ -348,7 +348,7 @@ Node *access_member() {
   Node *ptr;
   Node *offset_node;
   Token *tok;
-  Struct *struct_;
+  Struct *is_struct;
   LVar *var;
   char *consumed_ptr_prev;
   Token *prev_tok = token;
@@ -367,13 +367,13 @@ Node *access_member() {
         error_at(prev_tok->str, "%.*s is not a struct [in struct reference]", prev_tok->len, prev_tok->str);
       }
       tok = expect_ident("struct reference");
-      struct_ = node->type->struct_;
-      if (!struct_) {
+      is_struct = node->type->is_struct;
+      if (!is_struct) {
         error_at(prev_tok->str, "unknown struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
-      } else if (!struct_->size) {
+      } else if (!is_struct->size) {
         error_at(prev_tok->str, "not initialized struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
       }
-      var = find_struct_member(struct_, tok);
+      var = find_struct_member(is_struct, tok);
       offset_node = new_num(var->offset);
       ptr = new_node(ND_ADDR);
       ptr->lhs = node;
@@ -390,13 +390,13 @@ Node *access_member() {
                  prev_tok->str);
       }
       tok = expect_ident("struct reference");
-      struct_ = node->type->ptr_to->struct_;
-      if (!struct_) {
+      is_struct = node->type->ptr_to->is_struct;
+      if (!is_struct) {
         error_at(prev_tok->str, "unknown struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
-      } else if (!struct_->size) {
+      } else if (!is_struct->size) {
         error_at(prev_tok->str, "not initialized struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
       }
-      var = find_struct_member(struct_, tok);
+      var = find_struct_member(is_struct, tok);
       offset_node = new_num(var->offset);
       ptr = new_binary(ND_ADD, node, offset_node);
       ptr->type = new_type_ptr(var->type);
