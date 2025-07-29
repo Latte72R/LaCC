@@ -12,6 +12,7 @@ int variable_cnt = 0;
 int logical_cnt = 0;
 int block_cnt = 0;
 int block_id = 0;
+Node *current_switch;
 Function *functions;
 Function *current_fn;
 LVar *globals;
@@ -35,6 +36,9 @@ const int FALSE = 0;
 void *NULL = 0;
 
 void init_global_variables() {
+  // グローバル変数の初期化
+  current_switch = NULL;
+
   // functionの初期化
   functions = malloc(sizeof(Function));
   functions->next = NULL;

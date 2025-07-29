@@ -26,19 +26,21 @@ typedef enum {
   TK_CONST,    // const
   TK_STATIC,   // static
   TK_EXTERN,   // extern
-  TK_IF,
-  TK_ELSE,
-  TK_WHILE,
-  TK_FOR,
-  TK_BREAK,
-  TK_CONTINUE,
-  TK_DO,
-  TK_GOTO,    // GOTO
-  TK_LABEL,   // ラベル
-  TK_STRING,  // 文字列
-  TK_TYPEDEF, // typedef
-  TK_ENUM,    // enum
-  TK_STRUCT   // struct
+  TK_SWITCH,   // switch
+  TK_CASE,     // case
+  TK_DEFAULT,  // default
+  TK_IF,       // if
+  TK_ELSE,     // else
+  TK_WHILE,    // while
+  TK_FOR,      // for
+  TK_BREAK,    // break
+  TK_CONTINUE, // continue
+  TK_DO,       // do
+  TK_GOTO,     // GOTO
+  TK_STRING,   // 文字列
+  TK_TYPEDEF,  // typedef
+  TK_ENUM,     // enum
+  TK_STRUCT    // struct
 } TokenKind;
 
 // ローカル変数の型
@@ -181,6 +183,9 @@ typedef enum {
   ND_ARRAY,    // 配列
   ND_ADDR,     // &
   ND_DEREF,    // *
+  ND_SWITCH,   // switch
+  ND_CASE,     // case
+  ND_DEFAULT,  // default
   ND_IF,       // if
   ND_ELSE,     // else
   ND_WHILE,    // while
@@ -210,15 +215,18 @@ struct Node {
   int val;       // kindがND_NUMの場合はその数値
   int id;        // kindがND_IF, ND_WHILE, ND_FORの場合のみ使う
   int endline;
-  Node *cond;    // kindがND_IF, ND_WHILE, ND_FORの場合のみ使う
-  Node *then;    // kindがND_IFの場合のみ使う
-  Node *els;     // kindがND_IFの場合のみ使う
-  Node *init;    // kindがND_FORの場合のみ使う
-  Node *step;    // kindがND_FORの場合のみ使う
-  Node **body;   // kindがND_BLOCKの場合のみ使う
-  Node *args[6]; // kindがND_FUNCALLの場合のみ使う
-  Function *fn;  // kindがND_FUNCDEF, ND_FUNCALLの場合のみ使う
-  LVar *var;     // kindがND_LVAR, ND_GVARの場合のみ使う
+  int *cases;      // kindがND_SWITCHの場合のみ使う
+  int case_cnt;    // kindがND_SWITCHの場合のみ使う
+  int has_default; // kindがND_SWITCHの場合のみ使う
+  Node *cond;      // kindがND_IF, ND_WHILE, ND_FORの場合のみ使う
+  Node *then;      // kindがND_IFの場合のみ使う
+  Node *els;       // kindがND_IFの場合のみ使う
+  Node *init;      // kindがND_FORの場合のみ使う
+  Node *step;      // kindがND_FORの場合のみ使う
+  Node **body;     // kindがND_BLOCKの場合のみ使う
+  Node *args[6];   // kindがND_FUNCALLの場合のみ使う
+  Function *fn;    // kindがND_FUNCDEF, ND_FUNCALLの場合のみ使う
+  LVar *var;       // kindがND_LVAR, ND_GVARの場合のみ使う
   Type *type;
   Label *label;
 };
@@ -237,9 +245,10 @@ Function *find_fn(Token *tok);
 int peek(char *op);
 int consume(char *op);
 Token *consume_ident();
-Token *expect_ident(const char *context);
+Token *expect_ident(char *stmt);
 void expect(char *op, char *err, char *st);
-int expect_number();
+void error_expected_at(char *loc, char *op, char *err, char *stmt);
+int expect_number(char *stmt);
 int parse_sign();
 int expect_signed_number();
 
@@ -316,6 +325,7 @@ Node *unary();
 Node *increment_decrement();
 Node *access_member();
 Node *primary();
+int compile_time_number();
 
 //
 // Code generation
@@ -369,6 +379,8 @@ extern int isspace();
 extern int isdigit();
 
 // string.h
+extern int strcmp();
+extern int strncmp();
 extern int memcmp();
 extern int memcpy();
 extern int strlen();

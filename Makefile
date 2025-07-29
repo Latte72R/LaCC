@@ -1,5 +1,5 @@
 # CC_FLAGS:=-std=c99 -I include -Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option -g
-CC_FLAGS:=-std=c99 -I include -w
+CC_FLAGS:=-std=c99 -I include -w -g
 LACC_FLAGS:=-I include
 SRC_DIR:=./src
 TEST_DIR:=./tests

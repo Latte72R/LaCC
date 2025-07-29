@@ -31,25 +31,30 @@ Token *consume_ident() {
   return tok;
 }
 
-Token *expect_ident(const char *context) {
+// Ensure that the current token is `op`.
+void expect(char *op, char *err, char *stmt) {
+  if (strncmp(token->str, op, token->len))
+    error_at(token->str, "expected \"%s\":\n  %s  [in %s statement]", op, err, stmt);
+  token = token->next;
+}
+
+// Ensure that the current token is `op`.
+void error_expected_at(char *loc, char *op, char *err, char *stmt) {
+  error_at(loc, "expected \"%s\" but got \"%s\" [in %s statement]", op, err, stmt);
+}
+
+Token *expect_ident(char *stmt) {
   Token *tok = consume_ident();
   if (!tok) {
-    error_at(token->str, "expected an identifier but got \"%.*s\" [in %s]", token->len, token->str, context);
+    error_at(token->str, "expected an identifier [in %s statement]", stmt);
   }
   return tok;
 }
 
-// Ensure that the current token is `op`.
-void expect(char *op, char *err, char *st) {
-  if (token->kind != TK_RESERVED || strlen(op) != token->len || memcmp(token->str, op, token->len))
-    error_at(token->str, "expected \"%s\":\n  %s  [in %s statement]", op, err, st);
-  token = token->next;
-}
-
 // Ensure that the current token is TK_NUM.
-int expect_number() {
+int expect_number(char *stmt) {
   if (token->kind != TK_NUM)
-    error_at(token->str, "expected a number but got \"%.*s\" [in expect_number]", token->len, token->str);
+    error_at(token->str, "expected a number [in %s statement]", stmt);
   int val = token->val;
   token = token->next;
   return val;
@@ -66,5 +71,5 @@ int parse_sign() {
 // 数値の期待値取得（符号付き）
 int expect_signed_number() {
   int sign = parse_sign();
-  return expect_number() * sign;
+  return expect_number("expect signed number") * sign;
 }

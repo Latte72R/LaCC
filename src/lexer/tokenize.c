@@ -248,6 +248,24 @@ void tokenize() {
       continue;
     }
 
+    if (startswith(p, "switch") && !is_alnum(p[6])) {
+      new_token(TK_SWITCH, p, 6);
+      p += 6;
+      continue;
+    }
+
+    if (startswith(p, "case") && !is_alnum(p[4])) {
+      new_token(TK_CASE, p, 4);
+      p += 4;
+      continue;
+    }
+
+    if (startswith(p, "default") && !is_alnum(p[7])) {
+      new_token(TK_DEFAULT, p, 7);
+      p += 7;
+      continue;
+    }
+
     if (startswith(p, "do") && !is_alnum(p[2])) {
       new_token(TK_DO, p, 2);
       p += 2;
@@ -382,12 +400,7 @@ void tokenize() {
       while (isspace(*(p + j))) {
         j++;
       }
-      if (*(p + j) == ':') {
-        new_token(TK_LABEL, p, i);
-        j++;
-      } else {
-        new_token(TK_IDENT, p, i);
-      }
+      new_token(TK_IDENT, p, i);
       p += j;
       continue;
     }

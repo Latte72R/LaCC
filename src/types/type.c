@@ -143,7 +143,7 @@ Type *new_type_struct(Struct *struct_) {
 Type *parse_array_dimensions(Type *base_type) {
   Type *type = base_type;
   while (consume("[")) {
-    type = new_type_arr(type, expect_number());
+    type = new_type_arr(type, expect_number("array declaration"));
     expect("]", "after number", "array declaration");
   }
   return type;

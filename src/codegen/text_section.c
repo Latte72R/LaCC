@@ -332,10 +332,29 @@ void gen(Node *node) {
     return;
   } else if (node->kind == ND_GOTO) {
     Label *label = find_label(node->fn, node->label->name, node->label->len);
-    write_file("  jmp .L%d\n", label->id);
+    write_file("  jmp .Llabel%d\n", label->id);
     return;
   } else if (node->kind == ND_LABEL) {
-    write_file(".L%d:\n", node->label->id);
+    write_file(".Llabel%d:\n", node->label->id);
+    return;
+  } else if (node->kind == ND_SWITCH) {
+    gen(node->cond);
+    write_file("  pop rax\n");
+    for (int i = 0; i < node->case_cnt; i++) {
+      write_file("  cmp rax, %d\n", node->cases[i]);
+      write_file("  je .Lcase%d_%d\n", node->id, node->cases[i]);
+    }
+    if (node->has_default) {
+      write_file("  jmp .Ldefault%d\n", node->id);
+    }
+    gen(node->then);
+    write_file(".Lend%d:\n", node->id);
+    return;
+  } else if (node->kind == ND_CASE) {
+    write_file(".Lcase%d_%d:\n", node->id, node->val);
+    return;
+  } else if (node->kind == ND_DEFAULT) {
+    write_file(".Ldefault%d:\n", node->id);
     return;
   } else if (node->kind == ND_FUNCDEF) {
     if (node->fn->is_static) {

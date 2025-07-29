@@ -422,7 +422,7 @@ Node *primary() {
 
   // 数値
   if (token->kind == TK_NUM) {
-    return new_num(expect_number());
+    return new_num(expect_number("primary"));
   }
 
   // 文字列
@@ -500,4 +500,23 @@ Node *primary() {
     }
     return node;
   }
+}
+
+int compile_time_number() {
+  int result;
+  if (consume("(")) {
+    result = compile_time_number();
+    expect(")", "after expression", "compile time number");
+  } else if (token->kind == TK_NUM) {
+    result = expect_number("compile time number");
+  } else if (token->kind == TK_IDENT) {
+    LVar *member = find_enum_member(consume_ident());
+    if (!member) {
+      error_expected_at(token->str, "compile time constant", token->str, "compile time number");
+    }
+    result = member->offset;
+  } else {
+    error_expected_at(token->str, "compile time constant", token->str, "compile time number");
+  }
+  return result;
 }

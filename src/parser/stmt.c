@@ -8,6 +8,7 @@ extern int loop_id;
 extern int block_cnt;
 extern int block_id;
 extern Function *current_fn;
+extern Node *current_switch;
 extern char *consumed_ptr;
 
 extern const int TRUE;
@@ -53,6 +54,7 @@ Node *label_stmt() {
   Node *node = new_node(ND_LABEL);
   node->label = label;
   token = token->next;
+  expect(":", "after label", "label statement");
   node->endline = TRUE;
   return node;
 }
@@ -96,7 +98,7 @@ Node *do_while_stmt() {
   node->id = loop_cnt++;
   node->then = stmt();
   if (token->kind != TK_WHILE) {
-    error_at(token->str, "expected 'while' but got \"%.*s\" [in do-while statement]", token->len, token->str);
+    error_expected_at(token->str, "while", token->str, "do-while");
   }
   token = token->next;
   expect("(", "before condition", "do-while");
@@ -197,6 +199,68 @@ Node *return_stmt() {
   return node;
 }
 
+Node *switch_stmt() {
+  token = token->next;
+  expect("(", "before condition", "switch");
+  Node *node = new_node(ND_SWITCH);
+  node->id = loop_cnt++;
+  node->cond = expr();
+  node->cond->endline = FALSE;
+  node->cases = malloc(sizeof(int *));
+  node->case_cnt = 0;
+  node->has_default = FALSE;
+  expect(")", "after condition", "switch");
+  Node *prev_switch = current_switch;
+  current_switch = node;
+  int loop_id_prev = loop_id;
+  loop_id = node->id;
+  node->then = stmt();
+  loop_id = loop_id_prev;
+  current_switch = prev_switch;
+  node->endline = TRUE;
+  return node;
+}
+
+Node *case_stmt() {
+  if (!current_switch) {
+    error_at(token->str, "stray case statement [in case statement]");
+  }
+  token = token->next;
+  Node *node = new_node(ND_CASE);
+  node->id = loop_id;
+  node->val = compile_time_number();
+  current_switch->cases[current_switch->case_cnt] = node->val;
+  current_switch->cases = safe_realloc_array(current_switch->cases, sizeof(int *), ++current_switch->case_cnt);
+  expect(":", "after case value", "case");
+  node->endline = TRUE;
+  return node;
+}
+
+Node *default_stmt() {
+  if (!current_switch) {
+    error_at(token->str, "stray default statement [in default statement]");
+  }
+  token = token->next;
+  current_switch->has_default = TRUE;
+  Node *node = new_node(ND_DEFAULT);
+  node->id = loop_id;
+  expect(":", "after default", "default");
+  node->endline = TRUE;
+  return node;
+}
+
+int check_label() {
+  Token *tok = token;
+  if (tok->kind != TK_IDENT) {
+    return FALSE;
+  }
+  tok = tok->next;
+  if (tok->kind != TK_RESERVED || strncmp(tok->str, ":", tok->len)) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
 Node *stmt() {
   Node *node;
   if (consume("{")) {
@@ -204,7 +268,7 @@ Node *stmt() {
   } else if (token->kind == TK_GOTO) {
     node = goto_stmt();
     expect(";", "after line", "goto statement");
-  } else if (token->kind == TK_LABEL) {
+  } else if (check_label()) {
     node = label_stmt();
   } else if (token->kind == TK_EXTERN) {
     token = token->next;
@@ -218,6 +282,12 @@ Node *stmt() {
     node = struct_stmt();
   } else if (token->kind == TK_TYPEDEF) {
     node = typedef_stmt();
+  } else if (token->kind == TK_SWITCH) {
+    node = switch_stmt();
+  } else if (token->kind == TK_CASE) {
+    node = case_stmt();
+  } else if (token->kind == TK_DEFAULT) {
+    node = default_stmt();
   } else if (token->kind == TK_IF) {
     node = if_stmt();
   } else if (token->kind == TK_WHILE) {

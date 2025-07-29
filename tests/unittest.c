@@ -600,6 +600,127 @@ int test89() {
   return result; // 5 & 3 == 1 は false (0) なので 0
 }
 
+int test90() {
+  /* 基本的なswitch文 */
+  int a = 2;
+  int result = 0;
+  switch (a) {
+  case 1:
+    result = 10;
+    break;
+  case 2:
+    result = 20;
+    break;
+  case 3:
+    result = 30;
+    break;
+  default:
+    result = 99;
+    break;
+  }
+  return result; // 20
+}
+
+int test91() {
+  /* fall-through動作のテスト */
+  int a = 1;
+  int result = 0;
+  switch (a) {
+  case 1:
+    result += 5;
+  case 2:
+    result += 10;
+  case 3:
+    result += 15;
+    break;
+  default:
+    result = 99;
+  }
+  return result; // 5 + 10 + 15 = 30
+}
+
+int test92() {
+  /* default節のテスト */
+  int a = 99;
+  switch (a) {
+  case 1:
+    return 10;
+  case 2:
+    return 20;
+  default:
+    return 42;
+  }
+  return 0; // 到達しない
+}
+
+int test93() {
+  /* ネストしたswitch文 */
+  int x = 1, y = 2;
+  int result = 0;
+  switch (x) {
+  case 1:
+    switch (y) {
+    case 1:
+      result = 11;
+      break;
+    case 2:
+      result = 12;
+      break;
+    default:
+      result = 19;
+    }
+    break;
+  case 2:
+    result = 20;
+    break;
+  default:
+    result = 99;
+  }
+  return result; // 12
+}
+
+int test94() {
+  /* 文字定数を使ったswitch */
+  char c = 'B';
+  int result = 0;
+  switch (c) {
+  case 'A':
+    result = 1;
+    break;
+  case 'B':
+    result = 2;
+    break;
+  case 'C':
+    result = 3;
+    break;
+  default:
+    result = 0;
+  }
+  return result; // 2
+}
+
+int test95() {
+  /* 複数のcaseラベルが同じ処理を共有 */
+  int day = 6; // 土曜日
+  int result = 0;
+  switch (day) {
+  case 1:
+  case 2:
+  case 3:
+  case 4:
+  case 5:
+    result = 1; // 平日
+    break;
+  case 6:
+  case 7:
+    result = 2; // 週末
+    break;
+  default:
+    result = 0; // 無効
+  }
+  return result; // 2
+}
+
 int test_id = 0;
 void check(int result, int ans) {
   test_id++;
@@ -700,6 +821,12 @@ int main() {
   check(test87(), 5);
   check(test88(), 6);
   check(test89(), 0);
+  check(test90(), 20);
+  check(test91(), 30);
+  check(test92(), 42);
+  check(test93(), 12);
+  check(test94(), 2);
+  check(test95(), 2);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_id);

@@ -32,7 +32,7 @@ Node *handle_array_initialization(Node *node, Type *type, Type *org_type) {
   int i = 0;
   do {
     array->val = safe_realloc_array(array->val, sizeof(int), i + 1);
-    array->val[i++] = expect_number();
+    array->val[i++] = expect_number("array initializer");
   } while (consume(","));
   array->len = i;
   expect("}", "after array initializer", "local variable declaration");
