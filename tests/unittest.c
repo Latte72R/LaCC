@@ -100,13 +100,16 @@ int test14() {
 
 int test15() { return sizeof(num); }
 
+/*
 int test16() {
+  // 未定義動作 (Incompatible pointer types)
   int a[2];
   *a = 7;
   *(a + 1) = 4;
   int *p = &a;
   return *p * *(p + 1);
 }
+*/
 
 int test17() {
   int a[2];
@@ -370,11 +373,12 @@ int test53() {
 }
 
 /*
-int test54_sub(int n) { return n * 4; }
+int test54_helper(int n) { return n * 4; }
 int test54() {
-  // 未定義動作 (Clang と LaCC では 40, GCCでは 16)
+  // 未定義動作 (Unsequenced modification and access)
+  // Clang と LaCC では 40, GCCでは 16
   int n = 5;
-  return n * test54_sub(n = n - 3);
+  return n * test54_helper(n = n - 3);
 }
 */
 
@@ -402,12 +406,14 @@ int test58() { return sizeof(int *); }
 
 int test59() { return 'a' + 1; }
 
+/*
 int test60() {
-  /* ポインタの後置インクリメントと評価順 */
+  // 未定義動作 (Unsequenced modification and access)
   int a[2] = {1, 2};
   int *p = a;
-  return *p++ + *p; /* 1 + 2 = 3 */
+  return *p++ + *p;
 }
+*/
 
 int test61() {
   /* 2 段間接ポインタでの書き込み */
@@ -434,11 +440,13 @@ int test63() {
   return b; /* 0 なら OK */
 }
 
+/*
 int test64() {
-  /* 後置 ++ と左辺値の取り扱い */
+  // 未定義動作
   int a = 2;
-  return a++ * a; /* 2 * 3 = 6 */
-}
+  return a++ * a;
+  }
+*/
 
 int test65() {
   /* 括弧付きシフトと算術の優先順位 */
@@ -465,7 +473,7 @@ int test68() {
   return a;       /* 0 */
 }
 
-void test69_sub(int arr[2][2]) {
+void test69_helper(int arr[2][2]) {
   arr[0][0] = 5;
   arr[0][1] = 2;
   arr[1][0] = 3;
@@ -475,7 +483,7 @@ void test69_sub(int arr[2][2]) {
 int test69() {
   /* 2 次元配列を引数に渡す */
   int a[2][2];
-  test69_sub(a);
+  test69_helper(a);
   return a[0][0] * a[0][1] + a[1][0] * a[1][1];
 }
 
@@ -520,13 +528,13 @@ int test76() { return '\n' + 1; /* 10 + 1 = 11 */ }
 /* ビット演算とシフトの優先順位確認 */
 int test77() { return 1 << 3 & 0b10110; }
 
-int test78_sub(int n) {
+int test78_helper(int n) {
   static int cnt = 0;
   cnt += n;
   return cnt;
 }
 
-int test78() { return test78_sub(3) * test78_sub(4) + test78_sub(2); }
+int test78() { return test78_helper(3) * test78_helper(4) + test78_helper(2); }
 
 int test79(void) {
   int i = 0;
@@ -721,117 +729,420 @@ int test95() {
   return result; // 2
 }
 
-int test_id = 0;
-void check(int result, int ans) {
-  test_id++;
+int test96() {
+  /* switchの中でループとbreak/continueの混在 */
+  int sum = 0;
+  for (int i = 1; i <= 3; i++) {
+    switch (i) {
+    case 1:
+      for (int j = 1; j <= 5; j++) {
+        if (j == 3)
+          continue;
+        sum += j;
+      }
+      break;
+    case 2:
+      sum += 10;
+      break;
+    case 3:
+      sum += 20;
+      break;
+    }
+  }
+  return sum; // (1+2+4+5) + 10 + 20 = 42
+}
+
+int test97() {
+  /* switchの中でgoto */
+  int result = 0;
+  int n = 2;
+  switch (n) {
+  case 1:
+    result = 10;
+    goto end;
+  case 2:
+    result = 20;
+    goto middle;
+  case 3:
+    result = 30;
+    break;
+  }
+  result += 100; // case 3の時のみ実行される
+middle:
+  result += 5;
+end:
+  return result; // 25 (20 + 5)
+}
+
+int test98() {
+  /* 負の数のcase */
+  int x = -2;
+  switch (x) {
+  case -3:
+    return 30;
+  case -2:
+    return 20;
+  case -1:
+    return 10;
+  case 0:
+    return 0;
+  default:
+    return 99;
+  }
+}
+
+int test99() {
+  /* 16進数リテラルを使ったcase */
+  int x = 0xFF;
+  switch (x) {
+  case 0x00:
+    return 0;
+  case 0x10:
+    return 16;
+  case 0xFF:
+    return 255;
+  case 0x100:
+    return 256;
+  default:
+    return -1;
+  }
+}
+
+int test100_helper(int *counter) { return ++(*counter); }
+
+int test100() {
+  /* switchの式が副作用を持つ場合 */
+  int counter = 1;
+
+  switch (test100_helper(&counter)) {
+  case 1:
+    return counter * 10;
+  case 2:
+    return counter * 20; // counter = 40
+  case 3:
+    return counter * 30;
+  default:
+    return counter * 99;
+  }
+}
+
+int test101() {
+  /* default節がcaseの間にある場合 */
+  int x = 5;
+  int result = 0;
+  switch (x) {
+  case 1:
+    result = 10;
+    break;
+  default:
+    result = 99;
+    break;
+  case 2:
+    result = 20;
+    break;
+  case 3:
+    result = 30;
+    break;
+  }
+  return result; // 99
+}
+
+int test102() {
+  /* 同じ値のcaseラベル（コンパイルエラーになるべき）は避けて、
+     代わりに複雑なfall-through */
+  int x = 1;
+  int result = 0;
+  switch (x) {
+  case 1:
+    result += 1;
+    /* fall through */
+  case 2:
+    result += 2;
+    if (result > 2)
+      break;
+    /* fall through */
+  case 3:
+    result += 4;
+    break;
+  default:
+    result = 99;
+  }
+  return result; // 3 (1 + 2, then break)
+}
+
+int test103() {
+  /* enumを使ったswitch */
+  ENUM e = B;
+  switch (e) {
+  case A:
+    return 0;
+  case B:
+    return 1;
+  case C:
+    return 2;
+  default:
+    return -1;
+  }
+}
+
+int test104() {
+  // default節が最後にあるswitch
+  int x = 2;
+  int result = 0;
+  switch (x) {
+  default:
+    result = 99;
+    break;
+  case 1:
+    result = 10;
+    break;
+  case 2:
+    result = 20;
+    break;
+  case 3:
+    result = 30;
+    break;
+  }
+  return result; // 20
+}
+
+int test105() {
+  /* switch内で変数宣言とスコープ */
+  int x = 2;
+  switch (x) {
+  case 1: {
+    int local_var = 10;
+    return local_var;
+  }
+  case 2: {
+    int local_var = 20; // 同名だが別スコープ
+    return local_var;
+  }
+  default:
+    return 0;
+  }
+}
+
+int test106() {
+  /* 空のswitch文 */
+  int x = 5;
+  switch (x) {
+    // 何もない
+  }
+  return 42; // switch後に実行される
+}
+
+int test107() {
+  /* caseラベルだけでdefaultなし */
+  int x = 99; // どのcaseにもマッチしない
+  int result = 0;
+  switch (x) {
+  case 1:
+    result = 10;
+    break;
+  case 2:
+    result = 20;
+    break;
+  }
+  return result; // 0 (何も実行されない)
+}
+
+int test108() {
+  /* do-whileでbreak */
+  int i = 0, sum = 0;
+  do {
+    if (i == 3)
+      break;
+    sum += i;
+    i++;
+  } while (i < 10);
+  return sum; // 0 + 1 + 2 = 3
+}
+
+/*
+int test109() {
+  // Partial array initialization
+  int arr[5] = {1, 2};                               // Rest should be 0
+  return arr[0] + arr[1] + arr[2] + arr[3] + arr[4]; // 1 + 2 + 0 + 0 + 0 = 3
+}
+*/
+
+int test110() {
+  /* Multiple unary operators */
+  int a = 5;
+  return !!a + !0; // double negation + logical not of 0 = 1 + 1 = 2
+}
+
+int test111_helper(int *arr) { return arr[0] + arr[1] + arr[2]; }
+
+int test111() {
+  /* Array decay to pointer */
+  int arr[3] = {5, 7, 9};
+  return test111_helper(arr); // 5 + 7 + 9 = 21
+}
+
+int test112() {
+  char a = 5;
+  return (int)a;
+}
+
+int test113() {
+  // Pointer to int cast (size dependent)
+  int arr[5] = {10, 20, 30, 40, 50};
+  int *ptr = &arr[2];
+  // Cast pointer to different pointer type and back
+  char *char_ptr = (char *)ptr;
+  int *back_ptr = (int *)char_ptr;
+  return *back_ptr; // Should return 30
+}
+
+int test114() {
+  // Void pointer cast
+  int value = 42;
+  void *void_ptr = (void *)&value;
+  int *int_ptr = (int *)void_ptr;
+  return *int_ptr; // Should return 42
+}
+
+int test115() {
+  // Cast with function argument
+  int arr[3] = {1, 2, 3};
+  // Cast array to pointer explicitly
+  int *ptr = (int *)arr;
+  return ptr[1]; // Should return 2
+}
+
+int test_cnt = 0;
+void check(int result, int id, int ans) {
+  test_cnt++;
   if (result != ans) {
-    printf("test%d failed (expected: %d / result: %d)\n", test_id, ans, result);
+    printf("test%d failed (expected: %d / result: %d)\n", id, ans, result);
     failures++;
   }
 }
 
 int main() {
   failures = 0;
-  check(test1(), 13);
-  check(test2(), 2);
-  check(test3(), 13);
-  check(test4(), 1);
-  check(test5(), 0);
-  check(test6(), 1);
-  check(test7(), 0);
-  check(test8(), 10);
-  check(test9(), 10);
-  check(test10(), 2);
-  check(test11(), 12);
-  check(test12(), 3);
-  check(test13(), 5);
-  check(test14(), 25);
-  check(test15(), 4);
-  check(test16(), 28);
-  check(test17(), 4);
-  check(test18(), 34);
-  check(test19(), 27);
-  check(test20(), 7);
-  check(test21(), 104);
-  check(test22(), 12);
-  check(test23(), 35);
-  check(test24(), 2);
-  check(test25(), 97);
-  check(test26(), 37);
-  check(test27(), 8);
-  check(test28(), 67);
-  check(test29(), 12);
-  check(test30(), 7);
-  check(test31(), 7);
-  check(test32(), 2);
-  check(test33(), 7);
-  check(test34(), 5);
-  check(test35(), -6);
-  check(test36(), 16);
-  check(test37(), 4);
-  check(test38(), 11);
-  check(test39(), 28);
-  check(test40(), 2);
-  check(test41(), 12);
-  check(test42(), -2);
-  check(test43(), 1);
-  check(test44(), 36);
-  check(test45(), 11);
-  check(test46(), 56);
-  check(test47(), 7);
-  check(test48(), 1);
-  check(test49(), 26);
-  check(test50(), -4);
-  check(test51(), 45);
-  check(test52(), 15);
-  check(test53(), 10);
-  // check(test54(), 40);
-  check(test55(), 60);
-  check(test56(), 10);
-  check(test57(), 15);
-  check(test58(), 8);
-  check(test59(), 98);
-  check(test60(), 3);
-  check(test61(), 10);
-  check(test62(), 10);
-  check(test63(), 0);
-  check(test64(), 6);
-  check(test65(), 12);
-  check(test66(), 10);
-  check(test67(), 7);
-  check(test68(), 0);
-  check(test69(), 22);
-  check(test70(), 315);
-  check(test71(), 23);
-  check(test72(), 21);
-  check(test73(), 5);
-  check(test74(), 7);
-  check(test75(), 16);
-  check(test76(), 11);
-  check(test77(), 0);
-  check(test78(), 30);
-  check(test79(), 5);
-  check(test80(), 20);
-  check(test81(), 4);
-  check(test82(), 18);
-  check(test83(), 17);
-  check(test84(), 32);
-  check(test85(), 42);
-  check(test86(), 105);
-  check(test87(), 5);
-  check(test88(), 6);
-  check(test89(), 0);
-  check(test90(), 20);
-  check(test91(), 30);
-  check(test92(), 42);
-  check(test93(), 12);
-  check(test94(), 2);
-  check(test95(), 2);
+  check(test1(), 1, 13);
+  check(test2(), 2, 2);
+  check(test3(), 3, 13);
+  check(test4(), 4, 1);
+  check(test5(), 5, 0);
+  check(test6(), 6, 1);
+  check(test7(), 7, 0);
+  check(test8(), 8, 10);
+  check(test9(), 9, 10);
+  check(test10(), 10, 2);
+  check(test11(), 11, 12);
+  check(test12(), 12, 3);
+  check(test13(), 13, 5);
+  check(test14(), 14, 25);
+  check(test15(), 15, 4);
+  // check(test16(), 16, 28);
+  check(test17(), 17, 4);
+  check(test18(), 18, 34);
+  check(test19(), 19, 27);
+  check(test20(), 20, 7);
+  check(test21(), 21, 104);
+  check(test22(), 22, 12);
+  check(test23(), 23, 35);
+  check(test24(), 24, 2);
+  check(test25(), 25, 97);
+  check(test26(), 26, 37);
+  check(test27(), 27, 8);
+  check(test28(), 28, 67);
+  check(test29(), 29, 12);
+  check(test30(), 30, 7);
+  check(test31(), 31, 7);
+  check(test32(), 32, 2);
+  check(test33(), 33, 7);
+  check(test34(), 34, 5);
+  check(test35(), 35, -6);
+  check(test36(), 36, 16);
+  check(test37(), 37, 4);
+  check(test38(), 38, 11);
+  check(test39(), 39, 28);
+  check(test40(), 40, 2);
+  check(test41(), 41, 12);
+  check(test42(), 42, -2);
+  check(test43(), 43, 1);
+  check(test44(), 44, 36);
+  check(test45(), 45, 11);
+  check(test46(), 46, 56);
+  check(test47(), 47, 7);
+  check(test48(), 48, 1);
+  check(test49(), 49, 26);
+  check(test50(), 50, -4);
+  check(test51(), 51, 45);
+  check(test52(), 52, 15);
+  check(test53(), 53, 10);
+  // check(test54(), 54, 40);
+  check(test55(), 55, 60);
+  check(test56(), 56, 10);
+  check(test57(), 57, 15);
+  check(test58(), 58, 8);
+  check(test59(), 59, 98);
+  // check(test60(), 60, 3);
+  check(test61(), 61, 10);
+  check(test62(), 62, 10);
+  check(test63(), 63, 0);
+  // check(test64(), 64, 6);
+  check(test65(), 65, 12);
+  check(test66(), 66, 10);
+  check(test67(), 67, 7);
+  check(test68(), 68, 0);
+  check(test69(), 69, 22);
+  check(test70(), 70, 315);
+  check(test71(), 71, 23);
+  check(test72(), 72, 21);
+  check(test73(), 73, 5);
+  check(test74(), 74, 7);
+  check(test75(), 75, 16);
+  check(test76(), 76, 11);
+  check(test77(), 77, 0);
+  check(test78(), 78, 30);
+  check(test79(), 79, 5);
+  check(test80(), 80, 20);
+  check(test81(), 81, 4);
+  check(test82(), 82, 18);
+  check(test83(), 83, 17);
+  check(test84(), 84, 32);
+  check(test85(), 85, 42);
+  check(test86(), 86, 105);
+  check(test87(), 87, 5);
+  check(test88(), 88, 6);
+  check(test89(), 89, 0);
+  check(test90(), 90, 20);
+  check(test91(), 91, 30);
+  check(test92(), 92, 42);
+  check(test93(), 93, 12);
+  check(test94(), 94, 2);
+  check(test95(), 95, 2);
+  check(test96(), 96, 42);
+  check(test97(), 97, 25);
+  check(test98(), 98, 20);
+  check(test99(), 99, 255);
+  check(test100(), 100, 40);
+  check(test101(), 101, 99);
+  check(test102(), 102, 3);
+  check(test103(), 103, 1);
+  check(test104(), 104, 20);
+  check(test105(), 105, 20);
+  check(test106(), 106, 42);
+  check(test107(), 107, 0);
+  check(test108(), 108, 3);
+  // check(test109(), 109, 3);
+  check(test110(), 110, 2);
+  check(test111(), 111, 21);
+  check(test112(), 112, 5);
+  check(test113(), 113, 30);
+  check(test114(), 114, 42);
+  check(test115(), 115, 2);
 
   if (failures == 0) {
-    printf("\033[1;36mAll %d tests passed!\033[0m\n", test_id);
+    printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);
   } else {
-    printf("\033[1;31m %d of %d tests failed\033[0m\n", failures, test_id);
+    printf("\033[1;31m %d of %d tests failed\033[0m\n", failures, test_cnt);
   }
   return failures;
 }

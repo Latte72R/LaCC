@@ -95,19 +95,19 @@ Node *while_stmt() {
 Node *do_while_stmt() {
   token = token->next;
   Node *node = new_node(ND_DOWHILE);
+  int loop_id_prev = loop_id;
   node->id = loop_cnt++;
+  loop_id = node->id;
   node->then = stmt();
+  loop_id = loop_id_prev;
   if (token->kind != TK_WHILE) {
-    error_expected_at(token->str, "while", token->str, "do-while");
+    error_at(token->str, "expected 'while' after do-while statement [in do-while]");
   }
   token = token->next;
   expect("(", "before condition", "do-while");
   node->cond = expr();
   node->cond->endline = FALSE;
   expect(")", "after equality", "do-while");
-  int loop_id_prev = loop_id;
-  loop_id = node->id;
-  loop_id = loop_id_prev;
   expect(";", "after line", "do-while");
   node->endline = TRUE;
   return node;
@@ -229,6 +229,11 @@ Node *case_stmt() {
   Node *node = new_node(ND_CASE);
   node->id = loop_id;
   node->val = compile_time_number();
+  for (int i = 0; i < current_switch->case_cnt; i++) {
+    if (current_switch->cases[i] == node->val) {
+      error_at(token->str, "duplicate case value [in case statement]");
+    }
+  }
   current_switch->cases[current_switch->case_cnt] = node->val;
   current_switch->cases = safe_realloc_array(current_switch->cases, sizeof(int *), ++current_switch->case_cnt);
   expect(":", "after case value", "case");
@@ -239,6 +244,8 @@ Node *case_stmt() {
 Node *default_stmt() {
   if (!current_switch) {
     error_at(token->str, "stray default statement [in default statement]");
+  } else if (current_switch->has_default) {
+    error_at(token->str, "multiple default statements in switch [in default statement]");
   }
   token = token->next;
   current_switch->has_default = TRUE;

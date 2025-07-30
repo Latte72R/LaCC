@@ -38,11 +38,6 @@ void expect(char *op, char *err, char *stmt) {
   token = token->next;
 }
 
-// Ensure that the current token is `op`.
-void error_expected_at(char *loc, char *op, char *err, char *stmt) {
-  error_at(loc, "expected \"%s\" but got \"%s\" [in %s statement]", op, err, stmt);
-}
-
 Token *expect_ident(char *stmt) {
   Token *tok = consume_ident();
   if (!tok) {

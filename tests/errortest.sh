@@ -88,3 +88,40 @@ $CC $TMP_C -S -o $TMP_S
 cc $TMP_S -o $TMP_OUT
 $TMP_OUT
 printf "\n"
+
+printf "\e[1;36mTest case 8:\e[0m\n"
+cat <<EOF > "$TMP_C"
+int main() {
+  /* caseが重複しているswitch文 */
+  int x = 1;
+  switch (x) {
+    case 1:
+    case 1:  // 重複している
+      return 1;
+    default:
+      return 0;
+  }
+}
+EOF
+cat "$TMP_C"
+$CC $TMP_C -S -o $TMP_S
+printf "\n"
+
+printf "\e[1;36mTest case 9:\e[0m\n"
+cat <<EOF > "$TMP_C"
+int main() {
+  /* switch文でdefaultが複数ある */
+  int x = 1;
+  switch (x) {
+    case 1:
+      return 1;
+    default:
+      return 0;
+    default:  // 複数のdefault
+      return 2;
+  }
+}
+EOF
+cat "$TMP_C"
+$CC $TMP_C -S -o $TMP_S
+printf "\n" 

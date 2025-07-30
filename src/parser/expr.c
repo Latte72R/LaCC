@@ -255,24 +255,53 @@ Type *resolve_type_mul(Type *left, Type *right, char *ptr) {
 // mul = unary ("*" unary | "/" unary)*
 Node *mul() {
   char *consumed_ptr_prev;
-  Node *node = unary();
+  Node *node = type_cast();
 
   for (;;) {
     if (consume("*")) {
       consumed_ptr_prev = consumed_ptr;
-      node = new_binary(ND_MUL, node, unary());
+      node = new_binary(ND_MUL, node, type_cast());
       node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
     } else if (consume("/")) {
       consumed_ptr_prev = consumed_ptr;
-      node = new_binary(ND_DIV, node, unary());
+      node = new_binary(ND_DIV, node, type_cast());
       node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
     } else if (consume("%")) {
       consumed_ptr_prev = consumed_ptr;
-      node = new_binary(ND_MOD, node, unary());
+      node = new_binary(ND_MOD, node, type_cast());
       node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
     } else {
       break;
     }
+  }
+  return node;
+}
+
+Node *type_cast() {
+  Token *tok = token;
+  if (!consume("(")) {
+    token = tok;
+    return unary();
+  }
+  Type *type = consume_type();
+  if (!type) {
+    token = tok;
+    return unary();
+  }
+  if (!consume(")")) {
+    error_at(token->str, "expected ')' after type cast [in type_cast]");
+  }
+  Node *node = new_node(ND_TYPECAST);
+  node->lhs = unary();
+  node->type = type;
+  if (type->ty == TY_VOID) {
+    error_at(tok->str, "cannot cast to void type [in type_cast]");
+  } else if (type->ty == TY_STRUCT) {
+    error_at(tok->str, "cannot cast to struct type [in type_cast]");
+  } else if (node->lhs->type->ty == TY_VOID) {
+    error_at(tok->str, "cannot cast from void type [in type_cast]");
+  } else if (node->lhs->type->ty == TY_STRUCT) {
+    error_at(tok->str, "cannot cast from struct type [in type_cast]");
   }
   return node;
 }
@@ -507,16 +536,14 @@ int compile_time_number() {
   if (consume("(")) {
     result = compile_time_number();
     expect(")", "after expression", "compile time number");
-  } else if (token->kind == TK_NUM) {
-    result = expect_number("compile time number");
   } else if (token->kind == TK_IDENT) {
     LVar *member = find_enum_member(consume_ident());
     if (!member) {
-      error_expected_at(token->str, "compile time constant", token->str, "compile time number");
+      error_at(token->str, "expected a compile time constant [in compile time number]");
     }
     result = member->offset;
   } else {
-    error_expected_at(token->str, "compile time constant", token->str, "compile time number");
+    result = expect_signed_number("compile time number");
   }
   return result;
 }

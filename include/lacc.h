@@ -203,7 +203,8 @@ typedef enum {
   ND_ENUM,     // 列挙体
   ND_STRUCT,   // 構造体
   ND_TYPEDEF,  // typedef
-  ND_TYPE      // 型
+  ND_TYPE,     // 型
+  ND_TYPECAST  // 型キャスト
 } NodeKind;
 
 // 抽象構文木のノード
@@ -247,7 +248,6 @@ int consume(char *op);
 Token *consume_ident();
 Token *expect_ident(char *stmt);
 void expect(char *op, char *err, char *st);
-void error_expected_at(char *loc, char *op, char *err, char *stmt);
 int expect_number(char *stmt);
 int parse_sign();
 int expect_signed_number();
@@ -308,6 +308,7 @@ void program();
 Node *expr();
 Node *assign_sub(Node *lhs, Node *rhs, char *ptr);
 Node *assign();
+Node *type_cast();
 Node *logical_or();
 Node *logical_and();
 Node *bit_or();
