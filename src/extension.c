@@ -89,7 +89,7 @@ void warning_at(char *loc, char *fmt, ...) {
       line_num++;
 
   // 見つかった行を、ファイル名と行番号と一緒に表示
-  fprintf(stderr, "\033[1m\033[32m%s:%d\033[0m: ", input_file, line_num);
+  fprintf(stderr, "\033[1m\033[32m%s:%d\033[0m:\n", input_file, line_num);
   fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
   // エラー箇所を"^"で指し示して、エラーメッセージを表示

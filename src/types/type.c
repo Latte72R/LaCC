@@ -151,3 +151,24 @@ Type *parse_array_dimensions(Type *base_type) {
 
 int is_ptr_or_arr(Type *type) { return type->ty == TY_PTR || type->ty == TY_ARR || type->ty == TY_ARGARR; }
 int is_number(Type *type) { return type->ty == TY_INT || type->ty == TY_CHAR; }
+
+char *type_name(Type *type) {
+  switch (type->ty) {
+  case TY_INT:
+    return "int";
+  case TY_CHAR:
+    return "char";
+  case TY_PTR:
+    return "pointer";
+  case TY_ARR:
+    return "array";
+  case TY_ARGARR:
+    return "argument array";
+  case TY_VOID:
+    return "void";
+  case TY_STRUCT:
+    return type->is_struct->name;
+  default:
+    return "unknown type";
+  }
+}

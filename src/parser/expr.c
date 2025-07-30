@@ -17,6 +17,19 @@ Node *expr() { return assign(); }
 Node *assign_sub(Node *lhs, Node *rhs, char *ptr) {
   if (lhs->type->is_const) {
     error_at(ptr, "constant variable cannot be assigned [in assign_sub]");
+  } else if (!((lhs->type->ty == TY_INT && rhs->type->ty == TY_CHAR) ||
+               (lhs->type->ty == TY_CHAR && rhs->type->ty == TY_INT)) &&
+             (lhs->type->ty != rhs->type->ty)) {
+    warning_at(ptr, "incompatible types in assignment: '%s' and '%s' [in assign_sub]", type_name(lhs->type),
+               type_name(rhs->type));
+  } else if (lhs->type->ty == TY_PTR && rhs->type->ty == TY_PTR || lhs->type->ty == TY_ARR && rhs->type->ty == TY_ARR) {
+    if (!((lhs->type->ptr_to->ty == TY_INT && rhs->type->ptr_to->ty == TY_CHAR) ||
+          (lhs->type->ptr_to->ty == TY_CHAR && rhs->type->ptr_to->ty == TY_INT) ||
+          (lhs->type->ptr_to->ty == TY_VOID || rhs->type->ptr_to->ty == TY_VOID)) &&
+        (lhs->type->ptr_to->ty != rhs->type->ptr_to->ty)) {
+      warning_at(ptr, "incompatible pointer types in assignment: '%s' and '%s' [in assign_sub]", type_name(lhs->type),
+                 type_name(rhs->type));
+    }
   }
   Node *node = new_binary(ND_ASSIGN, lhs, rhs);
   return node;

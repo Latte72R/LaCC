@@ -280,6 +280,7 @@ Type *new_type_ptr(Type *ptr_to);
 Type *new_type_arr(Type *ptr_to, int array_size);
 Type *new_type_struct(Struct *struct_);
 Type *parse_array_dimensions(Type *base_type);
+char *type_name(Type *type);
 
 // decl.c
 Node *function_definition(Token *tok, Type *type, int is_static);
