@@ -80,14 +80,32 @@ char *parse_string_literal(char *p) {
   int len = 0;
   char *buf = malloc(sizeof(char) * 1024);
   while (*p != '"') {
-    if (*p == '\0' || *p == '\n') {
+    switch (*p) {
+    case '\0':
+    case '\n':
       error_at(p, "unclosed string literal [in tokenize]");
-    } else if (*p == '\\' && *(p + 1) == '\n') {
-      p += 2; // 行継続をスキップ
-    } else if (*p == '\\') {
-      buf[len++] = *p++;
-      buf[len++] = *p++;
-    } else {
+      break;
+    case '\\':
+      switch (*(p + 1)) {
+      case '\n':
+        p += 2; // 行継続をスキップ
+        break;
+      case 'a':
+        error_at(p, "unsupported escape sequence \"\\a\" in string literal. Use '\\007' for alert.");
+        break;
+      case 'e':
+        error_at(p, "unsupported escape sequence \"\\e\" in string literal. Use '\\033' for escape.");
+        break;
+      case 'v':
+        error_at(p, "unsupported escape sequence \"\\v\" in string literal. Use '\\012' for vertical tab.");
+        break;
+      default:
+        buf[len++] = *p++;
+        buf[len++] = *p++;
+        break;
+      }
+      break;
+    default:
       buf[len++] = *p++;
     }
   }

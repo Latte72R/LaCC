@@ -15,7 +15,7 @@ extern void *NULL;
 void gen_string_literal() {
   for (String *str = strings; str->next; str = str->next) {
     write_file(".L.str%d:\n", str->id);
-    write_file("  .string \"%.*s\"\n", str->len, str->text);
+    write_file("  .asciz \"%.*s\"\n", str->len, str->text);
   }
 }
 
