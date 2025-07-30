@@ -5,8 +5,10 @@ SRC_DIR:=./src
 TEST_DIR:=./tests
 EXAMPLE_DIR:=./examples
 BUILD_DIR:=./build
+EXTENSION:=$(SRC_DIR)/extension.c
 SRCS:=$(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/**/*.c)
-OBJ_S := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.s,$(SRCS))
+SRCS:=$(filter-out $(EXTENSION),$(SRCS))
+OBJ_S:=$(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.s,$(SRCS))
 CC:=cc
 BOOSTSTRAP:=$(BUILD_DIR)/bootstrap
 SELFHOST:=$(BUILD_DIR)/lacc
@@ -46,7 +48,7 @@ run: .run-selfhost ## Run a file with the self-hosted compiler
 	@$(call runfile, $(SELFHOST), $(FILE))
 
 $(BOOSTSTRAP): $(SRCS) | $(BUILD_DIR)
-	@$(CC) $(CC_FLAGS) -o $(BOOSTSTRAP) $(SRCS) extension.c
+	@$(CC) $(CC_FLAGS) -o $(BOOSTSTRAP) $(SRCS) $(EXTENSION)
 	@echo "Bootstrap compiler created at '$@'."
 
 $(BUILD_DIR)/%.s: $(SRC_DIR)/%.c | $(BUILD_DIR)
@@ -54,7 +56,7 @@ $(BUILD_DIR)/%.s: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	@$(BOOSTSTRAP) $(LACC_FLAGS) $< -o $@
 
 $(SELFHOST): $(BOOSTSTRAP) $(OBJ_S) | $(BUILD_DIR)
-	@$(CC) -o $@ $(OBJ_S) extension.c $(CC_FLAGS)
+	@$(CC) -o $@ $(OBJ_S) $(EXTENSION) $(CC_FLAGS)
 	@echo "Self-hosted compiler created at '$@'."
 
 define unittest
