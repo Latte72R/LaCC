@@ -99,8 +99,7 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   node->fn = fn;
   int n = 0;
   for (int i = 0; i < 6; i++) {
-    if (token->kind == TK_ELLIPSIS) {
-      token = token->next;
+    if (consume("...")) {
       break;
     }
     type = consume_type();

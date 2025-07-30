@@ -17,7 +17,6 @@ struct IncludePath {
 typedef enum {
   TK_EOF,      // 入力の終わりを表すトークン
   TK_RESERVED, // 記号
-  TK_ELLIPSIS, // ...
   TK_IDENT,    // 識別子
   TK_TYPE,     // 型
   TK_NUM,      // 整数トークン
@@ -143,10 +142,17 @@ struct Function {
   Label *labels;  // ラベルのリスト
 };
 
-// tokenize.c
-void tokenize();
-void new_token(TokenKind kind, char *str, int len);
+// lexer.c からエクスポートする関数
 int startswith(char *p, char *q);
+int is_alnum(char c);
+void new_token(TokenKind kind, char *str, int len);
+char *handle_include_directive(char *p);
+
+// token_parser.c からエクスポートする関数
+char *parse_number_literal(char *p);
+char *parse_string_literal(char *p);
+char *parse_char_literal(char *p);
+void tokenize();
 
 //
 // Parser
@@ -233,6 +239,11 @@ struct Node {
 };
 
 // symbol.c
+Node *new_node(NodeKind kind);
+Node *new_num(int val);
+Node *new_deref(Node *lhs);
+Node *new_binary(NodeKind kind, Node *lhs, Node *rhs);
+LVar *new_lvar(Token *tok, Type *type, int is_static, int is_extern);
 LVar *find_lvar(Token *tok);
 LVar *find_gvar(Token *tok);
 Struct *find_struct(Token *tok);
@@ -242,7 +253,10 @@ LVar *find_struct_member(Struct *struct_, Token *tok);
 StructTag *find_struct_tag(Token *tok);
 Function *find_fn(Token *tok);
 
-// token.c
+// parse.c
+void error_duplicate_name(Token *tok, const char *type);
+void *safe_realloc_array(void *ptr, int element_size, int new_size);
+void program();
 int peek(char *op);
 int consume(char *op);
 Token *consume_ident();
@@ -266,13 +280,6 @@ Type *new_type_ptr(Type *ptr_to);
 Type *new_type_arr(Type *ptr_to, int array_size);
 Type *new_type_struct(Struct *struct_);
 Type *parse_array_dimensions(Type *base_type);
-
-// ast.c
-Node *new_node(NodeKind kind);
-Node *new_num(int val);
-Node *new_deref(Node *lhs);
-Node *new_binary(NodeKind kind, Node *lhs, Node *rhs);
-LVar *new_lvar(Token *tok, Type *type, int is_static, int is_extern);
 
 // decl.c
 Node *function_definition(Token *tok, Type *type, int is_static);
@@ -298,11 +305,6 @@ Node *break_stmt();
 Node *continue_stmt();
 Node *return_stmt();
 Node *stmt();
-
-// parse.c
-void error_duplicate_name(Token *tok, const char *type);
-void *safe_realloc_array(void *ptr, int element_size, int new_size);
-void program();
 
 // expr.c
 Node *expr();

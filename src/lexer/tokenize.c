@@ -3,32 +3,137 @@
 
 extern char *user_input;
 extern Token *token;
-extern String *filenames;
-extern char *input_file;
 
 extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
-// Create a new token and add it as the next token of `cur`.
-void new_token(TokenKind kind, char *str, int len) {
-  Token *tok = malloc(sizeof(Token));
-  tok->kind = kind;
-  tok->str = str;
-  tok->len = len;
-  token->next = tok;
-  token = tok;
+char *parse_char_literal(char *p) {
+  char *q = p;
+  int len;
+  char val;
+  p++;
+
+  if (*p == '\\') {
+    p++;
+    switch (*p) {
+    case 'a':
+      val = '\a';
+      break;
+    case 'b':
+      val = '\b';
+      break;
+    case 'e':
+      val = '\e';
+      break;
+    case 'f':
+      val = '\f';
+      break;
+    case 'n':
+      val = '\n';
+      break;
+    case 'r':
+      val = '\r';
+      break;
+    case 't':
+      val = '\t';
+      break;
+    case 'v':
+      val = '\v';
+      break;
+    case '\\':
+      val = '\\';
+      break;
+    case '\'':
+      val = '\'';
+      break;
+    case '\"':
+      val = '\"';
+      break;
+    case '0':
+      val = '\0';
+      break;
+    default:
+      error_at(p - 1, "invalid escape sequence in character literal");
+    }
+    p++;
+    len = 4;
+  } else {
+    val = *p;
+    p++;
+    len = 3;
+  }
+
+  if (*p != '\'') {
+    error_at(p, "unclosed character literal");
+  }
+  p++;
+
+  new_token(TK_NUM, q, len);
+  token->val = val;
+  return p; // Return the position after the closing quote
 }
 
-int startswith(char *p, char *q) { return !memcmp(p, q, strlen(q)); }
+char *parse_string_literal(char *p) {
+  p++;
+  char *q = p;
+  int len = 0;
+  char *buf = malloc(sizeof(char) * 1024);
+  while (*p != '"') {
+    if (*p == '\0' || *p == '\n') {
+      error_at(p, "unclosed string literal [in tokenize]");
+    } else if (*p == '\\' && *(p + 1) == '\n') {
+      p += 2; // 行継続をスキップ
+    } else if (*p == '\\') {
+      buf[len++] = *p++;
+      buf[len++] = *p++;
+    } else {
+      buf[len++] = *p++;
+    }
+  }
+  if (token->kind == TK_STRING) {
+    memcpy(token->str + token->len, buf, len);
+    token->len += len;
+  } else {
+    memcpy(q, buf, len);
+    new_token(TK_STRING, q, len);
+  }
+  free(buf);
+  p++;
+  return p; // Return the position after the closing quote
+}
 
-int is_alnum(char c) {
-  return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') || (c == '_');
+char *parse_number_literal(char *p) {
+  char *q;
+  if (startswith(p, "0b")) {
+    new_token(TK_NUM, p, 0);
+    p += 2;
+    q = p;
+    token->val = strtol(p, &p, 2);
+    token->len = p - q + 2;
+  } else if (startswith(p, "0x")) {
+    p += 2;
+    q = p;
+    new_token(TK_NUM, p, 0);
+    token->val = strtol(p, &p, 16);
+    token->len = p - q + 2;
+  } else if (startswith(p, "0")) {
+    new_token(TK_NUM, p, 0);
+    p++;
+    q = p;
+    token->val = strtol(p, &p, 8);
+    token->len = p - q + 2;
+  } else {
+    new_token(TK_NUM, p, 0);
+    q = p;
+    token->val = strtol(p, &p, 10);
+    token->len = p - q;
+  }
+  return p; // Return the position after the number
 }
 
 // Tokenize `user_input` and returns new tokens.
 void tokenize() {
-  Token *token_cpy;
   char *p = user_input;
   char *q;
 
@@ -56,9 +161,14 @@ void tokenize() {
       continue;
     }
 
+    if (startswith(p, "#include") && !is_alnum(p[8])) {
+      p = handle_include_directive(p);
+      continue;
+    }
+
     // Multi-letter punctuator
     if (startswith(p, "...")) {
-      new_token(TK_ELLIPSIS, p, 3);
+      new_token(TK_RESERVED, p, 3);
       p += 3;
       continue;
     }
@@ -74,177 +184,25 @@ void tokenize() {
     }
 
     // Single-letter punctuator
-    if (strchr("+-*/()<>={}[];&|^~,%!.:#", *p)) {
-      token_cpy = token;
+    if (strchr("+-*/()<>={}[];&|^~,%!.:", *p)) {
       new_token(TK_RESERVED, p++, 1);
       continue;
     }
 
     // char
     if (*p == '\'') {
-      q = p;
-      int len;
-      char val;
-      p++;
-
-      if (*p == '\\') {
-        p++;
-        if (*p == 'a') {
-          val = '\a';
-        } else if (*p == 'b') {
-          val = '\b';
-        } else if (*p == 'e') {
-          val = '\e';
-        } else if (*p == 'f') {
-          val = '\f';
-        } else if (*p == 'n') {
-          val = '\n';
-        } else if (*p == 'r') {
-          val = '\r';
-        } else if (*p == 't') {
-          val = '\t';
-        } else if (*p == 'v') {
-          val = '\v';
-        } else if (*p == '\\') {
-          val = '\\';
-        } else if (*p == '\'') {
-          val = '\'';
-        } else if (*p == '\"') {
-          val = '\"';
-        } else if (*p == '0') {
-          val = '\0';
-        } else {
-          error_at(p - 1, "invalid escape sequence in character literal");
-        }
-        p++;
-        len = 4;
-      } else {
-        val = *p;
-        p++;
-        len = 3;
-      }
-
-      if (*p != '\'') {
-        error_at(p, "unclosed character literal");
-      }
-      p++;
-
-      new_token(TK_NUM, q, len);
-      token->val = val;
+      p = parse_char_literal(p);
       continue;
     }
 
     if (*p == '"') {
-      p++;
-      q = p;
-      int len = 0;
-      char *buf = malloc(sizeof(char) * 1024);
-      while (*p != '"') {
-        if (*p == '\0' || *p == '\n') {
-          error_at(p, "unclosed string literal [in tokenize]");
-        } else if (*p == '\\' && *(p + 1) == '\n') {
-          p += 2; // 行継続をスキップ
-        } else if (*p == '\\') {
-          buf[len++] = *p++;
-          buf[len++] = *p++;
-        } else {
-          buf[len++] = *p++;
-        }
-      }
-      if (token->kind == TK_STRING) {
-        memcpy(token->str + token->len, buf, len);
-        token->len += len;
-      } else {
-        memcpy(q, buf, len);
-        new_token(TK_STRING, q, len);
-      }
-      free(buf);
-      p++;
+      p = parse_string_literal(p);
       continue;
     }
 
     // Integer literal
-    if (startswith(p, "0b")) {
-      new_token(TK_NUM, p, 0);
-      p += 2;
-      q = p;
-      token->val = strtol(p, &p, 2);
-      token->len = p - q + 2;
-      continue;
-    } else if (startswith(p, "0x")) {
-      p += 2;
-      q = p;
-      new_token(TK_NUM, p, 0);
-      token->val = strtol(p, &p, 16);
-      token->len = p - q + 2;
-      continue;
-    } else if (startswith(p, "0")) {
-      new_token(TK_NUM, p, 0);
-      p++;
-      q = p;
-      token->val = strtol(p, &p, 8);
-      token->len = p - q + 2;
-      continue;
-    } else if (isdigit(*p)) {
-      new_token(TK_NUM, p, 0);
-      q = p;
-      token->val = strtol(p, &p, 10);
-      token->len = p - q;
-      continue;
-    }
-
-    if (startswith(p, "include") && !is_alnum(p[7])) {
-      if (!(token->kind == TK_RESERVED && !memcmp(token->str, "#", token->len))) {
-        error_at(token->str, "expected \"#\" before \"include\"");
-      }
-      token = token_cpy;
-      p += 7;
-      while (isspace(*p)) {
-        p++;
-      }
-      if (*p != '"') {
-        error_at(p, "expected \" before \"include\"");
-      }
-      p++;
-      q = p;
-      while (*p != '"') {
-        if (*p == '\0') {
-          error_at(q - 1, "unclosed string literal [in tokenize]");
-        }
-        if (*p == '\\') {
-          p += 2;
-        } else {
-          p++;
-        }
-      }
-      char *name = malloc(sizeof(char) * (p - q + 1));
-      memcpy(name, q, p - q);
-      name[p - q] = '\0';
-      p++;
-      int flag = 1;
-      for (String *s = filenames; s; s = s->next) {
-        if (!memcmp(s->text, name, strlen(name))) {
-          flag = 0;
-          break;
-        }
-      }
-      if (flag == 0) {
-        free(name);
-        continue;
-      }
-      input_file = name;
-      filenames = malloc(sizeof(String));
-      filenames->text = input_file;
-      filenames->len = strlen(input_file);
-      filenames->next = NULL;
-      char *user_input_cpy = user_input;
-      char *new_input = find_file_includes(name);
-      if (!new_input) {
-        error_at(q - 1, "Cannot open include file: %s", name);
-      }
-      user_input = new_input;
-      tokenize();
-      user_input = user_input_cpy;
+    if (isdigit(*p)) {
+      p = parse_number_literal(p);
       continue;
     }
 
