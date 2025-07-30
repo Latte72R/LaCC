@@ -82,12 +82,16 @@ Both global and local (stack) variable declarations are supported.
      comment */
   ```
 
+- **`switch` statements and `case` / `default` labels**  
+  LaCC supports `switch` statements with `case` labels for branching based on the value of an expression.
+
+- **Explicit type casting**  
+  LaCC allows explicit type casting between compatible pointer types.
+
 ## Unsupported Constructs
 
 LaCC does **not** support the following:
-
-- Nested functions (functions defined within other functions)  
-- `switch` statements and `case` / `default` labels  
+ 
 - Ternary conditional operator (`?:`)  
 - `union` types  
 - Extended primitive types: `unsigned`, `long`, `float`, `double`, etc.  
@@ -98,7 +102,7 @@ LaCC does **not** support the following:
 - Variadic functions (functions with `...` parameters)  
 - The comma operator
 - Function pointers
-- Explicit type casting
+- Nested functions (functions defined within other functions) 
 - Variable Length Arrays (VLAs)
 
 
