@@ -17,17 +17,8 @@ Node *expr() { return assign(); }
 Node *assign_sub(Node *lhs, Node *rhs, char *ptr) {
   if (lhs->type->is_const) {
     error_at(ptr, "constant variable cannot be assigned [in assign_sub]");
-  } else if (!(lhs->type->ty == TY_INT && rhs->type->ty == TY_CHAR) &&
-             !(lhs->type->ty == TY_CHAR && rhs->type->ty == TY_INT) &&
-             !(is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) && (lhs->type->ty != rhs->type->ty)) {
-    warning_at(ptr, "incompatible types in assignment: '%s' and '%s' [in assign_sub]", type_name(lhs->type),
-               type_name(rhs->type));
-  } else if (is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) {
-    if (!(lhs->type->ptr_to->ty == TY_VOID || rhs->type->ptr_to->ty == TY_VOID) &&
-        (lhs->type->ptr_to->ty != rhs->type->ptr_to->ty)) {
-      warning_at(ptr, "incompatible pointer types in assignment: '%s' and '%s' [in assign_sub]",
-                 type_name(lhs->type->ptr_to), type_name(rhs->type->ptr_to));
-    }
+  } else if (!is_same_type(lhs->type, rhs->type)) {
+    warning_at(ptr, "incompatible types for assignment [in assign_sub]");
   }
   Node *node = new_binary(ND_ASSIGN, lhs, rhs);
   return node;
@@ -503,7 +494,7 @@ Node *primary() {
   }
 
   // 変数
-  if (!consume("(")) {
+  if (!peek("(")) {
     LVar *lvar = find_lvar(tok);
     LVar *gvar = find_gvar(tok);
     if (lvar) {
@@ -522,6 +513,8 @@ Node *primary() {
 
   // 関数呼び出し
   else {
+    consume("(");
+    char *ptr = consumed_ptr;
     Function *fn = find_fn(tok);
     if (!fn) {
       error_at(tok->str, "undefined function: %.*s [in primary]", tok->len, tok->str);
@@ -543,6 +536,21 @@ Node *primary() {
     } else {
       node->val = 0;
     }
+    if (!fn->type_check) {
+    } else if (node->val > fn->param_count) {
+      warning_at(ptr, "too many arguments to function: %.*s [in primary]", tok->len, tok->str);
+    } else if (node->val < fn->param_count) {
+      warning_at(ptr, "not enough arguments to function: %.*s [in primary]", tok->len, tok->str);
+    } else {
+      for (int i = 0; i < node->val; i++) {
+        if (!is_same_type(node->args[i]->type, fn->param_types[i])) {
+          warning_at(ptr, "incompatible type for argument %.*s: expected %s, got %s [in primary]", tok->len, tok->str,
+                     type_name(fn->param_types[i]), type_name(node->args[i]->type));
+          break;
+        }
+      }
+    }
+
     return node;
   }
 }

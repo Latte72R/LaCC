@@ -8,6 +8,7 @@
 extern int show_warning;
 extern char *user_input;
 extern char *input_file;
+extern char *output_file;
 extern FILE *fp;
 
 // Write formatted output to the output file.
@@ -22,9 +23,15 @@ void write_file(char *fmt, ...) {
 void error(char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  fprintf(stderr, "\033[31m");
-  vfprintf(stderr, fmt, ap);
-  fprintf(stderr, "\033[0m\n");
+
+  // エラーメッセージを表示
+  char fmt2[128];
+  sprintf(fmt2, "\033[1;38;5;9merror:\033[0m %s\n", fmt);
+  vfprintf(stderr, fmt2, ap);
+
+  // ファイルを削除してプログラムを終了
+  fclose(fp);
+  remove(output_file);
   exit(1);
 }
 
@@ -52,16 +59,24 @@ void error_at(char *loc, char *fmt, ...) {
     if (*p == '\n')
       line_num++;
 
-  // 見つかった行を、ファイル名と行番号と一緒に表示
-  fprintf(stderr, "\033[1m\033[32m%s:%d\033[0m:\n", input_file, line_num);
+  // 見つかった行のファイル名と行番号を表示
+  fprintf(stderr, "\033[1;32m%s:%d:\033[0m ", input_file, line_num);
+
+  // エラーメッセージを表示
+  char fmt2[128];
+  sprintf(fmt2, "\033[1;38;5;9merror:\033[0m %s\n", fmt);
+  vfprintf(stderr, fmt2, ap);
+
+  // 見つかった行を表示
   fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
-  // エラー箇所を"^"で指し示して、エラーメッセージを表示
+  // エラー箇所を"^"で指し示す
   int pos = loc - line;
-  char fmt2[128];
-  sprintf(fmt2, "\033[1m\033[31m^\n%s\033[0m\n", fmt);
-  fprintf(stderr, "%*s", pos, ""); // pos個の空白を出力
-  vfprintf(stderr, fmt2, ap);
+  fprintf(stderr, "%*s\033[1;32m^\033[0m\n", pos, "");
+
+  // ファイルを削除してプログラムを終了
+  fclose(fp);
+  remove(output_file);
   exit(1);
 }
 
@@ -92,14 +107,18 @@ void warning_at(char *loc, char *fmt, ...) {
     if (*p == '\n')
       line_num++;
 
-  // 見つかった行を、ファイル名と行番号と一緒に表示
-  fprintf(stderr, "\033[1m\033[32m%s:%d\033[0m:\n", input_file, line_num);
+  // 見つかった行のファイル名と行番号を表示
+  fprintf(stderr, "\033[1;32m%s:%d:\033[0m ", input_file, line_num);
+
+  // 警告メッセージを表示
+  char fmt2[128];
+  sprintf(fmt2, "\033[1;38;5;3mwarning:\033[0m %s\n", fmt);
+  vfprintf(stderr, fmt2, ap);
+
+  // 見つかった行を表示
   fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
-  // エラー箇所を"^"で指し示して、エラーメッセージを表示
+  // 警告箇所を"^"で指し示す
   int pos = loc - line;
-  char fmt2[128];
-  sprintf(fmt2, "\033[1m\033[33m^\n%s\033[0m\n", fmt);
-  fprintf(stderr, "%*s", pos, ""); // pos個の空白を出力
-  vfprintf(stderr, fmt2, ap);
+  fprintf(stderr, "%*s\033[1;32m^\033[0m\n", pos, "");
 }

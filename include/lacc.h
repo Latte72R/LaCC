@@ -132,14 +132,19 @@ struct Label {
 // 関数の型
 typedef struct Function Function;
 struct Function {
-  Function *next; // 次の関数かNULL
-  LVar *locals;   // ローカル変数
-  char *name;     // 変数の名前
-  int len;        // 名前の長さ
-  int offset;     // RBPからのオフセット
-  Type *type;     // 関数の型
-  int is_static;  // staticかどうか
-  Label *labels;  // ラベルのリスト
+  Function *next;       // 次の関数かNULL
+  LVar *locals;         // ローカル変数
+  char *name;           // 変数の名前
+  int len;              // 名前の長さ
+  int offset;           // RBPからのオフセット
+  Type *type;           // 関数の型
+  int is_static;        // staticかどうか
+  Label *labels;        // ラベルのリスト
+  Type *return_type;    // 戻り値の型
+  Type *param_types[6]; // 引数の型の配列
+  int param_count;      // 引数の数
+  int type_check;       // 型チェックするかどうか
+  int is_defined;       // 定義済みかどうか
 };
 
 // lexer.c からエクスポートする関数
@@ -281,6 +286,7 @@ Type *new_type_arr(Type *ptr_to, int array_size);
 Type *new_type_struct(Struct *struct_);
 Type *parse_array_dimensions(Type *base_type);
 char *type_name(Type *type);
+int is_same_type(Type *type1, Type *type2);
 
 // decl.c
 Node *function_definition(Token *tok, Type *type, int is_static);

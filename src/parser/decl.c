@@ -77,8 +77,8 @@ Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, Type *o
 
 Node *function_definition(Token *tok, Type *type, int is_static) {
   Function *fn = find_fn(tok);
-  if (fn) {
-    // error_at(token->str, "duplicated function name: %.*s", tok->len, tok->str);
+  if (fn && fn->is_defined) {
+    error_at(consumed_ptr, "duplicated function definition: %.*s [in function definition]", tok->len, tok->str);
   } else {
     fn = malloc(sizeof(Function));
     fn->next = functions;
@@ -93,6 +93,9 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   fn->type = type;
   fn->offset = 0;
   fn->is_static = is_static;
+  fn->return_type = type;
+  fn->is_defined = FALSE;
+  fn->type_check = TRUE;
   fn->labels = malloc(sizeof(Label));
   fn->labels->next = NULL;
   Function *prev_fn = current_fn;
@@ -102,6 +105,8 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   int n = 0;
   for (int i = 0; i < 6; i++) {
     if (consume("...")) {
+      // 可変長引数
+      fn->type_check = FALSE;
       break;
     }
     type = consume_type();
@@ -131,6 +136,7 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
       lvar->offset = fn->locals->offset + get_sizeof(type);
     }
     fn->offset = lvar->offset;
+    fn->param_types[n] = type;
     nd_lvar->var = lvar;
     nd_lvar->type = type;
     fn->locals = lvar;
@@ -138,14 +144,20 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
     if (!consume(","))
       break;
   }
+  fn->param_count = n;
   node->val = n;
   expect(")", "after arguments", "function definition");
 
   if (!peek("{")) {
     node->kind = ND_EXTERN;
     expect(";", "after line", "function definition");
+    if (fn->param_count == 0) {
+      // C99のprototypeでは、引数を省略可能
+      fn->type_check = FALSE;
+    }
   } else {
     node->lhs = stmt();
+    fn->is_defined = TRUE;
   }
   current_fn = prev_fn;
   return node;

@@ -35,7 +35,7 @@ Token *consume_ident() {
 // Ensure that the current token is `op`.
 void expect(char *op, char *err, char *stmt) {
   if (strncmp(token->str, op, token->len))
-    error_at(token->str, "expected \"%s\":\n  %s  [in %s statement]", op, err, stmt);
+    error_at(token->str, "expected \"%s\" %s [in %s statement]", op, err, stmt);
   token = token->next;
 }
 

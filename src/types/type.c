@@ -173,3 +173,21 @@ char *type_name(Type *type) {
     return "unknown type";
   }
 }
+
+int is_same_type(Type *type1, Type *type2) {
+  // int と char の比較は許容
+  // void* と他のポインタ型の比較も許容
+  if (is_ptr_or_arr(type1) && is_ptr_or_arr(type2)) {
+    return is_same_type(type1->ptr_to, type2->ptr_to);
+  } else if (type1->ty == TY_VOID || type2->ty == TY_VOID) {
+    return TRUE;
+  } else if (type1->ty == type2->ty) {
+    return TRUE;
+  } else if (type1->ty == TY_INT && type2->ty == TY_CHAR) {
+    return TRUE;
+  } else if (type1->ty == TY_CHAR && type2->ty == TY_INT) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}

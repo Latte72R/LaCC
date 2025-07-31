@@ -43,16 +43,24 @@ int main(int argc, char **argv) {
     } else {
       token_cpy = token;
       input_file = argv[i];
+      int length = strlen(input_file);
       filenames = malloc(sizeof(String));
       filenames->text = input_file;
-      filenames->len = strlen(input_file);
+      filenames->len = length;
       filenames->next = NULL;
-      if (strncmp(input_file + strlen(input_file) - 2, ".c", 2)) {
+      if (strncmp(input_file + length - 2, ".c", 2)) {
         error("Source file must have a .c extension.");
       }
-      output_file_tmp = malloc(strlen(input_file));
-      memcpy(output_file_tmp, input_file, strlen(input_file));
-      output_file_tmp[strlen(input_file) - 1] = 's';
+      int start = 0;
+      for (int j = length - 2; j >= 0; j--) {
+        if (input_file[j] == '/') {
+          start = j + 1;
+          break;
+        }
+      }
+      output_file_tmp = malloc(length - start);
+      memcpy(output_file_tmp, input_file + start, length - start);
+      output_file_tmp[length - start - 1] = 's';
     }
   }
 
