@@ -57,7 +57,7 @@ LVar *new_lvar(Token *tok, Type *type, int is_static, int is_extern) {
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_lvar(Token *tok) {
   for (LVar *var = current_fn->locals; var->next; var = var->next)
-    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+    if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;
 }
@@ -65,7 +65,7 @@ LVar *find_lvar(Token *tok) {
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_gvar(Token *tok) {
   for (LVar *var = globals; var->next; var = var->next)
-    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+    if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;
 }
@@ -73,7 +73,7 @@ LVar *find_gvar(Token *tok) {
 // structを名前で検索する。見つからなかった場合はNULLを返す。
 Struct *find_struct(Token *tok) {
   for (Struct *var = structs; var->next; var = var->next)
-    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+    if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;
 }
@@ -81,7 +81,7 @@ Struct *find_struct(Token *tok) {
 // enumを名前で検索する。見つからなかった場合はNULLを返す。
 Enum *find_enum(Token *tok) {
   for (Enum *var = enums; var->next; var = var->next)
-    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+    if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;
 }
@@ -89,7 +89,7 @@ Enum *find_enum(Token *tok) {
 // enumのメンバーを名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_enum_member(Token *tok) {
   for (LVar *var = enum_members; var->next; var = var->next)
-    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+    if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;
 }
@@ -97,7 +97,7 @@ LVar *find_enum_member(Token *tok) {
 // structのメンバーを名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_struct_member(Struct *struct_, Token *tok) {
   for (LVar *var = struct_->var; var->next; var = var->next)
-    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+    if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;
 }
@@ -105,7 +105,7 @@ LVar *find_struct_member(Struct *struct_, Token *tok) {
 // struct_tagを名前で検索する。見つからなかった場合はNULLを返す。
 StructTag *find_struct_tag(Token *tok) {
   for (StructTag *var = struct_tags; var->next; var = var->next)
-    if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+    if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;
 }
@@ -113,7 +113,7 @@ StructTag *find_struct_tag(Token *tok) {
 // 関数を名前で検索する。見つからなかった場合はNULLを返す。
 Function *find_fn(Token *tok) {
   for (Function *fn = functions; fn->next; fn = fn->next)
-    if (fn->len == tok->len && !memcmp(tok->str, fn->name, fn->len))
+    if (fn->len == tok->len && !strncmp(tok->str, fn->name, fn->len))
       return fn;
   return NULL;
 }

@@ -68,7 +68,7 @@ void asm_memcpy(Node *lhs, Node *rhs) {
 
 Label *find_label(Function *fn, char *name, int len) {
   for (Label *label = fn->labels; label->next; label = label->next) {
-    if (label->len == len && !memcmp(label->name, name, len)) {
+    if (label->len == len && !strncmp(label->name, name, len)) {
       return label;
     }
   }
@@ -473,7 +473,7 @@ void gen(Node *node) {
       }
     }
     gen(node->lhs);
-    if (node->fn->type->ty == TY_VOID || startswith(node->fn->name, "main") && node->fn->len == 4) {
+    if (node->fn->type->ty == TY_VOID || !strncmp(node->fn->name, "main", 4)) {
       write_file("  mov rax, 0\n");
       write_file("  mov rsp, rbp\n");
       write_file("  pop rbp\n");

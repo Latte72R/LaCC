@@ -24,15 +24,15 @@ int main(int argc, char **argv) {
   }
 
   for (int i = 1; i < argc; i++) {
-    if (!memcmp(argv[i], "-I", 2) && i + 1 < argc) {
+    if (!strncmp(argv[i], "-I", 2) && i + 1 < argc) {
       IncludePath *ip = malloc(sizeof *ip);
       ip->path = argv[++i]; // "./include" など
       ip->next = include_paths;
       include_paths = ip;
-    } else if (!memcmp(argv[i], "-S", 2)) {
-    } else if (!memcmp(argv[i], "-w", 2)) {
+    } else if (!strncmp(argv[i], "-S", 2)) {
+    } else if (!strncmp(argv[i], "-w", 2)) {
       show_warning = FALSE;
-    } else if (!memcmp(argv[i], "-o", 2) && i + 1 < argc) {
+    } else if (!strncmp(argv[i], "-o", 2) && i + 1 < argc) {
       output_file_tmp = argv[++i];
       if (output_file_tmp[0] == '-') {
         error("Output file cannot start with '-'.");
@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
       filenames->text = input_file;
       filenames->len = strlen(input_file);
       filenames->next = NULL;
-      if (memcmp(input_file + strlen(input_file) - 2, ".c", 2)) {
+      if (strncmp(input_file + strlen(input_file) - 2, ".c", 2)) {
         error("Source file must have a .c extension.");
       }
       output_file_tmp = malloc(strlen(input_file));

@@ -20,7 +20,7 @@ void new_token(TokenKind kind, char *str, int len) {
   token = tok;
 }
 
-int startswith(char *p, char *q) { return !memcmp(p, q, strlen(q)); }
+int startswith(char *p, char *q) { return !strncmp(p, q, strlen(q)); }
 
 int is_alnum(char c) {
   return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9') || (c == '_');
@@ -53,7 +53,7 @@ char *handle_include_directive(char *p) {
   p++;
   int flag = 1;
   for (String *s = filenames; s; s = s->next) {
-    if (!memcmp(s->text, name, strlen(name))) {
+    if (!strncmp(s->text, name, strlen(name))) {
       flag = 0;
       break;
     }

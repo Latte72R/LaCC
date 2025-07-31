@@ -10,7 +10,7 @@ extern const int FALSE;
 extern void *NULL;
 
 int peek(char *op) {
-  if (token->kind != TK_RESERVED || strlen(op) != token->len || memcmp(token->str, op, token->len))
+  if (token->kind != TK_RESERVED || strlen(op) != token->len || strncmp(token->str, op, token->len))
     return FALSE;
   return TRUE;
 }

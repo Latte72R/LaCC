@@ -386,7 +386,6 @@ extern int isdigit();
 // string.h
 extern int strcmp();
 extern int strncmp();
-extern int memcmp();
 extern int memcpy();
 extern int strlen();
 extern int strtol();

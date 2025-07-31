@@ -47,7 +47,7 @@ run: .run-selfhost ## Run a file with the self-hosted compiler
 .run-selfhost: $(SELFHOST) | $(BUILD_DIR)
 	@$(call runfile, $(SELFHOST), $(FILE))
 
-$(BOOSTSTRAP): $(SRCS) | $(BUILD_DIR)
+$(BOOSTSTRAP): $(SRCS) $(EXTENSION) | $(BUILD_DIR)
 	@$(CC) $(CC_FLAGS) -o $(BOOSTSTRAP) $(SRCS) $(EXTENSION)
 	@echo "Bootstrap compiler created at '$@'."
 
