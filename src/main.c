@@ -1,6 +1,7 @@
 
 #include "lacc.h"
 
+extern int show_warning;
 extern char *user_input;
 extern Token *token;
 extern String *filenames;
@@ -8,6 +9,8 @@ extern char *input_file;
 extern char *output_file;
 extern IncludePath *include_paths;
 extern FILE *fp;
+extern const int TRUE;
+extern const int FALSE;
 extern void *NULL;
 
 int main(int argc, char **argv) {
@@ -27,6 +30,8 @@ int main(int argc, char **argv) {
       ip->next = include_paths;
       include_paths = ip;
     } else if (!memcmp(argv[i], "-S", 2)) {
+    } else if (!memcmp(argv[i], "-w", 2)) {
+      show_warning = FALSE;
     } else if (!memcmp(argv[i], "-o", 2) && i + 1 < argc) {
       output_file_tmp = argv[++i];
       if (output_file_tmp[0] == '-') {

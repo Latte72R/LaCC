@@ -23,6 +23,7 @@ Node *handle_array_initialization(Node *node, Type *type, Type *org_type) {
   if (type->ty != TY_ARR) {
     error_at(token->str, "array initializer is only allowed for array type [in variable declaration]");
   }
+  consume("{");
   Array *array = malloc(sizeof(Array));
   array->next = arrays;
   arrays = array;
@@ -45,8 +46,8 @@ Node *handle_array_initialization(Node *node, Type *type, Type *org_type) {
   return node;
 }
 
-Node *handle_scalar_initialization(Node *node, Type *type) {
-  node = new_binary(ND_ASSIGN, node, expr());
+Node *handle_scalar_initialization(Node *node, Type *type, char *ptr) {
+  node = assign_sub(node, expr(), ptr);
   node->type = type;
   if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR) {
     node->val = node->lhs->type->ptr_to->ty == TY_CHAR;
@@ -61,14 +62,15 @@ Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, Type *o
       lvar->offset = 0;
     return node;
   }
+  char *ptr = consumed_ptr;
   if (set_offset) {
     lvar->offset = expect_signed_number();
     return node;
   }
-  if (consume("{")) {
+  if (peek("{")) {
     node = handle_array_initialization(node, type, org_type);
   } else {
-    node = handle_scalar_initialization(node, type);
+    node = handle_scalar_initialization(node, type, ptr);
   }
   return node;
 }

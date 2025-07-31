@@ -17,18 +17,16 @@ Node *expr() { return assign(); }
 Node *assign_sub(Node *lhs, Node *rhs, char *ptr) {
   if (lhs->type->is_const) {
     error_at(ptr, "constant variable cannot be assigned [in assign_sub]");
-  } else if (!((lhs->type->ty == TY_INT && rhs->type->ty == TY_CHAR) ||
-               (lhs->type->ty == TY_CHAR && rhs->type->ty == TY_INT)) &&
-             (lhs->type->ty != rhs->type->ty)) {
+  } else if (!(lhs->type->ty == TY_INT && rhs->type->ty == TY_CHAR) &&
+             !(lhs->type->ty == TY_CHAR && rhs->type->ty == TY_INT) &&
+             !(is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) && (lhs->type->ty != rhs->type->ty)) {
     warning_at(ptr, "incompatible types in assignment: '%s' and '%s' [in assign_sub]", type_name(lhs->type),
                type_name(rhs->type));
-  } else if (lhs->type->ty == TY_PTR && rhs->type->ty == TY_PTR || lhs->type->ty == TY_ARR && rhs->type->ty == TY_ARR) {
-    if (!((lhs->type->ptr_to->ty == TY_INT && rhs->type->ptr_to->ty == TY_CHAR) ||
-          (lhs->type->ptr_to->ty == TY_CHAR && rhs->type->ptr_to->ty == TY_INT) ||
-          (lhs->type->ptr_to->ty == TY_VOID || rhs->type->ptr_to->ty == TY_VOID)) &&
+  } else if (is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) {
+    if (!(lhs->type->ptr_to->ty == TY_VOID || rhs->type->ptr_to->ty == TY_VOID) &&
         (lhs->type->ptr_to->ty != rhs->type->ptr_to->ty)) {
-      warning_at(ptr, "incompatible pointer types in assignment: '%s' and '%s' [in assign_sub]", type_name(lhs->type),
-                 type_name(rhs->type));
+      warning_at(ptr, "incompatible pointer types in assignment: '%s' and '%s' [in assign_sub]",
+                 type_name(lhs->type->ptr_to), type_name(rhs->type->ptr_to));
     }
   }
   Node *node = new_binary(ND_ASSIGN, lhs, rhs);
@@ -42,14 +40,19 @@ Node *assign() {
     ptr = consumed_ptr;
     node = assign_sub(node, expr(), ptr);
   } else if (consume("+=")) {
+    ptr = consumed_ptr;
     node = assign_sub(node, new_binary(ND_ADD, node, expr()), ptr);
   } else if (consume("-=")) {
+    ptr = consumed_ptr;
     node = assign_sub(node, new_binary(ND_SUB, node, expr()), ptr);
   } else if (consume("*=")) {
+    ptr = consumed_ptr;
     node = assign_sub(node, new_binary(ND_MUL, node, expr()), ptr);
   } else if (consume("/=")) {
+    ptr = consumed_ptr;
     node = assign_sub(node, new_binary(ND_DIV, node, expr()), ptr);
   } else if (consume("%=")) {
+    ptr = consumed_ptr;
     node = assign_sub(node, new_binary(ND_MOD, node, expr()), ptr);
   }
   return node;
@@ -390,7 +393,7 @@ Node *access_member() {
   Node *ptr;
   Node *offset_node;
   Token *tok;
-  Struct *is_struct;
+  Struct *struct_;
   LVar *var;
   char *consumed_ptr_prev;
   Token *prev_tok = token;
@@ -409,13 +412,13 @@ Node *access_member() {
         error_at(prev_tok->str, "%.*s is not a struct [in struct reference]", prev_tok->len, prev_tok->str);
       }
       tok = expect_ident("struct reference");
-      is_struct = node->type->is_struct;
-      if (!is_struct) {
+      struct_ = node->type->struct_;
+      if (!struct_) {
         error_at(prev_tok->str, "unknown struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
-      } else if (!is_struct->size) {
+      } else if (!struct_->size) {
         error_at(prev_tok->str, "not initialized struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
       }
-      var = find_struct_member(is_struct, tok);
+      var = find_struct_member(struct_, tok);
       offset_node = new_num(var->offset);
       ptr = new_node(ND_ADDR);
       ptr->lhs = node;
@@ -432,13 +435,13 @@ Node *access_member() {
                  prev_tok->str);
       }
       tok = expect_ident("struct reference");
-      is_struct = node->type->ptr_to->is_struct;
-      if (!is_struct) {
+      struct_ = node->type->ptr_to->struct_;
+      if (!struct_) {
         error_at(prev_tok->str, "unknown struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
-      } else if (!is_struct->size) {
+      } else if (!struct_->size) {
         error_at(prev_tok->str, "not initialized struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
       }
-      var = find_struct_member(is_struct, tok);
+      var = find_struct_member(struct_, tok);
       offset_node = new_num(var->offset);
       ptr = new_binary(ND_ADD, node, offset_node);
       ptr->type = new_type_ptr(var->type);

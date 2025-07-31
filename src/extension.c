@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+extern int show_warning;
 extern char *user_input;
 extern char *input_file;
 extern FILE *fp;
@@ -66,6 +67,9 @@ void error_at(char *loc, char *fmt, ...) {
 
 // 警告の起きた場所を報告するための関数
 void warning_at(char *loc, char *fmt, ...) {
+  if (!show_warning) {
+    return;
+  }
   va_list ap;
   va_start(ap, fmt);
 

@@ -25,7 +25,7 @@ Type *parse_base_type_internal(int should_consume) {
     Enum *enum_ = find_enum(token);
     if (struct_) {
       type->ty = TY_STRUCT;
-      type->is_struct = struct_;
+      type->struct_ = struct_;
     } else if (enum_) {
       type->ty = TY_INT;
     } else {
@@ -103,7 +103,7 @@ int get_sizeof(Type *type) {
   } else if (type->ty == TY_ARR || type->ty == TY_ARGARR) {
     return get_sizeof(type->ptr_to) * type->array_size;
   } else if (type->ty == TY_STRUCT) {
-    return type->is_struct->size;
+    return type->struct_->size;
   } else {
     error_at(token->str, "invalid type [in get_sizeof]");
     return 0;
@@ -135,7 +135,7 @@ Type *new_type_arr(Type *ptr_to, int array_size) {
 Type *new_type_struct(Struct *struct_) {
   Type *type = malloc(sizeof(Type));
   type->ty = TY_STRUCT;
-  type->is_struct = struct_;
+  type->struct_ = struct_;
   return type;
 }
 
@@ -166,8 +166,9 @@ char *type_name(Type *type) {
     return "argument array";
   case TY_VOID:
     return "void";
-  case TY_STRUCT:
-    return type->is_struct->name;
+  case TY_STRUCT: {
+    return "struct";
+  }
   default:
     return "unknown type";
   }

@@ -116,7 +116,7 @@ struct Type {
   TypeKind ty;
   Type *ptr_to;
   int array_size;
-  Struct *is_struct;
+  Struct *struct_;
   int is_const; // constかどうか
 };
 
@@ -291,7 +291,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern);
 Node *struct_stmt();
 Node *typedef_stmt();
 Node *handle_array_initialization(Node *node, Type *type, Type *org_type);
-Node *handle_scalar_initialization(Node *node, Type *type);
+Node *handle_scalar_initialization(Node *node, Type *type, char *ptr);
 Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, Type *org_type, int set_offset);
 
 // stmt.c
@@ -370,6 +370,7 @@ extern void warning_at(char *loc, char *fmt, ...);
 
 // stdio.h
 extern int printf(char *fmt, ...);
+extern int sprintf(char *fmt, ...);
 typedef struct _IO_FILE FILE;
 extern FILE *fopen(const char *filename, const char *mode);
 extern int fprintf();
