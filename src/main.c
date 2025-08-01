@@ -2,6 +2,7 @@
 #include "lacc.h"
 
 extern int show_warning;
+extern int warning_cnt;
 extern char *user_input;
 extern Token *token;
 extern String *filenames;
@@ -89,5 +90,10 @@ int main(int argc, char **argv) {
   generate_assembly();
 
   fclose(fp);
+
+  if (show_warning && warning_cnt > 0) {
+    warning("%d warnings generated.", warning_cnt);
+  }
+
   return 0;
 }

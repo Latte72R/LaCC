@@ -94,18 +94,40 @@ int is_type(Token *tok) {
 
 // 予約しているスタック領域のサイズ
 int get_sizeof(Type *type) {
-  if (type->ty == TY_INT) {
+  switch (type->ty) {
+  case TY_INT:
     return 4;
-  } else if (type->ty == TY_CHAR) {
+  case TY_CHAR:
     return 1;
-  } else if (type->ty == TY_PTR) {
+  case TY_PTR:
     return 8;
-  } else if (type->ty == TY_ARR || type->ty == TY_ARGARR) {
+  case TY_ARR:
+  case TY_ARGARR:
     return get_sizeof(type->ptr_to) * type->array_size;
-  } else if (type->ty == TY_STRUCT) {
+  case TY_STRUCT:
     return type->struct_->size;
-  } else {
+  default:
     error_at(token->str, "invalid type [in get_sizeof]");
+    return 0;
+  }
+}
+
+int type_size(Type *type) {
+  switch (type->ty) {
+  case TY_VOID:
+    return 0;
+  case TY_INT:
+    return 4;
+  case TY_CHAR:
+    return 1;
+  case TY_PTR:
+  case TY_ARR:
+  case TY_ARGARR:
+    return 8;
+  case TY_STRUCT:
+    return type->struct_->size;
+  default:
+    error_at(token->str, "invalid type [in type_size]");
     return 0;
   }
 }
@@ -155,22 +177,20 @@ int is_number(Type *type) { return type->ty == TY_INT || type->ty == TY_CHAR; }
 char *type_name(Type *type) {
   switch (type->ty) {
   case TY_INT:
-    return "int";
   case TY_CHAR:
-    return "char";
+    return "integer";
   case TY_PTR:
     return "pointer";
   case TY_ARR:
-    return "array";
   case TY_ARGARR:
-    return "argument array";
+    return "array";
   case TY_VOID:
     return "void";
   case TY_STRUCT: {
     return "struct";
   }
   default:
-    return "unknown type";
+    return "unknown";
   }
 }
 

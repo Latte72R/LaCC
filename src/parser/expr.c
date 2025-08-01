@@ -18,7 +18,7 @@ Node *assign_sub(Node *lhs, Node *rhs, char *ptr) {
   if (lhs->type->is_const) {
     error_at(ptr, "constant variable cannot be assigned [in assign_sub]");
   } else if (!is_same_type(lhs->type, rhs->type)) {
-    warning_at(ptr, "incompatible types for assignment [in assign_sub]");
+    warning_at(ptr, "incompatible %s to %s conversion [in assign_sub]", type_name(rhs->type), type_name(lhs->type));
   }
   Node *node = new_binary(ND_ASSIGN, lhs, rhs);
   return node;
@@ -302,13 +302,16 @@ Node *type_cast() {
   node->lhs = unary();
   node->type = type;
   if (type->ty == TY_VOID) {
+    // void型へのキャストは評価のみ
+    return node->lhs;
+  } else if (type->ty == TY_VOID) {
     error_at(tok->str, "cannot cast to void type [in type_cast]");
   } else if (type->ty == TY_STRUCT) {
     error_at(tok->str, "cannot cast to struct type [in type_cast]");
-  } else if (node->lhs->type->ty == TY_VOID) {
-    error_at(tok->str, "cannot cast from void type [in type_cast]");
   } else if (node->lhs->type->ty == TY_STRUCT) {
     error_at(tok->str, "cannot cast from struct type [in type_cast]");
+  } else if (type_size(node->lhs->type) > type_size(type)) {
+    warning_at(tok->str, "cast to smaller integer type [in type_cast]");
   }
   return node;
 }
@@ -538,14 +541,14 @@ Node *primary() {
     }
     if (!fn->type_check) {
     } else if (node->val > fn->param_count) {
-      warning_at(ptr, "too many arguments to function: %.*s [in primary]", tok->len, tok->str);
+      error_at(ptr, "too many arguments to function call: %.*s [in primary]", tok->len, tok->str);
     } else if (node->val < fn->param_count) {
-      warning_at(ptr, "not enough arguments to function: %.*s [in primary]", tok->len, tok->str);
+      error_at(ptr, "not enough arguments to function call: %.*s [in primary]", tok->len, tok->str);
     } else {
       for (int i = 0; i < node->val; i++) {
         if (!is_same_type(node->args[i]->type, fn->param_types[i])) {
-          warning_at(ptr, "incompatible type for argument %.*s: expected %s, got %s [in primary]", tok->len, tok->str,
-                     type_name(fn->param_types[i]), type_name(node->args[i]->type));
+          warning_at(ptr, "incompatible %s to %s conversion [in primary]", type_name(node->args[i]->type),
+                     type_name(fn->param_types[i]));
           break;
         }
       }

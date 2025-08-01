@@ -2,6 +2,7 @@
 #include "lacc.h"
 
 int show_warning = 1;
+int warning_cnt = 0;
 char *user_input;
 Token *token;
 Node **code;

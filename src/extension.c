@@ -6,6 +6,7 @@
 #include <stdlib.h>
 
 extern int show_warning;
+extern int warning_cnt;
 extern char *user_input;
 extern char *input_file;
 extern char *output_file;
@@ -80,6 +81,20 @@ void error_at(char *loc, char *fmt, ...) {
   exit(1);
 }
 
+// 警告を報告するための関数
+void warning(char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+
+  // 警告メッセージを表示
+  char fmt2[128];
+  sprintf(fmt2, "\033[1;38;5;3mwarning:\033[0m %s\n", fmt);
+  vfprintf(stderr, fmt2, ap);
+
+  warning_cnt++;
+  va_end(ap);
+}
+
 // 警告の起きた場所を報告するための関数
 void warning_at(char *loc, char *fmt, ...) {
   if (!show_warning) {
@@ -121,4 +136,7 @@ void warning_at(char *loc, char *fmt, ...) {
   // 警告箇所を"^"で指し示す
   int pos = loc - line;
   fprintf(stderr, "%*s\033[1;32m^\033[0m\n", pos, "");
+
+  warning_cnt++;
+  va_end(ap);
 }

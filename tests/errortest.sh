@@ -125,3 +125,49 @@ EOF
 cat "$TMP_C"
 $CC $TMP_C -S -o $TMP_S
 printf "\n" 
+
+printf "\e[1;36mTest case 10:\e[0m\n"
+cat <<EOF > "$TMP_C"
+int test(int x) {
+  return x;
+}
+
+int test(int x) {
+  return x;
+}
+
+int main() {
+  return test(5);
+}
+EOF
+cat "$TMP_C"
+$CC $TMP_C -S -o $TMP_S
+printf "\n"
+
+printf "\e[1;36mTest case 11:\e[0m\n"
+cat <<EOF > "$TMP_C"
+int test(int x) {
+  return x;
+}
+
+int main() {
+  return test(5, 6);  // 引数が多すぎる
+}
+EOF
+cat "$TMP_C"
+$CC $TMP_C -S -o $TMP_S
+printf "\n"
+
+printf "\e[1;36mTest case 12:\e[0m\n"
+cat <<EOF > "$TMP_C"
+int test(int x) {
+  return x;
+}
+
+int main() {
+  return test();  // 引数が足りない
+}
+EOF
+cat "$TMP_C"
+$CC $TMP_C -S -o $TMP_S
+printf "\n"

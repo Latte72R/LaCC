@@ -1,4 +1,4 @@
-# CC_FLAGS:=-std=c99 -I include -Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option -g
+CC_FLAGS_2:=-std=c99 -Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option
 CC_FLAGS:=-std=c99 -I include -w
 LACC_FLAGS:=-I include
 SRC_DIR:=./src
@@ -13,6 +13,7 @@ CC:=cc
 BOOSTSTRAP:=$(BUILD_DIR)/bootstrap
 SELFHOST:=$(BUILD_DIR)/lacc
 UNIT_TEST:=$(TEST_DIR)/unittest.c
+WARN_TEST:=$(TEST_DIR)/warntest.c
 TMP_C:=$(BUILD_DIR)/tmp.c
 TMP_S:=$(BUILD_DIR)/tmp.s
 TMP_OUT:=$(BUILD_DIR)/tmp
@@ -63,16 +64,22 @@ define unittest
 	@$(call runfile, $(1), $(UNIT_TEST))
 endef
 
+define warntest
+	@$(call runfile, $(1), $(WARN_TEST))
+endef
+
 define errortest
 	@$(TEST_DIR)/errortest.sh $(BUILD_DIR) $(1) $(TMP_C) $(TMP_S) $(TMP_OUT)
 endef
 
 unittest: .unittest-selfhost ## Run unit tests with the self-hosted compiler
 
+warntest: .warntest-selfhost ## Run warning tests with the self-hosted compiler
+
 errortest: .errortest-selfhost ## Run error tests with the self-hosted compiler
 
 .unittest-cc: | $(BUILD_DIR)
-	@$(CC) $(CC_FLAGS) -o $(TMP_OUT) $(UNIT_TEST)
+	@$(CC) $(CC_FLAGS_2) -o $(TMP_OUT) $(UNIT_TEST)
 	@$(TMP_OUT)
 
 .unittest-bootstrap: $(BOOSTSTRAP) | $(BUILD_DIR)
@@ -80,6 +87,16 @@ errortest: .errortest-selfhost ## Run error tests with the self-hosted compiler
 
 .unittest-selfhost: $(SELFHOST) | $(BUILD_DIR)
 	@$(call unittest, $(SELFHOST))
+
+.warntest-cc: | $(BUILD_DIR)
+	@$(CC) $(CC_FLAGS_2) -o $(TMP_OUT) $(WARN_TEST)
+	@$(TMP_OUT)
+
+.warntest-bootstrap: $(BOOSTSTRAP) | $(BUILD_DIR)
+	@$(call warntest, $(BOOSTSTRAP))
+
+.warntest-selfhost: $(SELFHOST) | $(BUILD_DIR)
+	@$(call warntest, $(SELFHOST))
 
 .errortest-cc: | $(BUILD_DIR)
 	@$(call errortest, $(CC))
@@ -94,7 +111,8 @@ clean: ## Clean up generated files
 	@rm -rf $(BUILD_DIR)
 	@echo "Cleaned up generated files."
 
-.PHONY: help run unittest errortest clean \
+.PHONY: help run unittest warntest errortest clean \
         bootstrap selfhost .run-cc .run-bootstrap .run-selfhost \
         .unittest-cc .unittest-bootstrap .unittest-selfhost \
+		.warntest-cc .warntest-bootstrap .warntest-selfhost \
         .errortest-cc .errortest-bootstrap .errortest-selfhost

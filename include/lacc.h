@@ -280,6 +280,7 @@ int is_type(Token *tok);
 int is_ptr_or_arr(Type *type);
 int is_number(Type *type);
 int get_sizeof(Type *type);
+int type_size(Type *type);
 Type *new_type(TypeKind ty);
 Type *new_type_ptr(Type *ptr_to);
 Type *new_type_arr(Type *ptr_to, int array_size);
@@ -368,6 +369,7 @@ char *find_file_includes(char *name);
 extern void write_file(char *fmt, ...);
 extern void error(char *fmt, ...);
 extern void error_at(char *loc, char *fmt, ...);
+extern void warning(char *fmt, ...);
 extern void warning_at(char *loc, char *fmt, ...);
 
 //
