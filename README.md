@@ -153,9 +153,17 @@ There are no code-generation optimizations beyond what's needed to make it work.
 
   Passing all tests confirms that your self-hosted compiler behaves as expected.  
   The unit tests are located in the `tests/unittest.c` file.  
-  They cover various features of the compiler to ensure it behaves correctly.
 
-### 5. Run error tests with the self-hosted compiler
+### 5. Run warning tests with the self-hosted compiler
+
+  ```bash
+  make warntest
+  ```
+
+  This command runs warning tests to ensure that the compiler correctly identifies and reports warnings.
+  The warning tests are located in the `tests/warntest.c` file.
+
+### 6. Run error tests with the self-hosted compiler
 
   ```bash
   make errortest
@@ -163,9 +171,8 @@ There are no code-generation optimizations beyond what's needed to make it work.
 
   This command runs error tests to ensure that the compiler correctly identifies and reports errors.
   The error tests are located in the `tests/errortest.sh` file.  
-  They cover various features of the compiler to ensure it behaves correctly in error scenarios.
 
-### 6. Clean up build artifacts
+### 7. Clean up build artifacts
 
   ```bash
   make clean
