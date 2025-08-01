@@ -10,3 +10,5 @@ tmp*
 *.ini
 .vscode/*
 build/*
+bootstrap
+lacc
