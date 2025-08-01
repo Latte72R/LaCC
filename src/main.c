@@ -36,12 +36,15 @@ int main(int argc, char **argv) {
     } else if (!strncmp(argv[i], "-o", 2) && i + 1 < argc) {
       output_file_tmp = argv[++i];
       if (output_file_tmp[0] == '-') {
-        error("Output file cannot start with '-'.");
+        error("output file cannot start with '-'.");
       }
       output_file = output_file_tmp;
     } else if (argv[i][0] == '-') {
-      error("Unknown option: %s", argv[i]);
+      error("unknown option: %s", argv[i]);
     } else {
+      if (input_file) {
+        error("multiple source files specified: %s and %s", input_file, argv[i]);
+      }
       token_cpy = token;
       input_file = argv[i];
       int length = strlen(input_file);
@@ -50,7 +53,7 @@ int main(int argc, char **argv) {
       filenames->len = length;
       filenames->next = NULL;
       if (strncmp(input_file + length - 2, ".c", 2)) {
-        error("Source file must have a .c extension.");
+        error("source file must have a .c extension.");
       }
       int start = 0;
       for (int j = length - 2; j >= 0; j--) {
@@ -68,7 +71,7 @@ int main(int argc, char **argv) {
   // トークナイズしてパースする
   // 結果はcodeに保存される
   if (!input_file) {
-    error("No source file specified.");
+    error("no source file specified.");
   }
 
   if (!output_file) {
@@ -76,7 +79,7 @@ int main(int argc, char **argv) {
   }
   fp = fopen(output_file, "w");
   if (!fp) {
-    error("Failed to open output file: %s", output_file);
+    error("failed to open output file: %s", output_file);
   }
 
   user_input = read_file(input_file);
@@ -91,8 +94,12 @@ int main(int argc, char **argv) {
 
   fclose(fp);
 
-  if (show_warning && warning_cnt > 0) {
-    warning("%d warnings generated.", warning_cnt);
+  if (show_warning) {
+    if (warning_cnt == 1) {
+      warning("%d warning generated.", warning_cnt);
+    } else if (warning_cnt > 1) {
+      warning("%d warnings generated.", warning_cnt);
+    }
   }
 
   return 0;

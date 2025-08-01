@@ -13,6 +13,12 @@ int test1() {
   return test(a);
 }
 
+// 2. 文字列初期化の配列宣言
+int test2() { char str[5] = "Hello, World!"; }
+
+// 3. 配列の初期化
+int test3() { int arr[3] = {2, 4, 6, 5, 7}; }
+
 // 5. ポインタ代入警告
 int test5() {
   int x = 19;

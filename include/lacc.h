@@ -336,6 +336,7 @@ Node *unary();
 Node *increment_decrement();
 Node *access_member();
 Node *primary();
+Node *string_literal();
 int compile_time_number();
 
 //

@@ -31,8 +31,10 @@ void error(char *fmt, ...) {
   vfprintf(stderr, fmt2, ap);
 
   // ファイルを削除してプログラムを終了
-  fclose(fp);
-  remove(output_file);
+  if (fp) {
+    fclose(fp);
+    remove(output_file);
+  }
   exit(1);
 }
 

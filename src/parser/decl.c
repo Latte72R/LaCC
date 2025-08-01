@@ -20,9 +20,12 @@ extern const int FALSE;
 extern void *NULL;
 
 Node *handle_array_initialization(Node *node, Type *type, Type *org_type) {
+  /*
   if (type->ty != TY_ARR) {
     error_at(token->str, "array initializer is only allowed for array type [in variable declaration]");
   }
+  */
+  char *ptr = consumed_ptr;
   consume("{");
   Array *array = malloc(sizeof(Array));
   array->next = arrays;
@@ -37,12 +40,34 @@ Node *handle_array_initialization(Node *node, Type *type, Type *org_type) {
   } while (consume(","));
   array->len = i;
   expect("}", "after array initializer", "local variable declaration");
+  if (type->ty == TY_ARR && type->array_size == 0) {
+    // サイズ指定なしの文字列
+    type->array_size = array->len;
+  } else if (type->ty == TY_ARR && type->array_size < array->len) {
+    warning_at(ptr, "excess elements in array initializer [in variable declaration]");
+  }
   Node *arr = new_node(ND_ARRAY);
   arr->type = type;
   arr->id = array->id;
   node = new_binary(ND_ASSIGN, node, arr);
   node->type = type;
   node->val = TRUE;
+  return node;
+}
+
+Node *handle_string_initialization(Node *node, Type *type, char *ptr) {
+  Node *string_node = string_literal();
+  if (type->ty == TY_ARR && type->array_size == 0) {
+    // サイズ指定なしの文字列
+    type->array_size = string_node->val + 1;
+  } else if (type->ty == TY_ARR && type->array_size < string_node->val + 1) {
+    warning_at(ptr, "initializer-string for char array is too long [in variable declaration]");
+  }
+  node = assign_sub(node, string_node, ptr);
+  node->type = type;
+  if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR) {
+    node->val = node->lhs->type->ptr_to->ty == TY_CHAR;
+  }
   return node;
 }
 
@@ -69,6 +94,8 @@ Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, Type *o
   }
   if (peek("{")) {
     node = handle_array_initialization(node, type, org_type);
+  } else if (token->kind == TK_STRING) {
+    node = handle_string_initialization(node, type, ptr);
   } else {
     node = handle_scalar_initialization(node, type, ptr);
   }

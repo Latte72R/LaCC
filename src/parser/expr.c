@@ -446,6 +446,21 @@ Node *access_member() {
   return node;
 }
 
+Node *string_literal() {
+  String *str = malloc(sizeof(String));
+  str->text = token->str;
+  str->len = token->len;
+  str->id = label_cnt++;
+  str->next = strings;
+  strings = str;
+  token = token->next;
+  Node *node = new_node(ND_STRING);
+  node->val = str->len;
+  node->id = str->id;
+  node->type = new_type_ptr(new_type(TY_CHAR));
+  return node;
+}
+
 // primary = "(" expr ")" | num
 Node *primary() {
   Node *node;
@@ -466,17 +481,7 @@ Node *primary() {
 
   // 文字列
   if (token->kind == TK_STRING) {
-    String *str = malloc(sizeof(String));
-    str->text = token->str;
-    str->len = token->len;
-    str->id = label_cnt++;
-    str->next = strings;
-    strings = str;
-    token = token->next;
-    node = new_node(ND_STRING);
-    node->id = str->id;
-    node->type = new_type_ptr(new_type(TY_CHAR));
-    return node;
+    return string_literal();
   }
 
   // 型
