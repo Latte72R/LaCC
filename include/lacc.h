@@ -270,6 +270,8 @@ void expect(char *op, char *err, char *st);
 int expect_number(char *stmt);
 int parse_sign();
 int expect_signed_number();
+Node *string_literal();
+Node *array_literal();
 
 // type.c
 Type *parse_base_type_internal(int should_consume);
@@ -336,7 +338,6 @@ Node *unary();
 Node *increment_decrement();
 Node *access_member();
 Node *primary();
-Node *string_literal();
 int compile_time_number();
 
 //

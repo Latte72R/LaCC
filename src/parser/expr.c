@@ -2,10 +2,8 @@
 #include "lacc.h"
 
 extern Token *token;
-extern int label_cnt;
 extern int loop_cnt;
 extern int logical_cnt;
-extern String *strings;
 extern char *consumed_ptr;
 
 extern const int TRUE;
@@ -17,6 +15,8 @@ Node *expr() { return assign(); }
 Node *assign_sub(Node *lhs, Node *rhs, char *ptr) {
   if (lhs->type->is_const) {
     error_at(ptr, "constant variable cannot be assigned [in assign_sub]");
+  } else if (lhs->type->ty == TY_ARR) {
+    error_at(ptr, "array variable cannot be assigned [in assign_sub]");
   } else if (!is_same_type(lhs->type, rhs->type)) {
     warning_at(ptr, "incompatible %s to %s conversion [in assign_sub]", type_name(rhs->type), type_name(lhs->type));
   }
@@ -443,21 +443,6 @@ Node *access_member() {
     } else
       break;
   }
-  return node;
-}
-
-Node *string_literal() {
-  String *str = malloc(sizeof(String));
-  str->text = token->str;
-  str->len = token->len;
-  str->id = label_cnt++;
-  str->next = strings;
-  strings = str;
-  token = token->next;
-  Node *node = new_node(ND_STRING);
-  node->val = str->len;
-  node->id = str->id;
-  node->type = new_type_ptr(new_type(TY_CHAR));
   return node;
 }
 

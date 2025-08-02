@@ -78,6 +78,7 @@ char *parse_string_literal(char *p) {
   p++;
   char *q = p;
   int len = 0;
+  int i = 0;
   char *buf = malloc(sizeof(char) * 1024);
   while (*p != '"') {
     switch (*p) {
@@ -102,21 +103,26 @@ char *parse_string_literal(char *p) {
       default:
         buf[len++] = *p++;
         buf[len++] = *p++;
+        i++;
         break;
       }
       break;
     default:
       buf[len++] = *p++;
+      i++;
     }
   }
+  buf[len] = '\0';
+  i++;
   if (token->kind == TK_STRING) {
+    token->str = realloc(token->str, token->len + len);
     memcpy(token->str + token->len, buf, len);
     token->len += len;
+    token->val += i - 1;
   } else {
-    memcpy(q, buf, len);
-    new_token(TK_STRING, q, len);
+    new_token(TK_STRING, buf, len);
+    token->val = i;
   }
-  free(buf);
   p++;
   return p; // Return the position after the closing quote
 }

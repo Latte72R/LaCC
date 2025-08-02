@@ -20,53 +20,48 @@ extern const int FALSE;
 extern void *NULL;
 
 Node *handle_array_initialization(Node *node, Type *type, Type *org_type) {
-  /*
   if (type->ty != TY_ARR) {
     error_at(token->str, "array initializer is only allowed for array type [in variable declaration]");
   }
-  */
-  char *ptr = consumed_ptr;
-  consume("{");
-  Array *array = malloc(sizeof(Array));
-  array->next = arrays;
-  arrays = array;
-  array->id = array_cnt++;
-  array->byte = get_sizeof(org_type);
-  array->val = NULL;
-  int i = 0;
-  do {
-    array->val = safe_realloc_array(array->val, sizeof(int), i + 1);
-    array->val[i++] = expect_number("array initializer");
-  } while (consume(","));
-  array->len = i;
-  expect("}", "after array initializer", "local variable declaration");
-  if (type->ty == TY_ARR && type->array_size == 0) {
-    // サイズ指定なしの文字列
-    type->array_size = array->len;
-  } else if (type->ty == TY_ARR && type->array_size < array->len) {
-    warning_at(ptr, "excess elements in array initializer [in variable declaration]");
+  Node *arr = array_literal(type, org_type);
+  if (type->ty == TY_ARR) {
+    if (type->array_size == 0) {
+      // サイズ指定なしの文字列
+      type->array_size = arr->val;
+    } else if (type->array_size < arr->val) {
+      warning_at(consumed_ptr, "excess elements in array initializer [in variable declaration]");
+    }
+    node = new_binary(ND_ASSIGN, node, arr);
+    node->type = type;
+    node->val = TRUE;
+  } else if (type->ty == TY_PTR) {
+    node = assign_sub(node, arr, consumed_ptr);
+    node->type = type;
+  } else {
+    error_at(consumed_ptr, "array initializer is only allowed for array or pointer type [in variable declaration]");
   }
-  Node *arr = new_node(ND_ARRAY);
-  arr->type = type;
-  arr->id = array->id;
-  node = new_binary(ND_ASSIGN, node, arr);
-  node->type = type;
-  node->val = TRUE;
   return node;
 }
 
 Node *handle_string_initialization(Node *node, Type *type, char *ptr) {
   Node *string_node = string_literal();
-  if (type->ty == TY_ARR && type->array_size == 0) {
-    // サイズ指定なしの文字列
-    type->array_size = string_node->val + 1;
-  } else if (type->ty == TY_ARR && type->array_size < string_node->val + 1) {
-    warning_at(ptr, "initializer-string for char array is too long [in variable declaration]");
-  }
-  node = assign_sub(node, string_node, ptr);
-  node->type = type;
-  if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR) {
-    node->val = node->lhs->type->ptr_to->ty == TY_CHAR;
+  if (type->ty == TY_ARR) {
+    if (type->array_size == 0) {
+      // サイズ指定なしの文字列
+      type->array_size = string_node->val;
+    } else if (type->array_size < string_node->val) {
+      warning_at(ptr, "initializer-string for char array is too long [in variable declaration]");
+    } else if (type->ptr_to->ty != TY_CHAR) {
+      error_at(ptr, "initializing wide char array with non-wide string literal [in variable declaration]");
+    }
+    node = new_binary(ND_ASSIGN, node, string_node);
+    node->type = type;
+    node->val = TRUE;
+  } else if (type->ty == TY_PTR) {
+    node = assign_sub(node, string_node, ptr);
+    node->type = type;
+  } else {
+    error_at(ptr, "string literal is only allowed for array or pointer type [in variable declaration]");
   }
   return node;
 }

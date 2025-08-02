@@ -38,7 +38,7 @@ void gen_lval(Node *node) {
 void asm_memcpy(Node *lhs, Node *rhs) {
   write_file("  pop rdi\n");
   write_file("  pop rsi\n");
-  int size = get_sizeof(rhs->type);
+  int size = get_sizeof(lhs->type);
   int offset = 0;
   while (size > 0) {
     if (size >= 8) {

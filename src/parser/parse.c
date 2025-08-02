@@ -4,6 +4,10 @@
 extern Token *token;
 extern Node **code;
 extern char *consumed_ptr;
+extern int label_cnt;
+extern int array_cnt;
+extern String *strings;
+extern Array *arrays;
 
 extern const int TRUE;
 extern const int FALSE;
@@ -89,4 +93,45 @@ void program() {
     code[i++] = stmt();
   }
   code[i] = new_node(ND_NONE);
+}
+
+Node *array_literal(Type *type, Type *org_type) {
+  char *ptr = consumed_ptr;
+  expect("{", "before array initializer", "array_literal");
+  Array *array = malloc(sizeof(Array));
+  array->next = arrays;
+  arrays = array;
+  array->id = array_cnt++;
+  array->byte = get_sizeof(org_type);
+  array->val = NULL;
+  int i = 0;
+  do {
+    array->val = safe_realloc_array(array->val, sizeof(int), i + 1);
+    array->val[i++] = expect_number("array_literal");
+  } while (consume(","));
+  array->len = i;
+  expect("}", "after array initializer", "array_literal");
+  Node *node = new_node(ND_ARRAY);
+  node->type = type;
+  node->id = array->id;
+  node->val = i;
+  return node;
+}
+
+Node *string_literal() {
+  if (token->kind != TK_STRING) {
+    error_at(token->str, "expected a string literal [in string_literal]");
+  }
+  String *str = malloc(sizeof(String));
+  str->text = token->str;
+  str->len = token->len;
+  str->id = label_cnt++;
+  str->next = strings;
+  strings = str;
+  token = token->next;
+  Node *node = new_node(ND_STRING);
+  node->val = str->len;
+  node->id = str->id;
+  node->type = new_type_ptr(new_type(TY_CHAR));
+  return node;
 }
