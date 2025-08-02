@@ -193,3 +193,20 @@ EOF
 cat "$TMP_C"
 $CC $TMP_C -S -o $TMP_S
 printf "\n"
+
+printf "\e[1;36mTest case 15:\e[0m\n"
+cat <<EOF > "$TMP_C"
+typedef struct ST ST;
+struct ST {
+  int a;
+  int b;
+};
+int main() {
+  ST st;
+  int a = (int)st;  // 構造体をintにキャスト
+  return a;
+}
+EOF
+cat "$TMP_C"
+$CC $TMP_C -S -o $TMP_S
+printf "\n"

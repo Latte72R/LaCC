@@ -18,7 +18,7 @@ void test2() { char str[5] = "Hello, World!"; }
 // 3. 配列の初期化
 void test3() { int arr[3] = {2, 4, 6, 5, 7}; }
 
-// 4. ポインタを整数にキャストする警告
+// 4. const pointerの代入警告
 void test4() {
   int y = 11;
   const int *x = &y;

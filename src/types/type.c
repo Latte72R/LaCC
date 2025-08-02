@@ -166,16 +166,25 @@ Type *new_type_struct(Struct *struct_) {
 
 // 配列サイズ解析の共通処理
 Type *parse_array_dimensions(Type *base_type) {
-  Type *type = base_type;
+  Type *type;
+  Type *arr;
+  if (!consume("[")) {
+    return base_type;
+  }
+  if (consume("]")) {
+    // サイズ指定なしの配列
+    arr = new_type_arr(base_type, 0);
+  } else {
+    arr = new_type_arr(base_type, expect_number("array dimension"));
+  }
+  expect("]", "after array dimension", "array dimension");
+  type = arr;
   while (consume("[")) {
-    if (consume("]")) {
-      // サイズ指定なしの配列
-      type = new_type_arr(type, 0);
-    }
-    type = new_type_arr(type, expect_number("array dimension"));
+    type->ptr_to = new_type_arr(base_type, expect_number("array dimension"));
+    type = type->ptr_to;
     expect("]", "after array dimension", "array dimension");
   }
-  return type;
+  return arr;
 }
 
 int is_ptr_or_arr(Type *type) { return type->ty == TY_PTR || type->ty == TY_ARR || type->ty == TY_ARGARR; }

@@ -1020,6 +1020,17 @@ int test116() {
   return arr[0] * arr[1] + arr[2]; // Should return 10 * 2 + 3 = 23
 }
 
+int test117() {
+  int arr[5][7];
+  return sizeof arr[2];
+}
+
+int test118() {
+  int x = 0x7FFFFFFF;
+  x += 0x7FFFFFFA;
+  return x; // Should handle overflow correctly
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1147,6 +1158,8 @@ int main() {
   check(test114(), 114, 42);
   check(test115(), 115, 2);
   check(test116(), 116, 23);
+  check(test117(), 117, 28);
+  check(test118(), 118, -7);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);
