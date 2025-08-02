@@ -79,7 +79,7 @@ warntest: .warntest-selfhost ## Run warning tests with the self-hosted compiler
 errortest: .errortest-selfhost ## Run error tests with the self-hosted compiler
 
 .unittest-cc: | $(BUILD_DIR)
-	@$(CC) $(CC_FLAGS_2) -o $(TMP_OUT) $(UNIT_TEST)
+	@$(CC) $(CC_FLAGS) -o $(TMP_OUT) $(UNIT_TEST)
 	@$(TMP_OUT)
 
 .unittest-bootstrap: $(BOOSTSTRAP) | $(BUILD_DIR)

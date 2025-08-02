@@ -1031,6 +1031,59 @@ int test118() {
   return x; // Should handle overflow correctly
 }
 
+// switch文内でのgoto
+int test119(void) {
+  int r = 0, x = 2;
+  switch (x) {
+  case 2:
+    goto c3;
+  }
+c3:
+  r = 30; /* ← case をまたいで到達 */
+  switch (x + 1) {
+  case 3:
+    r += 200;
+  }
+  return r; /* 30 + 200 */
+}
+
+// ネストしたブロック間でのgoto
+int test120(void) {
+  int r = 0;
+  { /* 外側 */
+    r += 10;
+    goto in;
+    {
+    in:
+      r += 20;
+    } /* 内側ラベル */
+    goto sib;
+  }
+sib:
+  r += 30;
+  { r += 40; }
+  r += 50;
+  return r; /* 10 + 20 + 30 + 40 + 50 */
+}
+
+// ラベルの前方参照・後方参照の混在
+int test121(void) {
+  int r = 0, i = 0;
+start:
+  r += 20;
+  i++;
+  if (i < 3)
+    goto loop; /* 前方→後方 */
+  goto end;
+loop:
+  r += 30;
+  i++;
+  if (i < 3)
+    goto start; /* 後方→前方 */
+end:
+  return r; /* 20 + 30 + 20 */
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1160,6 +1213,9 @@ int main() {
   check(test116(), 116, 23);
   check(test117(), 117, 28);
   check(test118(), 118, -7);
+  check(test119(), 119, 230);
+  check(test120(), 120, 150);
+  check(test121(), 121, 70);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);
