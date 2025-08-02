@@ -1133,6 +1133,12 @@ int test125() {
   return arr3d[1][2][3] + row_count;
 }
 
+int test126_sub[4];
+int test126() {
+  // グローバル配列のゼロ初期化
+  return test126_sub[0] + test126_sub[1] + test126_sub[2] + test126_sub[3];
+}
+
 int test127() {
   // 符号付き整数の右シフト（実装依存の可能性あり）
   int negative = -16;
@@ -1192,6 +1198,12 @@ int test131() {
   pi[4] = 100; // これは structs[1].a を変更するはず
 
   return structs[0].a + structs[1].a + structs[2].a; // 1 + 100 + 3 = 104
+}
+
+int test132() {
+  // static変数の初期値は 0
+  static int static_var;
+  return ++static_var;
 }
 
 int test_cnt = 0;
@@ -1330,11 +1342,13 @@ int main() {
   check(test123(), 123, 10);
   check(test124(), 124, 3);
   check(test125(), 125, 126);
+  check(test126(), 126, 0);
   check(test127(), 127, -4);
   check(test128(), 128, 100);
   check(test129(), 129, 9);
   check(test130(), 130, 245);
   check(test131(), 131, 6);
+  check(test132(), 132, 1);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);
