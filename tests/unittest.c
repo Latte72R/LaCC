@@ -1117,6 +1117,22 @@ int test124() {
   return arr[0] + arr[1] + arr[2] + arr[3] + arr[4]; // 1 + 2 + 0 + 0 + 0 = 3
 }
 
+int test125() {
+  // 3次元配列のアクセスとsizeof
+  int arr3d[2][3][4];
+  arr3d[1][2][3] = 42;
+
+  // ポインタ経由でアクセス
+  int *p = &arr3d[1][2][3];
+  *p = 123;
+
+  // 配列サイズの検証
+  int size_row = sizeof(arr3d[0][0]);
+  int row_count = sizeof(arr3d[0]) / size_row;
+
+  return arr3d[1][2][3] + row_count;
+}
+
 int test127() {
   // 符号付き整数の右シフト（実装依存の可能性あり）
   int negative = -16;
@@ -1143,6 +1159,39 @@ int test129() {
     arr[i]->b[1] = i * 3;
   }
   return arr[0]->a + arr[1]->b[0] + arr[2]->b[1]; // 1 + 2 + 6 = 9
+}
+
+int test130() {
+  // 複雑なビット演算の組み合わせ
+  int a = 0xF0; // 11110000
+  int b = 0xAA; // 10101010
+
+  // シフトとAND、ORの組み合わせ
+  int result = ((a & 0x0F) << 4) | (b & 0x0F);
+
+  // ビット反転と優先順位
+  result = ~(result & 0xFF) & 0xFF;
+
+  return result; // 計算: ((0 << 4) | (10)) = 10、~10 & 0xFF = 0xF5 = 245
+}
+
+int test131() {
+  // 構造体配列とポインタ操作
+  STRUCT structs[3];
+  for (int i = 0; i < 3; i++) {
+    structs[i].a = i + 1;
+    structs[i].b[0] = i * 2;
+    structs[i].b[1] = i * 3;
+  }
+
+  // ポインタ経由でアクセス
+  STRUCT *ps = structs;
+  int *pi = (int *)ps;
+
+  // 構造体メンバのオフセット計算（実装依存）
+  pi[4] = 100; // これは structs[1].a を変更するはず
+
+  return structs[0].a + structs[1].a + structs[2].a; // 1 + 100 + 3 = 104
 }
 
 int test_cnt = 0;
@@ -1280,9 +1329,12 @@ int main() {
   check(test122(), 122, 0);
   check(test123(), 123, 10);
   check(test124(), 124, 3);
+  check(test125(), 125, 126);
   check(test127(), 127, -4);
   check(test128(), 128, 100);
   check(test129(), 129, 9);
+  check(test130(), 130, 245);
+  check(test131(), 131, 6);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);
