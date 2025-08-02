@@ -57,7 +57,8 @@ struct Array {
   Array *next;
   int *val;
   int byte;
-  int len;
+  int len;  // 配列の要素数
+  int init; // 初期化されている数
   int id;
 };
 
@@ -270,8 +271,8 @@ void expect(char *op, char *err, char *st);
 int expect_number(char *stmt);
 int parse_sign();
 int expect_signed_number();
-Node *string_literal();
-Node *array_literal();
+String *string_literal();
+Array *array_literal();
 
 // type.c
 Type *parse_base_type_internal(int should_consume);
@@ -318,7 +319,7 @@ Node *stmt();
 
 // expr.c
 Node *expr();
-Node *assign_sub(Node *lhs, Node *rhs, char *ptr);
+Node *assign_sub(Node *lhs, Node *rhs, char *ptr, int check_const);
 Node *assign();
 Node *type_cast();
 Node *logical_or();

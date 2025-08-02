@@ -23,19 +23,23 @@ Node *handle_array_initialization(Node *node, Type *type, Type *org_type) {
   if (type->ty != TY_ARR) {
     error_at(token->str, "array initializer is only allowed for array type [in variable declaration]");
   }
-  Node *arr = array_literal(type, org_type);
+  Array *array = array_literal(type, org_type);
+  Node *arr_node = new_node(ND_ARRAY);
+  arr_node->type = type;
+  arr_node->id = array->id;
   if (type->ty == TY_ARR) {
     if (type->array_size == 0) {
       // サイズ指定なしの文字列
-      type->array_size = arr->val;
-    } else if (type->array_size < arr->val) {
+      type->array_size = array->len;
+    } else if (type->array_size < array->len) {
       warning_at(consumed_ptr, "excess elements in array initializer [in variable declaration]");
     }
-    node = new_binary(ND_ASSIGN, node, arr);
+    array->len = type->array_size;
+    node = new_binary(ND_ASSIGN, node, arr_node);
     node->type = type;
     node->val = TRUE;
   } else if (type->ty == TY_PTR) {
-    node = assign_sub(node, arr, consumed_ptr);
+    node = assign_sub(node, arr_node, consumed_ptr, FALSE);
     node->type = type;
   } else {
     error_at(consumed_ptr, "array initializer is only allowed for array or pointer type [in variable declaration]");
@@ -44,12 +48,15 @@ Node *handle_array_initialization(Node *node, Type *type, Type *org_type) {
 }
 
 Node *handle_string_initialization(Node *node, Type *type, char *ptr) {
-  Node *string_node = string_literal();
+  String *str = string_literal();
+  Node *string_node = new_node(ND_STRING);
+  string_node->id = str->id;
+  string_node->type = new_type_ptr(new_type(TY_CHAR));
   if (type->ty == TY_ARR) {
     if (type->array_size == 0) {
       // サイズ指定なしの文字列
-      type->array_size = string_node->val;
-    } else if (type->array_size < string_node->val) {
+      type->array_size = str->len;
+    } else if (type->array_size < str->len) {
       warning_at(ptr, "initializer-string for char array is too long [in variable declaration]");
     } else if (type->ptr_to->ty != TY_CHAR) {
       error_at(ptr, "initializing wide char array with non-wide string literal [in variable declaration]");
@@ -58,7 +65,7 @@ Node *handle_string_initialization(Node *node, Type *type, char *ptr) {
     node->type = type;
     node->val = TRUE;
   } else if (type->ty == TY_PTR) {
-    node = assign_sub(node, string_node, ptr);
+    node = assign_sub(node, string_node, ptr, FALSE);
     node->type = type;
   } else {
     error_at(ptr, "string literal is only allowed for array or pointer type [in variable declaration]");
@@ -67,7 +74,7 @@ Node *handle_string_initialization(Node *node, Type *type, char *ptr) {
 }
 
 Node *handle_scalar_initialization(Node *node, Type *type, char *ptr) {
-  node = assign_sub(node, expr(), ptr);
+  node = assign_sub(node, expr(), ptr, FALSE);
   node->type = type;
   if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR) {
     node->val = node->lhs->type->ptr_to->ty == TY_CHAR;

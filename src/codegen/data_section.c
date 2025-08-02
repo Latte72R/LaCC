@@ -60,9 +60,17 @@ void gen_array_literals() {
     write_file(".L.arr%d:\n", arr->id);
     for (int i = 0; i < arr->len; i++) {
       if (arr->byte == 1) {
-        write_file("  .byte %d\n", arr->val[i]);
+        if (i > arr->init) {
+          write_file("  .byte 0\n");
+        } else {
+          write_file("  .byte %d\n", arr->val[i]);
+        }
       } else if (arr->byte == 4) {
-        write_file("  .long %d\n", arr->val[i]);
+        if (i > arr->init) {
+          write_file("  .long 0\n");
+        } else {
+          write_file("  .long %d\n", arr->val[i]);
+        }
       } else {
         error("invalid array type [INIT]");
       }
@@ -73,11 +81,11 @@ void gen_array_literals() {
 void gen_rodata_section() {
   write_file("  .rodata\n");
   gen_string_literal();
+  gen_array_literals();
 }
 
 void gen_data_section() {
   write_file("  .data\n");
   gen_global_variables();
   gen_static_variables();
-  gen_array_literals();
 }

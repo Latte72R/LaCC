@@ -1084,6 +1084,67 @@ end:
   return r; /* 20 + 30 + 20 */
 }
 
+int test122() {
+  // 構造体ポインタから void* へのキャストとその逆
+  STRUCT s;
+  s.a = 10;
+  s.b[0] = 20;
+  s.b[1] = 30;
+  void *vp = (void *)&s;
+  STRUCT *sp = (STRUCT *)vp;
+  return sp->a + sp->b[0] - sp->b[1]; // 10 + 20 - 30 = 0
+}
+
+typedef struct NESTED_STRUCT NESTED_STRUCT;
+struct NESTED_STRUCT {
+  int x;
+  STRUCT inner;
+};
+
+int test123() {
+  // ネストした構造体のアクセス
+  NESTED_STRUCT ns;
+  ns.x = 5;
+  ns.inner.a = 10;
+  ns.inner.b[0] = 15;
+  ns.inner.b[1] = 20;
+  return ns.x + ns.inner.a + ns.inner.b[0] - ns.inner.b[1]; // 5 + 10 + 15 - 20 = 10
+}
+
+int test124() {
+  // 配列の部分初期化（残りは0で初期化される）
+  int arr[5] = {1, 2};
+  return arr[0] + arr[1] + arr[2] + arr[3] + arr[4]; // 1 + 2 + 0 + 0 + 0 = 3
+}
+
+int test127() {
+  // 符号付き整数の右シフト（実装依存の可能性あり）
+  int negative = -16;
+  return negative >> 2; // 算術右シフトなら -4、論理右シフトなら大きな正の値
+}
+
+int test128() {
+  // const指定子の複雑な使用
+  const int const_val = 42;
+  const int *p1 = &const_val;
+  int *p2 = (int *)p1; // const外し
+  *p2 = 100;           // undefined behaviorだがコンパイルは通るはず
+  int *const p3 = p2;  // ポインタ自体がconst
+  return *p3;          // 100
+}
+
+int test129() {
+  // 構造体ポインタの配列
+  STRUCT *arr[3];
+  for (int i = 0; i < 3; i++) {
+    arr[i] = (STRUCT *)calloc(1, sizeof(STRUCT));
+    arr[i]->a = i + 1;
+    arr[i]->b[0] = i * 2;
+    arr[i]->b[1] = i * 3;
+  }
+  return arr[0]->a + arr[1]->b[0] + arr[2]->b[1]; // 1 + 2 + 6 = 9
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1216,6 +1277,12 @@ int main() {
   check(test119(), 119, 230);
   check(test120(), 120, 150);
   check(test121(), 121, 70);
+  check(test122(), 122, 0);
+  check(test123(), 123, 10);
+  check(test124(), 124, 3);
+  check(test127(), 127, -4);
+  check(test128(), 128, 100);
+  check(test129(), 129, 9);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

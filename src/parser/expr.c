@@ -12,8 +12,8 @@ extern void *NULL;
 
 Node *expr() { return assign(); }
 
-Node *assign_sub(Node *lhs, Node *rhs, char *ptr) {
-  if (lhs->type->is_const) {
+Node *assign_sub(Node *lhs, Node *rhs, char *ptr, int check_const) {
+  if (lhs->type->is_const && check_const) {
     error_at(ptr, "constant variable cannot be assigned [in assign_sub]");
   } else if (lhs->type->ty == TY_ARR) {
     error_at(ptr, "array variable cannot be assigned [in assign_sub]");
@@ -31,22 +31,22 @@ Node *assign() {
   char *ptr;
   if (consume("=")) {
     ptr = consumed_ptr;
-    node = assign_sub(node, expr(), ptr);
+    node = assign_sub(node, expr(), ptr, TRUE);
   } else if (consume("+=")) {
     ptr = consumed_ptr;
-    node = assign_sub(node, new_binary(ND_ADD, node, expr()), ptr);
+    node = assign_sub(node, new_binary(ND_ADD, node, expr()), ptr, TRUE);
   } else if (consume("-=")) {
     ptr = consumed_ptr;
-    node = assign_sub(node, new_binary(ND_SUB, node, expr()), ptr);
+    node = assign_sub(node, new_binary(ND_SUB, node, expr()), ptr, TRUE);
   } else if (consume("*=")) {
     ptr = consumed_ptr;
-    node = assign_sub(node, new_binary(ND_MUL, node, expr()), ptr);
+    node = assign_sub(node, new_binary(ND_MUL, node, expr()), ptr, TRUE);
   } else if (consume("/=")) {
     ptr = consumed_ptr;
-    node = assign_sub(node, new_binary(ND_DIV, node, expr()), ptr);
+    node = assign_sub(node, new_binary(ND_DIV, node, expr()), ptr, TRUE);
   } else if (consume("%=")) {
     ptr = consumed_ptr;
-    node = assign_sub(node, new_binary(ND_MOD, node, expr()), ptr);
+    node = assign_sub(node, new_binary(ND_MOD, node, expr()), ptr, TRUE);
   }
   return node;
 }
@@ -369,11 +369,11 @@ Node *increment_decrement() {
   if (consume("++")) {
     ptr = consumed_ptr;
     node = access_member();
-    return assign_sub(node, new_add(node, new_num(1), consumed_ptr), ptr);
+    return assign_sub(node, new_add(node, new_num(1), consumed_ptr), ptr, TRUE);
   } else if (consume("--")) {
     ptr = consumed_ptr;
     node = access_member();
-    return assign_sub(node, new_sub(node, new_num(1), consumed_ptr), ptr);
+    return assign_sub(node, new_sub(node, new_num(1), consumed_ptr), ptr, TRUE);
   }
   node = access_member();
   if (consume("++")) {
@@ -468,7 +468,11 @@ Node *primary() {
 
   // 文字列
   if (token->kind == TK_STRING) {
-    return string_literal();
+    String *str = string_literal();
+    node = new_node(ND_STRING);
+    node->id = str->id;
+    node->type = new_type_ptr(new_type(TY_CHAR));
+    return node;
   }
 
   // 型

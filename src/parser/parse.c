@@ -95,7 +95,7 @@ void program() {
   code[i] = new_node(ND_NONE);
 }
 
-Node *array_literal(Type *type, Type *org_type) {
+Array *array_literal(Type *type, Type *org_type) {
   char *ptr = consumed_ptr;
   expect("{", "before array initializer", "array_literal");
   Array *array = malloc(sizeof(Array));
@@ -110,15 +110,12 @@ Node *array_literal(Type *type, Type *org_type) {
     array->val[i++] = expect_number("array_literal");
   } while (consume(","));
   array->len = i;
+  array->init = i;
   expect("}", "after array initializer", "array_literal");
-  Node *node = new_node(ND_ARRAY);
-  node->type = type;
-  node->id = array->id;
-  node->val = i;
-  return node;
+  return array;
 }
 
-Node *string_literal() {
+String *string_literal() {
   if (token->kind != TK_STRING) {
     error_at(token->str, "expected a string literal [in string_literal]");
   }
@@ -129,9 +126,5 @@ Node *string_literal() {
   str->next = strings;
   strings = str;
   token = token->next;
-  Node *node = new_node(ND_STRING);
-  node->val = str->len;
-  node->id = str->id;
-  node->type = new_type_ptr(new_type(TY_CHAR));
-  return node;
+  return str;
 }
