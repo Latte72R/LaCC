@@ -215,10 +215,10 @@ int is_same_type(Type *lhs, Type *rhs) {
   if (is_ptr_or_arr(lhs) && is_ptr_or_arr(rhs)) {
     if (!(lhs->ptr_to->is_const) && (rhs->ptr_to->is_const)) {
       return FALSE; // const 修飾子が異なる場合は同じ型ではない
+    } else if (lhs->ptr_to->ty == TY_VOID || rhs->ptr_to->ty == TY_VOID) {
+      return TRUE;
     }
     return is_same_type(lhs->ptr_to, rhs->ptr_to);
-  } else if (lhs->ty == TY_VOID || rhs->ty == TY_VOID) {
-    return TRUE;
   } else if (lhs->ty == rhs->ty) {
     return TRUE;
   } else if (lhs->ty == TY_INT && rhs->ty == TY_CHAR) {

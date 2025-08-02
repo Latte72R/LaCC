@@ -210,3 +210,17 @@ EOF
 cat "$TMP_C"
 $CC $TMP_C -S -o $TMP_S
 printf "\n"
+
+printf "\e[1;36mTest case 16:\e[0m\n"
+cat <<EOF > "$TMP_C"
+void test() { return; }
+
+int main() {
+  int n;
+  n = test();
+}
+EOF
+cat "$TMP_C"
+$CC $TMP_C -S -o $TMP_S
+printf "\n"
+

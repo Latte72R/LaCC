@@ -17,6 +17,8 @@ Node *assign_sub(Node *lhs, Node *rhs, char *ptr) {
     error_at(ptr, "constant variable cannot be assigned [in assign_sub]");
   } else if (lhs->type->ty == TY_ARR) {
     error_at(ptr, "array variable cannot be assigned [in assign_sub]");
+  } else if (rhs->type->ty == TY_VOID) {
+    error_at(ptr, "void type cannot be assigned [in assign_sub]");
   } else if (!is_same_type(lhs->type, rhs->type)) {
     warning_at(ptr, "incompatible %s to %s conversion [in assign_sub]", type_name(rhs->type), type_name(lhs->type));
   }
