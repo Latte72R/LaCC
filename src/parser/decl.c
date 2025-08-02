@@ -314,6 +314,7 @@ Node *struct_stmt() {
   struct_->var->next = NULL;
   struct_->var->type = new_type(TY_NONE);
   int offset = 0;
+  int max_size = 0;
   expect("{", "before struct members", "struct");
   while (!consume("}")) {
     Type *type = consume_type();
@@ -327,6 +328,9 @@ Node *struct_stmt() {
     if (offset % single_size != 0) {
       offset += single_size - (offset % single_size);
     }
+    if (max_size < single_size) {
+      max_size = single_size;
+    }
     member_var->offset = offset;
     offset += get_sizeof(type);
     if (consume(";")) {
@@ -334,6 +338,9 @@ Node *struct_stmt() {
     } else {
       error_at(token->str, "expected ';' after struct member declaration [in struct declaration]");
     }
+  }
+  if (offset % max_size != 0) {
+    offset += max_size - (offset % max_size);
   }
   struct_->size = offset;
   expect(";", "after struct definition", "struct");
