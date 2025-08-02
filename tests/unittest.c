@@ -1012,6 +1012,14 @@ int test115() {
   return ptr[1]; // Should return 2
 }
 
+int test116() {
+  const int arr[3] = {1, 2, 3};
+  // Cast away constness (not recommended in practice)
+  int *ptr = (int *)arr;
+  *ptr = 10;                       // Modifying const data (undefined behavior)
+  return arr[0] * arr[1] + arr[2]; // Should return 10 * 2 + 3 = 23
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1138,6 +1146,7 @@ int main() {
   check(test113(), 113, 30);
   check(test114(), 114, 42);
   check(test115(), 115, 2);
+  check(test116(), 116, 23);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

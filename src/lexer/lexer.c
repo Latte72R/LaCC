@@ -62,18 +62,20 @@ char *handle_include_directive(char *p) {
     free(name);
     return p; // Already included
   }
+  char *input_file_prev = input_file;
   input_file = name;
   filenames = malloc(sizeof(String));
   filenames->text = input_file;
   filenames->len = strlen(input_file);
   filenames->next = NULL;
-  char *user_input_cpy = user_input;
+  char *user_input_prev = user_input;
   char *new_input = find_file_includes(name);
   if (!new_input) {
     error_at(q - 1, "Cannot open include file: %s", name);
   }
   user_input = new_input;
   tokenize();
-  user_input = user_input_cpy;
+  user_input = user_input_prev;
+  input_file = input_file_prev;
   return p; // Return the position after the closing quote
 }

@@ -536,7 +536,7 @@ Node *primary() {
       error_at(ptr, "not enough arguments to function call: %.*s [in primary]", tok->len, tok->str);
     } else {
       for (int i = 0; i < node->val; i++) {
-        if (!is_same_type(node->args[i]->type, fn->param_types[i])) {
+        if (!is_same_type(fn->param_types[i], node->args[i]->type)) {
           warning_at(ptr, "incompatible %s to %s conversion [in primary]", type_name(node->args[i]->type),
                      type_name(fn->param_types[i]));
           break;

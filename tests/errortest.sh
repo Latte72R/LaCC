@@ -171,3 +171,25 @@ EOF
 cat "$TMP_C"
 $CC $TMP_C -S -o $TMP_S
 printf "\n"
+
+printf "\e[1;36mTest case 13:\e[0m\n"
+cat <<EOF > "$TMP_C"
+int main() {
+  const int arr[3] = {1, 2, 3};
+  arr[2] = 10; // 定数配列の要素を変更
+}
+EOF
+cat "$TMP_C"
+$CC $TMP_C -S -o $TMP_S
+printf "\n"
+
+printf "\e[1;36mTest case 14:\e[0m\n"
+cat <<EOF > "$TMP_C"
+int main() {
+  const int x = 5;
+  x = 10;  // 定数の変更
+}
+EOF
+cat "$TMP_C"
+$CC $TMP_C -S -o $TMP_S
+printf "\n"

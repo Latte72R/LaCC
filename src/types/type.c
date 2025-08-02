@@ -135,6 +135,9 @@ int type_size(Type *type) {
 Type *new_type(TypeKind ty) {
   Type *type = malloc(sizeof(Type));
   type->ty = ty;
+  type->ptr_to = NULL;
+  type->array_size = 0;
+  type->is_const = FALSE;
   return type;
 }
 
@@ -190,26 +193,28 @@ char *type_name(Type *type) {
     return "array";
   case TY_VOID:
     return "void";
-  case TY_STRUCT: {
+  case TY_STRUCT:
     return "struct";
-  }
   default:
     return "unknown";
   }
 }
 
-int is_same_type(Type *type1, Type *type2) {
+int is_same_type(Type *lhs, Type *rhs) {
   // int と char の比較は許容
   // void* と他のポインタ型の比較も許容
-  if (is_ptr_or_arr(type1) && is_ptr_or_arr(type2)) {
-    return is_same_type(type1->ptr_to, type2->ptr_to);
-  } else if (type1->ty == TY_VOID || type2->ty == TY_VOID) {
+  if (is_ptr_or_arr(lhs) && is_ptr_or_arr(rhs)) {
+    if (!(lhs->ptr_to->is_const) && (rhs->ptr_to->is_const)) {
+      return FALSE; // const 修飾子が異なる場合は同じ型ではない
+    }
+    return is_same_type(lhs->ptr_to, rhs->ptr_to);
+  } else if (lhs->ty == TY_VOID || rhs->ty == TY_VOID) {
     return TRUE;
-  } else if (type1->ty == type2->ty) {
+  } else if (lhs->ty == rhs->ty) {
     return TRUE;
-  } else if (type1->ty == TY_INT && type2->ty == TY_CHAR) {
+  } else if (lhs->ty == TY_INT && rhs->ty == TY_CHAR) {
     return TRUE;
-  } else if (type1->ty == TY_CHAR && type2->ty == TY_INT) {
+  } else if (lhs->ty == TY_CHAR && rhs->ty == TY_INT) {
     return TRUE;
   } else {
     return FALSE;

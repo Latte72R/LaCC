@@ -289,7 +289,7 @@ Type *new_type_arr(Type *ptr_to, int array_size);
 Type *new_type_struct(Struct *struct_);
 Type *parse_array_dimensions(Type *base_type);
 char *type_name(Type *type);
-int is_same_type(Type *type1, Type *type2);
+int is_same_type(Type *lhs, Type *rhs);
 
 // decl.c
 Node *function_definition(Token *tok, Type *type, int is_static);
