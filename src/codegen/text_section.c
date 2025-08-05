@@ -558,6 +558,7 @@ void gen(Node *node) {
   case ND_TYPEDEF:
   case ND_TYPE:
   case ND_ENUM:
+  case ND_UNION:
   case ND_STRUCT:
   case ND_NONE:
     break;

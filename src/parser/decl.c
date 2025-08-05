@@ -310,11 +310,11 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   return node;
 }
 
-Node *struct_and_union_declaration(int is_struct, int is_union) {
+Node *struct_and_union_declaration(const int is_struct, const int is_union) {
   if (is_struct && is_union) {
-    error_at(token->str, "cannot declare both struct and union at the same time [in struct/union declaration]");
+    error_at(token->str, "cannot declare both struct and union at the same time [in object declaration]");
   } else if (!is_struct && !is_union) {
-    error_at(token->str, "expected struct or union [in struct/union declaration]");
+    error_at(token->str, "expected struct or union [in object declaration]");
   }
   Token *tok = expect_ident("object declaration");
   Node *node;
@@ -396,50 +396,36 @@ Node *union_stmt() {
 Node *typedef_stmt() {
   token = token->next;
   Node *node;
-  if (token->kind == TK_STRUCT) {
+  if (token->kind == TK_STRUCT || token->kind == TK_UNION) {
+    TokenKind kind = token->kind;
     token = token->next;
     node = new_node(ND_TYPEDEF);
     Token *tok1 = expect_ident("typedef");
     Token *tok2 = expect_ident("typedef");
-    if (find_struct_tag(tok1)) {
+    if (find_struct_tag(tok1) || find_union_tag(tok1)) {
       error_duplicate_name(tok1, "typedef");
     }
-    if (find_struct(tok2)) {
+    if (find_struct(tok2) || find_union(tok2)) {
       error_duplicate_name(tok2, "typedef");
     }
     Object *var = malloc(sizeof(Object));
     var->name = tok2->str;
     var->len = tok2->len;
-    var->next = structs;
-    structs = var;
     ObjectTag *tag = malloc(sizeof(ObjectTag));
     tag->name = tok1->str;
     tag->len = tok1->len;
     tag->main = var;
-    tag->next = struct_tags;
-    struct_tags = tag;
-  } else if (token->kind == TK_UNION) {
-    token = token->next;
-    node = new_node(ND_TYPEDEF);
-    Token *tok1 = expect_ident("typedef");
-    Token *tok2 = expect_ident("typedef");
-    if (find_struct_tag(tok1)) {
-      error_duplicate_name(tok1, "typedef");
+    if (kind == TK_STRUCT) {
+      var->next = structs;
+      structs = var;
+      tag->next = struct_tags;
+      struct_tags = tag;
+    } else {
+      var->next = unions;
+      unions = var;
+      tag->next = union_tags;
+      union_tags = tag;
     }
-    if (find_struct(tok2)) {
-      error_duplicate_name(tok2, "typedef");
-    }
-    Object *var = malloc(sizeof(Object));
-    var->name = tok2->str;
-    var->len = tok2->len;
-    var->next = unions;
-    unions = var;
-    ObjectTag *tag = malloc(sizeof(ObjectTag));
-    tag->name = tok1->str;
-    tag->len = tok1->len;
-    tag->main = var;
-    tag->next = union_tags;
-    union_tags = tag;
   } else if (token->kind == TK_ENUM) {
     token = token->next;
     node = new_node(ND_TYPEDEF);

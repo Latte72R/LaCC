@@ -86,11 +86,10 @@ int is_type(Token *tok) {
   if (tok->kind == TK_CONST)
     return TRUE;
   if (tok->kind == TK_IDENT) {
-    Object *object = find_struct(tok);
-    if (object)
-      return TRUE;
+    Object *struct_ = find_struct(tok);
+    Object *union_ = find_union(tok);
     Object *enum_ = find_enum(tok);
-    if (enum_)
+    if (struct_ || union_ || enum_)
       return TRUE;
   }
   return FALSE;
