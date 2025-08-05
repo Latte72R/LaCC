@@ -101,9 +101,9 @@ struct Object {
 };
 
 // struct, unionのメンバー
-typedef struct MemberTag MemberTag;
-struct MemberTag {
-  MemberTag *next; // 次の構造体かNULL
+typedef struct ObjectTag ObjectTag;
+struct ObjectTag {
+  ObjectTag *next; // 次の構造体かNULL
   Object *main;    // struct
   char *name;      // タグの名前
   int len;         // 名前の長さ
@@ -209,6 +209,7 @@ typedef enum {
   ND_EXTERN,   // extern
   ND_BLOCK,    // { ... }
   ND_ENUM,     // 列挙体
+  ND_UNION,    // union
   ND_STRUCT,   // 構造体
   ND_TYPEDEF,  // typedef
   ND_TYPE,     // 型
@@ -252,7 +253,8 @@ Object *find_struct(Token *tok);
 Object *find_enum(Token *tok);
 LVar *find_enum_member(Token *tok);
 LVar *find_struct_member(Object *struct_, Token *tok);
-MemberTag *find_struct_tag(Token *tok);
+ObjectTag *find_struct_tag(Token *tok);
+ObjectTag *find_union_tag(Token *tok);
 Function *find_fn(Token *tok);
 
 // parse.c
@@ -295,6 +297,7 @@ Node *global_variable_declaration(Token *tok, Type *type, int is_static);
 Node *extern_variable_declaration(Token *tok, Type *type);
 Node *vardec_and_funcdef_stmt(int is_static, int is_extern);
 Node *struct_stmt();
+Node *union_stmt();
 Node *typedef_stmt();
 Node *handle_array_initialization(Node *node, Type *type, Type *org_type);
 Node *handle_scalar_initialization(Node *node, Type *type, char *ptr);

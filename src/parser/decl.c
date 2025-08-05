@@ -9,7 +9,9 @@ extern Function *current_fn;
 extern LVar *globals;
 extern LVar *statics;
 extern Object *structs;
-extern MemberTag *struct_tags;
+extern ObjectTag *struct_tags;
+extern Object *unions;
+extern ObjectTag *union_tags;
 extern Object *enums;
 extern LVar *enum_members;
 extern Array *arrays;
@@ -308,29 +310,40 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   return node;
 }
 
-Node *struct_stmt() {
-  token = token->next;
-  Token *tok = expect_ident("struct declaration");
-  Node *node = new_node(ND_STRUCT);
-  MemberTag *struct_tag = find_struct_tag(tok);
-  if (!struct_tag) {
-    error_at(tok->str, "unknown tag: %.*s [in struct declaration]", tok->len, tok->str);
+Node *struct_and_union_declaration(int is_struct, int is_union) {
+  if (is_struct && is_union) {
+    error_at(token->str, "cannot declare both struct and union at the same time [in struct/union declaration]");
+  } else if (!is_struct && !is_union) {
+    error_at(token->str, "expected struct or union [in struct/union declaration]");
   }
-  Object *struct_ = struct_tag->main;
-  struct_->var = malloc(sizeof(LVar));
-  struct_->var->next = NULL;
-  struct_->var->type = new_type(TY_NONE);
+  Token *tok = expect_ident("object declaration");
+  Node *node;
+  ObjectTag *object_tag;
+  if (is_struct) {
+    node = new_node(ND_STRUCT);
+    object_tag = find_struct_tag(tok);
+  } else {
+    node = new_node(ND_UNION);
+    object_tag = find_union_tag(tok);
+  }
+  if (!object_tag) {
+    error_at(tok->str, "unknown tag: %.*s [in object declaration]", tok->len, tok->str);
+  }
+  Object *object = object_tag->main;
+  object->var = malloc(sizeof(LVar));
+  object->var->next = NULL;
+  object->var->type = new_type(TY_NONE);
   int offset = 0;
   int max_size = 0;
-  expect("{", "before struct members", "struct");
+  expect("{", "before object members", "object");
   while (!consume("}")) {
     Type *type = consume_type();
-    Token *member_tok = expect_ident("struct member declaration");
+    Token *member_tok = expect_ident("object member declaration");
     Type *org_type = type;
     type = parse_array_dimensions(type);
     LVar *member_var = new_lvar(member_tok, type, FALSE, FALSE);
-    member_var->next = struct_->var;
-    struct_->var = member_var;
+    member_var->next = object->var;
+    object->var = member_var;
     int single_size = get_sizeof(org_type);
     if (offset % single_size != 0) {
       offset += single_size - (offset % single_size);
@@ -338,21 +351,45 @@ Node *struct_stmt() {
     if (max_size < single_size) {
       max_size = single_size;
     }
-    member_var->offset = offset;
+    if (is_struct) {
+      // 構造体のメンバーはオフセットを持つ
+      member_var->offset = offset;
+    } else {
+      // unionのメンバーはオフセットを持たない
+      member_var->offset = 0;
+    }
     offset += get_sizeof(type);
     if (consume(";")) {
       continue;
     } else {
-      error_at(token->str, "expected ';' after struct member declaration [in struct declaration]");
+      error_at(token->str, "expected ';' after object member declaration [in object declaration]");
     }
   }
-  if (offset % max_size != 0) {
-    offset += max_size - (offset % max_size);
+  if (is_struct) {
+    // 構造体のサイズはメンバーの合計サイズ
+    if (offset % max_size != 0) {
+      offset += max_size - (offset % max_size);
+    }
+    object->size = offset;
+  } else {
+    // unionのサイズは最大のメンバーのサイズ
+    object->size = max_size;
   }
-  struct_->size = offset;
-  expect(";", "after struct definition", "struct");
-  node->type = new_type_struct(struct_);
+  expect(";", "after object definition", "object");
+  node->type = new_type_struct(object);
   node->endline = TRUE;
+  return node;
+}
+
+Node *struct_stmt() {
+  token = token->next;
+  Node *node = struct_and_union_declaration(TRUE, FALSE);
+  return node;
+}
+
+Node *union_stmt() {
+  token = token->next;
+  Node *node = struct_and_union_declaration(FALSE, TRUE);
   return node;
 }
 
@@ -375,12 +412,34 @@ Node *typedef_stmt() {
     var->len = tok2->len;
     var->next = structs;
     structs = var;
-    MemberTag *tag = malloc(sizeof(MemberTag));
+    ObjectTag *tag = malloc(sizeof(ObjectTag));
     tag->name = tok1->str;
     tag->len = tok1->len;
     tag->main = var;
     tag->next = struct_tags;
     struct_tags = tag;
+  } else if (token->kind == TK_UNION) {
+    token = token->next;
+    node = new_node(ND_TYPEDEF);
+    Token *tok1 = expect_ident("typedef");
+    Token *tok2 = expect_ident("typedef");
+    if (find_struct_tag(tok1)) {
+      error_duplicate_name(tok1, "typedef");
+    }
+    if (find_struct(tok2)) {
+      error_duplicate_name(tok2, "typedef");
+    }
+    Object *var = malloc(sizeof(Object));
+    var->name = tok2->str;
+    var->len = tok2->len;
+    var->next = unions;
+    unions = var;
+    ObjectTag *tag = malloc(sizeof(ObjectTag));
+    tag->name = tok1->str;
+    tag->len = tok1->len;
+    tag->main = var;
+    tag->next = union_tags;
+    union_tags = tag;
   } else if (token->kind == TK_ENUM) {
     token = token->next;
     node = new_node(ND_TYPEDEF);
