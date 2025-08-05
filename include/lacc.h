@@ -113,7 +113,7 @@ struct Type {
   TypeKind ty;
   Type *ptr_to;
   int array_size;
-  Object *struct_;
+  Object *object;
   int is_const; // constかどうか
 };
 
@@ -250,9 +250,10 @@ LVar *new_lvar(Token *tok, Type *type, int is_static, int is_extern);
 LVar *find_lvar(Token *tok);
 LVar *find_gvar(Token *tok);
 Object *find_struct(Token *tok);
+Object *find_union(Token *tok);
 Object *find_enum(Token *tok);
 LVar *find_enum_member(Token *tok);
-LVar *find_struct_member(Object *struct_, Token *tok);
+LVar *find_object_member(Object *object, Token *tok);
 ObjectTag *find_struct_tag(Token *tok);
 ObjectTag *find_union_tag(Token *tok);
 Function *find_fn(Token *tok);
@@ -285,7 +286,8 @@ int type_size(Type *type);
 Type *new_type(TypeKind ty);
 Type *new_type_ptr(Type *ptr_to);
 Type *new_type_arr(Type *ptr_to, int array_size);
-Type *new_type_struct(Object *struct_);
+Type *new_type_struct(Object *object);
+Type *new_type_union(Object *object);
 Type *parse_array_dimensions(Type *base_type);
 char *type_name(Type *type);
 int is_same_type(Type *lhs, Type *rhs);

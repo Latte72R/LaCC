@@ -310,8 +310,12 @@ Node *type_cast() {
     error_at(tok->str, "cannot cast to void type [in type_cast]");
   } else if (type->ty == TY_STRUCT) {
     error_at(tok->str, "cannot cast to struct type [in type_cast]");
+  } else if (type->ty == TY_UNION) {
+    error_at(tok->str, "cannot cast to union type [in type_cast]");
   } else if (node->lhs->type->ty == TY_STRUCT) {
     error_at(tok->str, "cannot cast from struct type [in type_cast]");
+  } else if (node->lhs->type->ty == TY_UNION) {
+    error_at(tok->str, "cannot cast from union type [in type_cast]");
   } else if (type_size(node->lhs->type) > type_size(type)) {
     warning_at(tok->str, "cast to smaller integer type [in type_cast]");
   }
@@ -389,7 +393,7 @@ Node *access_member() {
   Node *ptr;
   Node *offset_node;
   Token *tok;
-  Object *struct_;
+  Object *object;
   LVar *var;
   char *consumed_ptr_prev;
   Token *prev_tok = token;
@@ -404,17 +408,17 @@ Node *access_member() {
       expect("]", "after number", "array access");
       node = new_deref(node);
     } else if (consume(".")) {
-      if (node->type->ty != TY_STRUCT) {
-        error_at(prev_tok->str, "%.*s is not a struct [in struct reference]", prev_tok->len, prev_tok->str);
+      if (node->type->ty != TY_STRUCT && node->type->ty != TY_UNION) {
+        error_at(prev_tok->str, "%.*s is not an object [in object reference]", prev_tok->len, prev_tok->str);
       }
-      tok = expect_ident("struct reference");
-      struct_ = node->type->struct_;
-      if (!struct_) {
-        error_at(prev_tok->str, "unknown struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
-      } else if (!struct_->size) {
-        error_at(prev_tok->str, "not initialized struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
+      tok = expect_ident("object reference");
+      object = node->type->object;
+      if (!object) {
+        error_at(prev_tok->str, "unknown object: %.*s [in object reference]", prev_tok->len, prev_tok->str);
+      } else if (!object->size) {
+        error_at(prev_tok->str, "not initialized object: %.*s [in object reference]", prev_tok->len, prev_tok->str);
       }
-      var = find_struct_member(struct_, tok);
+      var = find_object_member(object, tok);
       offset_node = new_num(var->offset);
       ptr = new_node(ND_ADDR);
       ptr->lhs = node;
@@ -426,18 +430,17 @@ Node *access_member() {
       if (node->type->ty != TY_PTR) {
         error_at(prev_tok->str, "%.*s is not a pointer [in struct reference]", prev_tok->len, prev_tok->str);
       }
-      if (node->type->ptr_to->ty != TY_STRUCT) {
-        error_at(prev_tok->str, "%.*s is not a pointer of a struct [in struct reference]", prev_tok->len,
-                 prev_tok->str);
+      if (node->type->ptr_to->ty != TY_STRUCT && node->type->ptr_to->ty != TY_UNION) {
+        error_at(prev_tok->str, "%.*s is not a pointer of object [in struct reference]", prev_tok->len, prev_tok->str);
       }
-      tok = expect_ident("struct reference");
-      struct_ = node->type->ptr_to->struct_;
-      if (!struct_) {
-        error_at(prev_tok->str, "unknown struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
-      } else if (!struct_->size) {
-        error_at(prev_tok->str, "not initialized struct: %.*s [in struct reference]", prev_tok->len, prev_tok->str);
+      tok = expect_ident("object reference");
+      object = node->type->ptr_to->object;
+      if (!object) {
+        error_at(prev_tok->str, "unknown object: %.*s [in object reference]", prev_tok->len, prev_tok->str);
+      } else if (!object->size) {
+        error_at(prev_tok->str, "not initialized object: %.*s [in object reference]", prev_tok->len, prev_tok->str);
       }
-      var = find_struct_member(struct_, tok);
+      var = find_object_member(object, tok);
       offset_node = new_num(var->offset);
       ptr = new_binary(ND_ADD, node, offset_node);
       ptr->type = new_type_ptr(var->type);

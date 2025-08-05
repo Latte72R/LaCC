@@ -80,6 +80,14 @@ Object *find_struct(Token *tok) {
   return NULL;
 }
 
+// unionを名前で検索する。見つからなかった場合はNULLを返す。
+Object *find_union(Token *tok) {
+  for (Object *var = unions; var->next; var = var->next)
+    if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
+      return var;
+  return NULL;
+}
+
 // enumを名前で検索する。見つからなかった場合はNULLを返す。
 Object *find_enum(Token *tok) {
   for (Object *var = enums; var->next; var = var->next)
@@ -96,9 +104,9 @@ LVar *find_enum_member(Token *tok) {
   return NULL;
 }
 
-// structのメンバーを名前で検索する。見つからなかった場合はNULLを返す。
-LVar *find_struct_member(Object *struct_, Token *tok) {
-  for (LVar *var = struct_->var; var->next; var = var->next)
+// structとunionのメンバーを名前で検索する。見つからなかった場合はNULLを返す。
+LVar *find_object_member(Object *object, Token *tok) {
+  for (LVar *var = object->var; var->next; var = var->next)
     if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;
