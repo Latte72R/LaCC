@@ -1206,6 +1206,90 @@ int test132() {
   return ++static_var;
 }
 
+typedef union UNION UNION;
+union UNION {
+  int i;
+  int *ip;
+  char c[4];
+};
+
+int test133() {
+  // 基本的なunion使用
+  UNION u;
+  u.i = 45;
+  return u.i; // 45
+}
+
+int test134() {
+  // unionのサイズ確認（最大メンバのサイズ）
+  return sizeof(UNION); // int(4)、 char*(8)、char[4](4) の中で最大の 8
+}
+
+int test135() {
+  // ポインタunionのテスト
+  UNION u;
+  int value = 42;
+  u.ip = &value;
+  return *u.ip; // 42
+}
+
+int test136() {
+  // unionメンバへのポインタアクセス
+  UNION u;
+  u.i = 0x61626364; // "abcd" in little endian
+  char *cp = u.c;
+  return cp[0] + cp[1]; // 'd' + 'c' = 100 + 99 = 199 (little endian前提)
+}
+
+int test137() {
+  // unionの配列
+  UNION arr[2];
+  arr[0].i = 10;
+  arr[1].i = 20;
+  return arr[0].i + arr[1].i; // 30
+}
+
+int test138() {
+  // unionポインタの間接参照
+  UNION u;
+  UNION *up = &u;
+  up->i = 500;
+  return up->i; // 500
+}
+
+typedef struct test139_struct test139_struct;
+struct test139_struct {
+  int a, b, c, d;
+};
+typedef union test139_union test139_union;
+union test139_union {
+  int arr[4];
+  test139_struct s;
+};
+int test139() {
+  test139_union u;
+  u.arr[0] = 10;
+  u.arr[1] = 20;
+  u.arr[2] = 30;
+  u.arr[3] = 40;
+  return u.s.a + u.s.b + u.s.c + u.s.d; // 100
+}
+
+int test140() {
+  // unionの全体代入
+  UNION u1, u2;
+  u1.i = 99;
+  u2 = u1;
+  return u2.i; // 99
+}
+
+int test141() {
+  // void* ←→ 型付きポインタキャスト後のポインタ差分評価
+  int arr[4];
+  void *vp = &arr[3];
+  return (int)((int *)vp - arr); // arr[3] - arr[0] = 3
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1349,6 +1433,15 @@ int main() {
   check(test130(), 130, 245);
   check(test131(), 131, 6);
   check(test132(), 132, 1);
+  check(test133(), 133, 45);
+  check(test134(), 134, 8);
+  check(test135(), 135, 42);
+  check(test136(), 136, 199);
+  check(test137(), 137, 30);
+  check(test138(), 138, 500);
+  check(test139(), 139, 100);
+  check(test140(), 140, 99);
+  check(test141(), 141, 3);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

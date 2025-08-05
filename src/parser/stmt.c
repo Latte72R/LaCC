@@ -295,6 +295,8 @@ Node *stmt() {
     node = vardec_and_funcdef_stmt(FALSE, FALSE);
   } else if (token->kind == TK_STRUCT) {
     node = struct_stmt();
+  } else if (token->kind == TK_UNION) {
+    node = union_stmt();
   } else if (token->kind == TK_TYPEDEF) {
     node = typedef_stmt();
   } else if (token->kind == TK_SWITCH) {

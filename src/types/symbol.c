@@ -4,9 +4,11 @@
 extern Function *functions;
 extern Function *current_fn;
 extern LVar *globals;
-extern Struct *structs;
-extern StructTag *struct_tags;
-extern Enum *enums;
+extern Object *structs;
+extern ObjectTag *struct_tags;
+extern Object *unions;
+extern ObjectTag *union_tags;
+extern Object *enums;
 extern LVar *enum_members;
 
 extern const int TRUE;
@@ -71,16 +73,24 @@ LVar *find_gvar(Token *tok) {
 }
 
 // structを名前で検索する。見つからなかった場合はNULLを返す。
-Struct *find_struct(Token *tok) {
-  for (Struct *var = structs; var->next; var = var->next)
+Object *find_struct(Token *tok) {
+  for (Object *var = structs; var->next; var = var->next)
+    if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
+      return var;
+  return NULL;
+}
+
+// unionを名前で検索する。見つからなかった場合はNULLを返す。
+Object *find_union(Token *tok) {
+  for (Object *var = unions; var->next; var = var->next)
     if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;
 }
 
 // enumを名前で検索する。見つからなかった場合はNULLを返す。
-Enum *find_enum(Token *tok) {
-  for (Enum *var = enums; var->next; var = var->next)
+Object *find_enum(Token *tok) {
+  for (Object *var = enums; var->next; var = var->next)
     if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;
@@ -94,17 +104,25 @@ LVar *find_enum_member(Token *tok) {
   return NULL;
 }
 
-// structのメンバーを名前で検索する。見つからなかった場合はNULLを返す。
-LVar *find_struct_member(Struct *struct_, Token *tok) {
-  for (LVar *var = struct_->var; var->next; var = var->next)
+// structとunionのメンバーを名前で検索する。見つからなかった場合はNULLを返す。
+LVar *find_object_member(Object *object, Token *tok) {
+  for (LVar *var = object->var; var->next; var = var->next)
     if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;
 }
 
 // struct_tagを名前で検索する。見つからなかった場合はNULLを返す。
-StructTag *find_struct_tag(Token *tok) {
-  for (StructTag *var = struct_tags; var->next; var = var->next)
+ObjectTag *find_struct_tag(Token *tok) {
+  for (ObjectTag *var = struct_tags; var->next; var = var->next)
+    if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
+      return var;
+  return NULL;
+}
+
+// union_tagを名前で検索する。見つからなかった場合はNULLを返す。
+ObjectTag *find_union_tag(Token *tok) {
+  for (ObjectTag *var = union_tags; var->next; var = var->next)
     if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;

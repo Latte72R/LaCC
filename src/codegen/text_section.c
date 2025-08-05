@@ -238,7 +238,7 @@ void gen(Node *node) {
       if (!node->endline)
         write_file("  push rax\n");
       break;
-    } else if (node->lhs->type->ty == TY_STRUCT) {
+    } else if (node->lhs->type->ty == TY_STRUCT || node->lhs->type->ty == TY_UNION) {
       gen_lval(node->lhs);
       gen_lval(node->rhs);
       asm_memcpy(node->lhs, node->rhs);
@@ -558,6 +558,7 @@ void gen(Node *node) {
   case ND_TYPEDEF:
   case ND_TYPE:
   case ND_ENUM:
+  case ND_UNION:
   case ND_STRUCT:
   case ND_NONE:
     break;

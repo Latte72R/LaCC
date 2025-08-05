@@ -21,11 +21,15 @@ Type *parse_base_type_internal(int should_consume) {
 
   // 型の判定
   if (token->kind == TK_IDENT) {
-    Struct *struct_ = find_struct(token);
-    Enum *enum_ = find_enum(token);
+    Object *struct_ = find_struct(token);
+    Object *union_ = find_union(token);
+    Object *enum_ = find_enum(token);
     if (struct_) {
       type->ty = TY_STRUCT;
-      type->struct_ = struct_;
+      type->object = struct_;
+    } else if (union_) {
+      type->ty = TY_UNION;
+      type->object = union_;
     } else if (enum_) {
       type->ty = TY_INT;
     } else {
@@ -82,11 +86,10 @@ int is_type(Token *tok) {
   if (tok->kind == TK_CONST)
     return TRUE;
   if (tok->kind == TK_IDENT) {
-    Struct *struct_ = find_struct(tok);
-    if (struct_)
-      return TRUE;
-    Enum *enum_ = find_enum(tok);
-    if (enum_)
+    Object *struct_ = find_struct(tok);
+    Object *union_ = find_union(tok);
+    Object *enum_ = find_enum(tok);
+    if (struct_ || union_ || enum_)
       return TRUE;
   }
   return FALSE;
@@ -105,7 +108,8 @@ int get_sizeof(Type *type) {
   case TY_ARGARR:
     return get_sizeof(type->ptr_to) * type->array_size;
   case TY_STRUCT:
-    return type->struct_->size;
+  case TY_UNION:
+    return type->object->size;
   default:
     error_at(token->str, "invalid type [in get_sizeof]");
     return 0;
@@ -125,7 +129,8 @@ int type_size(Type *type) {
   case TY_ARGARR:
     return 8;
   case TY_STRUCT:
-    return type->struct_->size;
+  case TY_UNION:
+    return type->object->size;
   default:
     error_at(token->str, "invalid type [in type_size]");
     return 0;
@@ -157,10 +162,17 @@ Type *new_type_arr(Type *ptr_to, int array_size) {
   return type;
 }
 
-Type *new_type_struct(Struct *struct_) {
+Type *new_type_struct(Object *object) {
   Type *type = malloc(sizeof(Type));
   type->ty = TY_STRUCT;
-  type->struct_ = struct_;
+  type->object = object;
+  return type;
+}
+
+Type *new_type_union(Object *object) {
+  Type *type = malloc(sizeof(Type));
+  type->ty = TY_UNION;
+  type->object = object;
   return type;
 }
 
@@ -204,6 +216,8 @@ char *type_name(Type *type) {
     return "void";
   case TY_STRUCT:
     return "struct";
+  case TY_UNION:
+    return "union";
   default:
     return "unknown";
   }
