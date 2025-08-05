@@ -1206,6 +1206,57 @@ int test132() {
   return ++static_var;
 }
 
+typedef union UNION UNION;
+union UNION {
+  int i;
+  int *ip;
+  char c[4];
+};
+
+int test133() {
+  // 基本的なunion使用
+  UNION u;
+  u.i = 45;
+  return u.i; // 45
+}
+
+int test134() {
+  // unionのサイズ確認（最大メンバのサイズ）
+  return sizeof(UNION); // int(4)、 char*(8)、char[4](4) の中で最大の 8
+}
+
+int test135() {
+  // ポインタunionのテスト
+  UNION u;
+  int value = 42;
+  u.ip = &value;
+  return *u.ip; // 42
+}
+
+int test136() {
+  // unionメンバへのポインタアクセス
+  UNION u;
+  u.i = 0x61626364; // "abcd" in little endian
+  char *cp = u.c;
+  return cp[0] + cp[1]; // 'd' + 'c' = 100 + 99 = 199 (little endian前提)
+}
+
+int test137() {
+  // unionの配列
+  UNION arr[2];
+  arr[0].i = 10;
+  arr[1].i = 20;
+  return arr[0].i + arr[1].i; // 30
+}
+
+int test138() {
+  // unionポインタの間接参照
+  UNION u;
+  UNION *up = &u;
+  up->i = 500;
+  return up->i; // 500
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1349,6 +1400,12 @@ int main() {
   check(test130(), 130, 245);
   check(test131(), 131, 6);
   check(test132(), 132, 1);
+  check(test133(), 133, 45);
+  check(test134(), 134, 8);
+  check(test135(), 135, 42);
+  check(test136(), 136, 199);
+  check(test137(), 137, 30);
+  check(test138(), 138, 500);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);
