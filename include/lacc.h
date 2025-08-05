@@ -39,6 +39,7 @@ typedef enum {
   TK_STRING,   // 文字列
   TK_TYPEDEF,  // typedef
   TK_ENUM,     // enum
+  TK_UNION,    // union
   TK_STRUCT    // struct
 } TokenKind;
 
@@ -89,15 +90,17 @@ struct LVar {
   int block;     // ブロックのID
 };
 
+// struct, enum, unionの型
 typedef struct Object Object;
 struct Object {
-  Object *next; // 次の構造体かNULL
+  Object *next; // 次の Object か NULL
   LVar *var;    // 次の変数かNULL
   char *name;   // 変数の名前
   int len;      // 名前の長さ
   int size;     // 構造体のサイズ
 };
 
+// struct, unionのメンバー
 typedef struct MemberTag MemberTag;
 struct MemberTag {
   MemberTag *next; // 次の構造体かNULL

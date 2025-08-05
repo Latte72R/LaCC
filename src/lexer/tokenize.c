@@ -296,6 +296,12 @@ void tokenize() {
       continue;
     }
 
+    if (startswith(p, "union") && !is_alnum(p[5])) {
+      new_token(TK_UNION, p, 5);
+      p += 5;
+      continue;
+    }
+
     if (startswith(p, "struct") && !is_alnum(p[6])) {
       new_token(TK_STRUCT, p, 6);
       p += 6;
