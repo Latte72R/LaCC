@@ -12,7 +12,7 @@ LaCC is a minimalist C compiler that implements only the core language features 
 
 - **Primitive**: `int`, `char`, `void`  
 - **Derived**: pointer types (`T*`), arrays (`T[]`)  
-- **Composite**: structures (`struct`), enumerations (`enum`)  
+- **Composite**: structures (`struct`), unions (`union`), enumerations (`enum`)  
 
 ### 2. Functions
 
@@ -70,8 +70,8 @@ Both global and local (stack) variable declarations are supported.
 - **`goto` statement and labels**  
   LaCC supports `goto` statements and label definitions, allowing for non-linear control flow.
 
-- **Struct member access**  
-  Both dot notation (`.`) for direct struct access and arrow notation (`->`) for pointer-to-struct access are supported.
+- **Struct and Union member access**  
+  Both dot notation (`.`) for direct access and arrow notation (`->`) for pointer access are supported.
 
 - **Binary and Hexadecimal numbers:** `0b001011` or `0xFF2A`
 
@@ -93,7 +93,6 @@ Both global and local (stack) variable declarations are supported.
 LaCC does **not** support the following:
  
 - Ternary conditional operator (`?:`)  
-- `union` types  
 - Extended primitive types: `unsigned`, `long`, `float`, `double`, etc.  
 - Type qualifiers & storage-class specifiers: `register`, `auto`, etc.  
 - No initializer lists for structs (e.g.,  `struct AB p = {.a = 1, .b = 2};`)  
