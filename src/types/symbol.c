@@ -4,9 +4,9 @@
 extern Function *functions;
 extern Function *current_fn;
 extern LVar *globals;
-extern Struct *structs;
-extern StructTag *struct_tags;
-extern Enum *enums;
+extern Object *structs;
+extern MemberTag *struct_tags;
+extern Object *enums;
 extern LVar *enum_members;
 
 extern const int TRUE;
@@ -71,16 +71,16 @@ LVar *find_gvar(Token *tok) {
 }
 
 // structを名前で検索する。見つからなかった場合はNULLを返す。
-Struct *find_struct(Token *tok) {
-  for (Struct *var = structs; var->next; var = var->next)
+Object *find_struct(Token *tok) {
+  for (Object *var = structs; var->next; var = var->next)
     if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;
 }
 
 // enumを名前で検索する。見つからなかった場合はNULLを返す。
-Enum *find_enum(Token *tok) {
-  for (Enum *var = enums; var->next; var = var->next)
+Object *find_enum(Token *tok) {
+  for (Object *var = enums; var->next; var = var->next)
     if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;
@@ -95,7 +95,7 @@ LVar *find_enum_member(Token *tok) {
 }
 
 // structのメンバーを名前で検索する。見つからなかった場合はNULLを返す。
-LVar *find_struct_member(Struct *struct_, Token *tok) {
+LVar *find_struct_member(Object *struct_, Token *tok) {
   for (LVar *var = struct_->var; var->next; var = var->next)
     if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
@@ -103,8 +103,8 @@ LVar *find_struct_member(Struct *struct_, Token *tok) {
 }
 
 // struct_tagを名前で検索する。見つからなかった場合はNULLを返す。
-StructTag *find_struct_tag(Token *tok) {
-  for (StructTag *var = struct_tags; var->next; var = var->next)
+MemberTag *find_struct_tag(Token *tok) {
+  for (MemberTag *var = struct_tags; var->next; var = var->next)
     if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;

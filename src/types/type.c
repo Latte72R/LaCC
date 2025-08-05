@@ -21,8 +21,8 @@ Type *parse_base_type_internal(int should_consume) {
 
   // 型の判定
   if (token->kind == TK_IDENT) {
-    Struct *struct_ = find_struct(token);
-    Enum *enum_ = find_enum(token);
+    Object *struct_ = find_struct(token);
+    Object *enum_ = find_enum(token);
     if (struct_) {
       type->ty = TY_STRUCT;
       type->struct_ = struct_;
@@ -82,10 +82,10 @@ int is_type(Token *tok) {
   if (tok->kind == TK_CONST)
     return TRUE;
   if (tok->kind == TK_IDENT) {
-    Struct *struct_ = find_struct(tok);
+    Object *struct_ = find_struct(tok);
     if (struct_)
       return TRUE;
-    Enum *enum_ = find_enum(tok);
+    Object *enum_ = find_enum(tok);
     if (enum_)
       return TRUE;
   }
@@ -157,7 +157,7 @@ Type *new_type_arr(Type *ptr_to, int array_size) {
   return type;
 }
 
-Type *new_type_struct(Struct *struct_) {
+Type *new_type_struct(Object *struct_) {
   Type *type = malloc(sizeof(Type));
   type->ty = TY_STRUCT;
   type->struct_ = struct_;

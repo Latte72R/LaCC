@@ -8,9 +8,9 @@ extern Function *functions;
 extern Function *current_fn;
 extern LVar *globals;
 extern LVar *statics;
-extern Struct *structs;
-extern StructTag *struct_tags;
-extern Enum *enums;
+extern Object *structs;
+extern MemberTag *struct_tags;
+extern Object *enums;
 extern LVar *enum_members;
 extern Array *arrays;
 extern char *consumed_ptr;
@@ -312,11 +312,11 @@ Node *struct_stmt() {
   token = token->next;
   Token *tok = expect_ident("struct declaration");
   Node *node = new_node(ND_STRUCT);
-  StructTag *struct_tag = find_struct_tag(tok);
+  MemberTag *struct_tag = find_struct_tag(tok);
   if (!struct_tag) {
     error_at(tok->str, "unknown tag: %.*s [in struct declaration]", tok->len, tok->str);
   }
-  Struct *struct_ = struct_tag->main;
+  Object *struct_ = struct_tag->main;
   struct_->var = malloc(sizeof(LVar));
   struct_->var->next = NULL;
   struct_->var->type = new_type(TY_NONE);
@@ -370,12 +370,12 @@ Node *typedef_stmt() {
     if (find_struct(tok2)) {
       error_duplicate_name(tok2, "typedef");
     }
-    Struct *var = malloc(sizeof(Struct));
+    Object *var = malloc(sizeof(Object));
     var->name = tok2->str;
     var->len = tok2->len;
     var->next = structs;
     structs = var;
-    StructTag *tag = malloc(sizeof(StructTag));
+    MemberTag *tag = malloc(sizeof(MemberTag));
     tag->name = tok1->str;
     tag->len = tok1->len;
     tag->main = var;
@@ -398,7 +398,7 @@ Node *typedef_stmt() {
     if (find_enum(tok)) {
       error_duplicate_name(tok, "typedef");
     }
-    Enum *enum_ = malloc(sizeof(Enum));
+    Object *enum_ = malloc(sizeof(Object));
     enum_->name = tok->str;
     enum_->len = tok->len;
     enum_->next = enums;

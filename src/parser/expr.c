@@ -384,12 +384,12 @@ Node *increment_decrement() {
   return node;
 }
 
-// Structure Reference and Array Indexing
+// Objecture Reference and Array Indexing
 Node *access_member() {
   Node *ptr;
   Node *offset_node;
   Token *tok;
-  Struct *struct_;
+  Object *struct_;
   LVar *var;
   char *consumed_ptr_prev;
   Token *prev_tok = token;
