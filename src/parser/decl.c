@@ -338,27 +338,29 @@ Node *struct_and_union_declaration(const int is_struct, const int is_union) {
   expect("{", "before object members", "object");
   while (!consume("}")) {
     Type *type = consume_type();
-    Token *member_tok = expect_ident("object member declaration");
     Type *org_type = type;
-    type = parse_array_dimensions(type);
-    LVar *member_var = new_lvar(member_tok, type, FALSE, FALSE);
-    member_var->next = object->var;
-    object->var = member_var;
-    int single_size = get_sizeof(org_type);
-    if (offset % single_size != 0) {
-      offset += single_size - (offset % single_size);
-    }
-    if (max_size < single_size) {
-      max_size = single_size;
-    }
-    if (is_struct) {
-      // 構造体のメンバーはオフセットを持つ
-      member_var->offset = offset;
-    } else {
-      // unionのメンバーはオフセットを持たない
-      member_var->offset = 0;
-    }
-    offset += get_sizeof(type);
+    do {
+      Token *member_tok = expect_ident("object member declaration");
+      type = parse_array_dimensions(type);
+      LVar *member_var = new_lvar(member_tok, type, FALSE, FALSE);
+      member_var->next = object->var;
+      object->var = member_var;
+      int single_size = get_sizeof(org_type);
+      if (offset % single_size != 0) {
+        offset += single_size - (offset % single_size);
+      }
+      if (max_size < single_size) {
+        max_size = single_size;
+      }
+      if (is_struct) {
+        // 構造体のメンバーはオフセットを持つ
+        member_var->offset = offset;
+      } else {
+        // unionのメンバーはオフセットを持たない
+        member_var->offset = 0;
+      }
+      offset += get_sizeof(type);
+    } while (consume(","));
     if (consume(";")) {
       continue;
     } else {
