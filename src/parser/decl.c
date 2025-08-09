@@ -12,7 +12,6 @@ extern Object *structs;
 extern Object *unions;
 extern Object *enums;
 extern ObjectTag *object_tags;
-extern LVar *enum_members;
 extern Array *arrays;
 extern char *consumed_ptr;
 
@@ -320,14 +319,20 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   return node;
 }
 
-Object *struct_and_union_declaration(const int is_struct, const int is_union, const int should_record) {
+Object *struct_and_union_declaration(const int is_struct, const int is_union, const int should_record,
+                                     const int is_typedef) {
   token = token->next;
   if (is_struct && is_union) {
     error_at(token->str, "cannot declare both struct and union at the same time [in object declaration]");
   } else if (!is_struct && !is_union) {
     error_at(token->str, "expected struct or union [in object declaration]");
   }
-  Token *tok = expect_ident("object declaration");
+  Token *tok;
+  if (is_typedef && token->kind != TK_IDENT) {
+    tok = NULL;
+  } else {
+    tok = expect_ident("object declaration");
+  }
   Object *object = NULL;
   if (tok && should_record) {
     if (is_struct) {
@@ -412,9 +417,14 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
   return object;
 }
 
-Object *enum_declaration(const int should_record) {
+Object *enum_declaration(const int should_record, const int is_typedef) {
   token = token->next;
-  Token *tok = expect_ident("object declaration");
+  Token *tok;
+  if (is_typedef && token->kind != TK_IDENT) {
+    tok = NULL;
+  } else {
+    tok = expect_ident("object declaration");
+  }
   Object *object = NULL;
   if (tok && should_record) {
     object = find_enum(tok);
@@ -424,6 +434,9 @@ Object *enum_declaration(const int should_record) {
   } else if (!object) {
     object = malloc(sizeof(Object));
     object->is_defined = FALSE;
+    object->var = malloc(sizeof(LVar));
+    object->var->next = NULL;
+    object->var->type = new_type(TY_NONE);
     if (tok) {
       object->name = tok->str;
       object->len = tok->len;
@@ -440,9 +453,6 @@ Object *enum_declaration(const int should_record) {
     return object;
   }
   object->is_defined = TRUE;
-  object->var = malloc(sizeof(LVar));
-  object->var->next = NULL;
-  object->var->type = new_type(TY_NONE);
 
   int value = 0;
   expect("{", "before enum members", "enum");
@@ -450,8 +460,8 @@ Object *enum_declaration(const int should_record) {
     Token *member_tok = expect_ident("typedef");
     LVar *member_var = new_lvar(member_tok, new_type(TY_INT), FALSE, FALSE);
     member_var->offset = value++;
-    member_var->next = enum_members;
-    enum_members = member_var;
+    member_var->next = object->var;
+    object->var = member_var;
   } while (consume(","));
   expect("}", "after enum members", "enum");
 
@@ -461,23 +471,24 @@ Object *enum_declaration(const int should_record) {
 Node *typedef_stmt() {
   token = token->next;
   Node *node;
-  if (token->kind == TK_STRUCT || token->kind == TK_UNION) {
+  if (token->kind == TK_STRUCT || token->kind == TK_UNION || token->kind == TK_ENUM) {
     Object *object;
     Type *type;
-    TypeKind kind;
+    ObjectKind kind;
     if (token->kind == TK_STRUCT) {
-      object = struct_and_union_declaration(TRUE, FALSE, TRUE);
-      type = new_type_struct(object);
-      kind = TY_STRUCT;
+      object = struct_and_union_declaration(TRUE, FALSE, TRUE, TRUE);
+      kind = OBJ_STRUCT;
     } else if (token->kind == TK_UNION) {
-      object = struct_and_union_declaration(FALSE, TRUE, TRUE);
-      type = new_type_union(object);
-      kind = TY_UNION;
+      object = struct_and_union_declaration(FALSE, TRUE, TRUE, TRUE);
+      kind = OBJ_UNION;
+    } else if (token->kind == TK_ENUM) {
+      object = enum_declaration(TRUE, TRUE);
+      kind = OBJ_ENUM;
     } else {
       error_at(token->str, "expected struct or union [in typedef]");
     }
     node = new_node(ND_TYPEDEF);
-    node->type = type;
+    node->type = new_type(TY_NONE);
     Token *tok = expect_ident("typedef");
     if (find_object_tag(tok)) {
       error_duplicate_name(tok, "typedef");
@@ -489,28 +500,6 @@ Node *typedef_stmt() {
     tag->kind = kind;
     tag->next = object_tags;
     object_tags = tag;
-  } else if (token->kind == TK_ENUM) {
-    token = token->next;
-    node = new_node(ND_TYPEDEF);
-    int offset = 0;
-    expect("{", "before enum members", "enum");
-    do {
-      Token *member_tok = expect_ident("typedef");
-      LVar *member_var = new_lvar(member_tok, new_type(TY_INT), FALSE, FALSE);
-      member_var->offset = offset++;
-      member_var->next = enum_members;
-      enum_members = member_var;
-    } while (consume(","));
-    expect("}", "after enum members", "enum");
-    Token *tok = expect_ident("typedef");
-    if (find_enum(tok)) {
-      error_duplicate_name(tok, "typedef");
-    }
-    Object *enum_ = malloc(sizeof(Object));
-    enum_->name = tok->str;
-    enum_->len = tok->len;
-    enum_->next = enums;
-    enums = enum_;
   } else {
     error_at(token->str, "expected a struct but got \"%.*s\" [in typedef]", token->len, token->str);
   }

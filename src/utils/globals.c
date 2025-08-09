@@ -23,7 +23,6 @@ Object *structs;
 Object *unions;
 Object *enums;
 ObjectTag *object_tags;
-LVar *enum_members;
 String *strings;
 Array *arrays;
 String *filenames;
@@ -50,9 +49,6 @@ void init_global_variables() {
   // object の初期化
   enums = malloc(sizeof(Object));
   enums->next = NULL;
-  enum_members = malloc(sizeof(LVar));
-  enum_members->next = NULL;
-  enum_members->type = new_type(TY_NONE);
   structs = malloc(sizeof(Object));
   structs->next = NULL;
   unions = malloc(sizeof(Object));

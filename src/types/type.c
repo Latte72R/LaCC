@@ -22,15 +22,30 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
   // 基本型の処理
   if (token->kind == TK_STRUCT) {
     type->ty = TY_STRUCT;
-    type->object = struct_and_union_declaration(TRUE, FALSE, should_record);
+    type->object = struct_and_union_declaration(TRUE, FALSE, should_record, FALSE);
   } else if (token->kind == TK_UNION) {
     type->ty = TY_UNION;
-    type->object = struct_and_union_declaration(FALSE, TRUE, should_record);
+    type->object = struct_and_union_declaration(FALSE, TRUE, should_record, FALSE);
+  } else if (token->kind == TK_ENUM) {
+    type->ty = TY_INT;
+    type->object = enum_declaration(should_record, FALSE);
   } else if (token->kind == TK_IDENT) {
     ObjectTag *object_tag = find_object_tag(token);
     Object *enum_ = find_enum(token);
     if (object_tag) {
-      type->ty = object_tag->kind;
+      switch (object_tag->kind) {
+      case OBJ_STRUCT:
+        type->ty = TY_STRUCT;
+        break;
+      case OBJ_UNION:
+        type->ty = TY_UNION;
+        break;
+      case OBJ_ENUM:
+        type->ty = TY_INT;
+        break;
+      default:
+        return NULL;
+      }
       type->object = object_tag->object;
     } else if (enum_) {
       type->ty = TY_INT;
@@ -87,13 +102,12 @@ int is_type(Token *tok) {
     return TRUE;
   if (tok->kind == TK_CONST)
     return TRUE;
-  if (token->kind == TK_STRUCT || token->kind == TK_UNION) {
+  if (token->kind == TK_STRUCT || token->kind == TK_UNION || token->kind == TK_ENUM) {
     return TRUE;
   }
   if (tok->kind == TK_IDENT) {
     ObjectTag *object_tag = find_object_tag(token);
-    Object *enum_ = find_enum(tok);
-    if (object_tag || enum_)
+    if (object_tag)
       return TRUE;
   }
   return FALSE;
@@ -163,20 +177,6 @@ Type *new_type_arr(Type *ptr_to, int array_size) {
   type->ty = TY_ARR;
   type->ptr_to = ptr_to;
   type->array_size = array_size;
-  return type;
-}
-
-Type *new_type_struct(Object *object) {
-  Type *type = malloc(sizeof(Type));
-  type->ty = TY_STRUCT;
-  type->object = object;
-  return type;
-}
-
-Type *new_type_union(Object *object) {
-  Type *type = malloc(sizeof(Type));
-  type->ty = TY_UNION;
-  type->object = object;
   return type;
 }
 

@@ -8,7 +8,6 @@ extern Object *structs;
 extern Object *unions;
 extern Object *enums;
 extern ObjectTag *object_tags;
-extern LVar *enum_members;
 
 extern const int TRUE;
 extern const int FALSE;
@@ -97,9 +96,11 @@ Object *find_enum(Token *tok) {
 
 // enumのメンバーを名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_enum_member(Token *tok) {
-  for (LVar *var = enum_members; var->next; var = var->next)
-    if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
-      return var;
+  for (Object *enum_ = enums; enum_->next; enum_ = enum_->next) {
+    for (LVar *var = enum_->var; var->next; var = var->next)
+      if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
+        return var;
+  }
   return NULL;
 }
 
