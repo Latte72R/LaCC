@@ -4,24 +4,7 @@
 void printf();
 void *calloc();
 
-int num;
-char str[2];
-
 int failures;
-
-typedef struct STRUCT STRUCT;
-struct STRUCT {
-  int a;
-  int b[2];
-};
-
-typedef enum { A, B, C } ENUM;
-
-typedef struct ST28 ST28;
-struct ST28 {
-  ST28 *next;
-  char ch;
-};
 
 int foo_test11(int n) { return n * 4; }
 
@@ -98,7 +81,8 @@ int test14() {
   return a;
 }
 
-int test15() { return sizeof(num); }
+int test15_sub;
+int test15() { return sizeof(test15_sub); }
 
 /*
 int test16() {
@@ -147,21 +131,27 @@ int test21() {
 }
 
 int test22() {
+  char str[2];
   str[0] = 3;
   str[1] = 4;
   return str[0] * str[1];
 }
 
+typedef struct {
+  int a;
+  int b[2];
+} ST23;
 int test23() {
-  STRUCT *c = calloc(1, sizeof(STRUCT));
+  ST23 *c = calloc(1, sizeof(ST23));
   c->a = 5;
   c->b[0] = 1;
   c->b[1] = 6;
   return c->a * (c->b[0] + c->b[1]);
 }
 
-ENUM test24() {
-  ENUM a = C;
+typedef enum { A24, B24, C24 } ENUM24;
+ENUM24 test24() {
+  ENUM24 a = C24;
   return a;
 }
 
@@ -186,6 +176,11 @@ int test27() {
   return a * b;
 }
 
+typedef struct ST28 ST28;
+struct ST28 {
+  ST28 *next;
+  char ch;
+};
 int test28() {
   ST28 *a = calloc(1, sizeof(ST28));
   ST28 *b = calloc(1, sizeof(ST28));
@@ -248,8 +243,12 @@ int test37() {
   return 16 >> 2; // 0b10000 >> 2 = 0b100 = 4
 }
 
+typedef struct {
+  int a;
+  int b[2];
+} ST38;
 int test38() {
-  STRUCT c;
+  ST38 c;
   c.a = 5;
   ((&c)->b)[0] = 3;
   c.b[1] = 4;
@@ -267,10 +266,14 @@ int test40() {
   return &arr[2] - &arr[0]; // 2
 }
 
+typedef struct {
+  int a;
+  int b[2];
+} ST41;
 int test41() {
   // 構造体のサイズ
-  // STRUCT は int(4) + int の合計 12 バイト
-  return sizeof(STRUCT);
+  // int(4) + int の合計 12 バイト
+  return sizeof(ST41);
 }
 
 int test42() {
@@ -326,8 +329,12 @@ int test49_helper(int x) {
   }
 }
 
+typedef struct {
+  int a;
+  int b[2];
+} ST49;
 int test49() {
-  STRUCT arr[3];
+  ST49 arr[3];
   for (int i = 0; i < 3; i++) {
     arr[i].a = test49_helper(i + 1);
     arr[i].b[0] = i;
@@ -510,8 +517,12 @@ int test73() {
 }
 
 /* 構造体の丸ごと代入が正しく動くか */
+typedef struct {
+  int a;
+  int b[2];
+} ST74;
 int test74() {
-  STRUCT s1, s2;
+  ST74 s1, s2;
   s1.a = 4;
   s1.b[0] = 2;
   s1.b[1] = 1;
@@ -519,8 +530,11 @@ int test74() {
   return s2.a + s2.b[0] + s2.b[1]; /* 4 + 2 + 1 = 7 */
 }
 
-/* sizeof でポインタ型を組み合わせた時の結果 */
-int test75() { return sizeof(STRUCT *) + sizeof(char **); /* 8 + 8 = 16 (LP64 環境を想定) */ }
+/* sizeof でポインタ型を組み合わせた時の結果 */ typedef struct {
+  int a;
+  int b[2];
+} ST75;
+int test75() { return sizeof(ST75 *) + sizeof(char **); /* 8 + 8 = 16 (LP64 環境を想定) */ }
 
 /* 文字定数の扱いと算術演算 */
 int test76() { return '\n' + 1; /* 10 + 1 = 11 */ }
@@ -870,15 +884,18 @@ int test102() {
   return result; // 3 (1 + 2, then break)
 }
 
+typedef enum ENUM103 ENUM103;
+enum ENUM103 { D103, E103, F103 };
+
 int test103() {
   /* enumを使ったswitch */
-  ENUM e = B;
+  ENUM103 e = E103;
   switch (e) {
-  case A:
+  case D103:
     return 0;
-  case B:
+  case E103:
     return 1;
-  case C:
+  case F103:
     return 2;
   default:
     return -1;
@@ -1084,26 +1101,29 @@ end:
   return r; /* 20 + 30 + 20 */
 }
 
+typedef struct {
+  int a;
+  int b[2];
+} ST122;
 int test122() {
   // 構造体ポインタから void* へのキャストとその逆
-  STRUCT s;
+  ST122 s;
   s.a = 10;
   s.b[0] = 20;
   s.b[1] = 30;
   void *vp = (void *)&s;
-  STRUCT *sp = (STRUCT *)vp;
+  ST122 *sp = (ST122 *)vp;
   return sp->a + sp->b[0] - sp->b[1]; // 10 + 20 - 30 = 0
 }
 
-typedef struct NESTED_STRUCT NESTED_STRUCT;
-struct NESTED_STRUCT {
+typedef struct {
   int x;
-  STRUCT inner;
-};
+  ST122 inner;
+} ST123;
 
 int test123() {
   // ネストした構造体のアクセス
-  NESTED_STRUCT ns;
+  ST123 ns;
   ns.x = 5;
   ns.inner.a = 10;
   ns.inner.b[0] = 15;
@@ -1155,11 +1175,15 @@ int test128() {
   return *p3;          // 100
 }
 
+typedef struct {
+  int a;
+  int b[2];
+} ST129;
 int test129() {
   // 構造体ポインタの配列
-  STRUCT *arr[3];
+  ST129 *arr[3];
   for (int i = 0; i < 3; i++) {
-    arr[i] = (STRUCT *)calloc(1, sizeof(STRUCT));
+    arr[i] = (ST129 *)calloc(1, sizeof(ST129));
     arr[i]->a = i + 1;
     arr[i]->b[0] = i * 2;
     arr[i]->b[1] = i * 3;
@@ -1181,9 +1205,14 @@ int test130() {
   return result; // 計算: ((0 << 4) | (10)) = 10、~10 & 0xFF = 0xF5 = 245
 }
 
+typedef struct ST131 ST131;
+struct ST131 {
+  int a;
+  int b[2];
+};
 int test131() {
   // 構造体配列とポインタ操作
-  STRUCT structs[3];
+  ST131 structs[3];
   for (int i = 0; i < 3; i++) {
     structs[i].a = i + 1;
     structs[i].b[0] = i * 2;
@@ -1191,7 +1220,7 @@ int test131() {
   }
 
   // ポインタ経由でアクセス
-  STRUCT *ps = structs;
+  ST131 *ps = structs;
   int *pi = (int *)ps;
 
   // 構造体メンバのオフセット計算（実装依存）
@@ -1206,12 +1235,11 @@ int test132() {
   return ++static_var;
 }
 
-typedef union UNION UNION;
-union UNION {
+typedef union {
   int i;
   int *ip;
   char c[4];
-};
+} UNION;
 
 int test133() {
   // 基本的なunion使用
