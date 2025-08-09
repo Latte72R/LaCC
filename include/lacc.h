@@ -93,18 +93,18 @@ struct LVar {
 // struct, enum, unionの型
 typedef struct Object Object;
 struct Object {
-  Object *next; // 次の Object か NULL
-  LVar *var;    // 次の変数かNULL
-  char *name;   // 変数の名前
-  int len;      // 名前の長さ
-  int size;     // 構造体のサイズ
+  Object *next;   // 次の Object か NULL
+  LVar *var;      // 次の変数かNULL
+  char *name;     // 変数の名前
+  int len;        // 名前の長さ
+  int size;       // 構造体のサイズ
+  int is_defined; // 定義済みかどうか
 };
 
-// struct, unionのメンバー
 typedef struct ObjectTag ObjectTag;
 struct ObjectTag {
   ObjectTag *next; // 次の構造体かNULL
-  Object *main;    // struct
+  Object *object;  // struct または union の型
   char *name;      // タグの名前
   int len;         // 名前の長さ
 };
@@ -274,10 +274,10 @@ String *string_literal();
 Array *array_literal();
 
 // type.c
-Type *parse_base_type_internal(int should_consume);
+Type *parse_base_type_internal(int should_consume, int should_record);
 Type *check_base_type();
 Type *parse_pointer_qualifiers(Type *base_type);
-Type *consume_type();
+Type *consume_type(int should_record);
 int is_type(Token *tok);
 int is_ptr_or_arr(Type *type);
 int is_number(Type *type);
@@ -298,8 +298,8 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static);
 Node *global_variable_declaration(Token *tok, Type *type, int is_static);
 Node *extern_variable_declaration(Token *tok, Type *type);
 Node *vardec_and_funcdef_stmt(int is_static, int is_extern);
-Node *struct_stmt();
-Node *union_stmt();
+Node *struct_stmt(int should_record);
+Node *union_stmt(int should_record);
 Node *typedef_stmt();
 Node *handle_array_initialization(Node *node, Type *type, Type *org_type);
 Node *handle_scalar_initialization(Node *node, Type *type, char *ptr);
@@ -316,6 +316,11 @@ Node *for_stmt();
 Node *break_stmt();
 Node *continue_stmt();
 Node *return_stmt();
+Node *switch_stmt();
+Node *case_stmt();
+Node *default_stmt();
+int check_label();
+Node *expression_stmt();
 Node *stmt();
 
 // expr.c

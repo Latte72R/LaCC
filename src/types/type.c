@@ -7,7 +7,7 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
-Type *parse_base_type_internal(int should_consume) {
+Type *parse_base_type_internal(const int should_consume, const int should_record) {
   Token *tok = token;
   Type *type = malloc(sizeof(Type));
 
@@ -19,29 +19,35 @@ Type *parse_base_type_internal(int should_consume) {
     type->is_const = FALSE;
   }
 
-  // 型の判定
-  if (token->kind == TK_IDENT) {
-    Object *struct_ = find_struct(token);
-    Object *union_ = find_union(token);
+  // 基本型の処理
+  if (token->kind == TK_STRUCT) {
+    type->ty = TY_STRUCT;
+    type->object = struct_stmt(should_record)->type->object;
+  } else if (token->kind == TK_UNION) {
+    type->ty = TY_UNION;
+    type->object = union_stmt(should_record)->type->object;
+  } else if (token->kind == TK_IDENT) {
+    ObjectTag *struct_ = find_struct_tag(token);
+    ObjectTag *union_ = find_union_tag(token);
     Object *enum_ = find_enum(token);
     if (struct_) {
       type->ty = TY_STRUCT;
-      type->object = struct_;
+      type->object = struct_->object;
     } else if (union_) {
       type->ty = TY_UNION;
-      type->object = union_;
+      type->object = union_->object;
     } else if (enum_) {
       type->ty = TY_INT;
     } else {
       return NULL;
     }
+    token = token->next;
   } else if (token->kind != TK_TYPE) {
     return NULL;
   } else {
     type->ty = token->ty;
+    token = token->next;
   }
-
-  token = token->next;
 
   // 後続のconst
   if (token->kind == TK_CONST) {
@@ -54,7 +60,7 @@ Type *parse_base_type_internal(int should_consume) {
   return type;
 }
 
-Type *check_base_type() { return parse_base_type_internal(FALSE); }
+Type *check_base_type() { return parse_base_type_internal(FALSE, FALSE); }
 
 // ポインタ修飾子を解析
 Type *parse_pointer_qualifiers(Type *base_type) {
@@ -72,8 +78,8 @@ Type *parse_pointer_qualifiers(Type *base_type) {
   return type;
 }
 
-Type *consume_type() {
-  Type *type = parse_base_type_internal(TRUE);
+Type *consume_type(const int should_record) {
+  Type *type = parse_base_type_internal(TRUE, should_record);
   if (!type)
     return NULL;
   type = parse_pointer_qualifiers(type);
@@ -85,9 +91,12 @@ int is_type(Token *tok) {
     return TRUE;
   if (tok->kind == TK_CONST)
     return TRUE;
+  if (token->kind == TK_STRUCT || token->kind == TK_UNION) {
+    return TRUE;
+  }
   if (tok->kind == TK_IDENT) {
-    Object *struct_ = find_struct(tok);
-    Object *union_ = find_union(tok);
+    ObjectTag *struct_ = find_struct_tag(token);
+    ObjectTag *union_ = find_union_tag(token);
     Object *enum_ = find_enum(tok);
     if (struct_ || union_ || enum_)
       return TRUE;

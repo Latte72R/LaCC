@@ -140,7 +140,7 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
       fn->type_check = FALSE;
       break;
     }
-    type = consume_type();
+    type = consume_type(TRUE);
     if (!type) {
       if (i != 0) {
         error_at(consumed_ptr, "expected a type [in function definition]");
@@ -264,9 +264,20 @@ Node *extern_variable_declaration(Token *tok, Type *type) {
 
 Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   // 変数宣言または関数定義
+  Token *tok = token;
+  Type *type = consume_type(FALSE);
+
+  Node *node;
+  if (token->kind != TK_IDENT) {
+    // expression として扱う
+    token = tok;
+    return expression_stmt();
+  }
+
+  token = tok;
   Type *ch_type = check_base_type();
-  Type *type = consume_type();
-  Token *tok = expect_ident("variable declaration");
+  type = consume_type(TRUE);
+  tok = expect_ident("variable declaration");
 
   // 関数定義
   if (consume("(")) {
@@ -277,7 +288,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
     }
   }
 
-  Node *node = new_node(ND_BLOCK);
+  node = new_node(ND_BLOCK);
   node->body = malloc(sizeof(Node *));
   int i = 0;
 
@@ -310,7 +321,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   return node;
 }
 
-Node *struct_and_union_declaration(const int is_struct, const int is_union) {
+Node *struct_and_union_declaration(const int is_struct, const int is_union, const int should_record) {
   if (is_struct && is_union) {
     error_at(token->str, "cannot declare both struct and union at the same time [in object declaration]");
   } else if (!is_struct && !is_union) {
@@ -318,18 +329,46 @@ Node *struct_and_union_declaration(const int is_struct, const int is_union) {
   }
   Token *tok = expect_ident("object declaration");
   Node *node;
-  ObjectTag *object_tag;
+  Object *object = NULL;
   if (is_struct) {
     node = new_node(ND_STRUCT);
-    object_tag = find_struct_tag(tok);
+    if (tok && should_record) {
+      object = find_struct(tok);
+    }
   } else {
     node = new_node(ND_UNION);
-    object_tag = find_union_tag(tok);
+    if (tok && should_record) {
+      object = find_union(tok);
+    }
   }
-  if (!object_tag) {
-    error_at(tok->str, "unknown tag: %.*s [in object declaration]", tok->len, tok->str);
+  if (object && object->is_defined && peek("{")) {
+    error_at(tok->str, "duplicate object declaration: %.*s [in object declaration]", tok->len, tok->str);
+  } else if (!object) {
+    object = malloc(sizeof(Object));
+    object->is_defined = FALSE;
+    if (tok) {
+      object->name = tok->str;
+      object->len = tok->len;
+    } else {
+      object->name = NULL;
+      object->len = 0;
+    }
+    if (should_record) {
+      if (is_struct) {
+        object->next = structs;
+        structs = object;
+      } else {
+        object->next = unions;
+        unions = object;
+      }
+    }
   }
-  Object *object = object_tag->main;
+  if (!peek("{")) {
+    node->type = new_type_struct(object);
+    node->endline = TRUE;
+    return node;
+  }
+  object->is_defined = TRUE;
   object->var = malloc(sizeof(LVar));
   object->var->next = NULL;
   object->var->type = new_type(TY_NONE);
@@ -337,7 +376,7 @@ Node *struct_and_union_declaration(const int is_struct, const int is_union) {
   int max_size = 0;
   expect("{", "before object members", "object");
   while (!consume("}")) {
-    Type *type = consume_type();
+    Type *type = consume_type(TRUE);
     Type *org_type = type;
     do {
       Token *member_tok = expect_ident("object member declaration");
@@ -373,25 +412,24 @@ Node *struct_and_union_declaration(const int is_struct, const int is_union) {
       offset += max_size - (offset % max_size);
     }
     object->size = offset;
+    node->type = new_type_struct(object);
   } else {
     // unionのサイズは最大のメンバーのサイズ
     object->size = max_size;
+    node->type = new_type_union(object);
   }
-  expect(";", "after object definition", "object");
-  node->type = new_type_struct(object);
-  node->endline = TRUE;
   return node;
 }
 
-Node *struct_stmt() {
+Node *struct_stmt(const int should_record) {
   token = token->next;
-  Node *node = struct_and_union_declaration(TRUE, FALSE);
+  Node *node = struct_and_union_declaration(TRUE, FALSE, should_record);
   return node;
 }
 
-Node *union_stmt() {
+Node *union_stmt(const int should_record) {
   token = token->next;
-  Node *node = struct_and_union_declaration(FALSE, TRUE);
+  Node *node = struct_and_union_declaration(FALSE, TRUE, should_record);
   return node;
 }
 
@@ -399,32 +437,29 @@ Node *typedef_stmt() {
   token = token->next;
   Node *node;
   if (token->kind == TK_STRUCT || token->kind == TK_UNION) {
-    TokenKind kind = token->kind;
-    token = token->next;
+    if (token->kind == TK_STRUCT) {
+      token = token->next;
+      node = struct_and_union_declaration(TRUE, FALSE, TRUE);
+    } else if (token->kind == TK_UNION) {
+      token = token->next;
+      node = struct_and_union_declaration(FALSE, TRUE, TRUE);
+    } else {
+      error_at(token->str, "expected struct or union [in typedef]");
+    }
+    Type *type = node->type;
     node = new_node(ND_TYPEDEF);
-    Token *tok1 = expect_ident("typedef");
-    Token *tok2 = expect_ident("typedef");
-    if (find_struct_tag(tok1) || find_union_tag(tok1)) {
-      error_duplicate_name(tok1, "typedef");
+    Token *tok = expect_ident("typedef");
+    if (find_struct_tag(tok) || find_union_tag(tok)) {
+      error_duplicate_name(tok, "typedef");
     }
-    if (find_struct(tok2) || find_union(tok2)) {
-      error_duplicate_name(tok2, "typedef");
-    }
-    Object *var = malloc(sizeof(Object));
-    var->name = tok2->str;
-    var->len = tok2->len;
     ObjectTag *tag = malloc(sizeof(ObjectTag));
-    tag->name = tok1->str;
-    tag->len = tok1->len;
-    tag->main = var;
-    if (kind == TK_STRUCT) {
-      var->next = structs;
-      structs = var;
+    tag->name = tok->str;
+    tag->len = tok->len;
+    tag->object = type->object;
+    if (type->ty == TY_STRUCT) {
       tag->next = struct_tags;
       struct_tags = tag;
     } else {
-      var->next = unions;
-      unions = var;
       tag->next = union_tags;
       union_tags = tag;
     }
