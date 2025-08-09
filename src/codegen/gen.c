@@ -57,6 +57,7 @@ char *regs8(int i) {
 void generate_assembly() {
   // アセンブリのモード
   write_file(".intel_syntax noprefix\n");
+  write_file(".section .note.GNU-stack\n");
 
   gen_rodata_section();
   gen_data_section();

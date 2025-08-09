@@ -79,7 +79,7 @@ void gen_array_literals() {
 }
 
 void gen_rodata_section() {
-  write_file("  .rodata\n");
+  write_file("  .section .rodata\n");
   gen_string_literal();
   gen_array_literals();
 }
