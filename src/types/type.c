@@ -22,20 +22,16 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
   // 基本型の処理
   if (token->kind == TK_STRUCT) {
     type->ty = TY_STRUCT;
-    type->object = struct_stmt(should_record)->type->object;
+    type->object = struct_and_union_declaration(TRUE, FALSE, should_record);
   } else if (token->kind == TK_UNION) {
     type->ty = TY_UNION;
-    type->object = union_stmt(should_record)->type->object;
+    type->object = struct_and_union_declaration(FALSE, TRUE, should_record);
   } else if (token->kind == TK_IDENT) {
-    ObjectTag *struct_ = find_struct_tag(token);
-    ObjectTag *union_ = find_union_tag(token);
+    ObjectTag *object_tag = find_object_tag(token);
     Object *enum_ = find_enum(token);
-    if (struct_) {
-      type->ty = TY_STRUCT;
-      type->object = struct_->object;
-    } else if (union_) {
-      type->ty = TY_UNION;
-      type->object = union_->object;
+    if (object_tag) {
+      type->ty = object_tag->kind;
+      type->object = object_tag->object;
     } else if (enum_) {
       type->ty = TY_INT;
     } else {
@@ -95,10 +91,9 @@ int is_type(Token *tok) {
     return TRUE;
   }
   if (tok->kind == TK_IDENT) {
-    ObjectTag *struct_ = find_struct_tag(token);
-    ObjectTag *union_ = find_union_tag(token);
+    ObjectTag *object_tag = find_object_tag(token);
     Object *enum_ = find_enum(tok);
-    if (struct_ || union_ || enum_)
+    if (object_tag || enum_)
       return TRUE;
   }
   return FALSE;

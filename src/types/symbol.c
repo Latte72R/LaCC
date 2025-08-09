@@ -5,10 +5,9 @@ extern Function *functions;
 extern Function *current_fn;
 extern LVar *globals;
 extern Object *structs;
-extern ObjectTag *struct_tags;
 extern Object *unions;
-extern ObjectTag *union_tags;
 extern Object *enums;
+extern ObjectTag *object_tags;
 extern LVar *enum_members;
 
 extern const int TRUE;
@@ -112,17 +111,9 @@ LVar *find_object_member(Object *object, Token *tok) {
   return NULL;
 }
 
-// struct_tagを名前で検索する。見つからなかった場合はNULLを返す。
-ObjectTag *find_struct_tag(Token *tok) {
-  for (ObjectTag *var = struct_tags; var->next; var = var->next)
-    if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
-      return var;
-  return NULL;
-}
-
-// union_tagを名前で検索する。見つからなかった場合はNULLを返す。
-ObjectTag *find_union_tag(Token *tok) {
-  for (ObjectTag *var = union_tags; var->next; var = var->next)
+// ObjectTag を名前で検索する。見つからなかった場合はNULLを返す。
+ObjectTag *find_object_tag(Token *tok) {
+  for (ObjectTag *var = object_tags; var->next; var = var->next)
     if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;

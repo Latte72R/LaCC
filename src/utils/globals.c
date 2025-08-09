@@ -20,10 +20,9 @@ Function *current_fn;
 LVar *globals;
 LVar *statics;
 Object *structs;
-ObjectTag *struct_tags;
 Object *unions;
-ObjectTag *union_tags;
 Object *enums;
+ObjectTag *object_tags;
 LVar *enum_members;
 String *strings;
 Array *arrays;
@@ -48,24 +47,18 @@ void init_global_variables() {
   functions->next = NULL;
   current_fn = functions;
 
-  // enumの初期化
+  // object の初期化
   enums = malloc(sizeof(Object));
   enums->next = NULL;
   enum_members = malloc(sizeof(LVar));
   enum_members->next = NULL;
   enum_members->type = new_type(TY_NONE);
-
-  // 構造体の初期化
   structs = malloc(sizeof(Object));
   structs->next = NULL;
-  struct_tags = malloc(sizeof(ObjectTag));
-  struct_tags->next = NULL;
-
-  // unionの初期化
   unions = malloc(sizeof(Object));
   unions->next = NULL;
-  union_tags = malloc(sizeof(ObjectTag));
-  union_tags->next = NULL;
+  object_tags = malloc(sizeof(ObjectTag));
+  object_tags->next = NULL;
 
   // グローバル変数の初期化
   globals = malloc(sizeof(LVar));
