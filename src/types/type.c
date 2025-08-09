@@ -7,7 +7,7 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
-Type *parse_base_type_internal(int should_consume) {
+Type *parse_base_type_internal(const int should_consume, const int should_record) {
   Token *tok = token;
   Type *type = malloc(sizeof(Type));
 
@@ -19,29 +19,46 @@ Type *parse_base_type_internal(int should_consume) {
     type->is_const = FALSE;
   }
 
-  // 型の判定
-  if (token->kind == TK_IDENT) {
-    Object *struct_ = find_struct(token);
-    Object *union_ = find_union(token);
+  // 基本型の処理
+  if (token->kind == TK_STRUCT) {
+    type->ty = TY_STRUCT;
+    type->object = struct_and_union_declaration(TRUE, FALSE, should_record, FALSE);
+  } else if (token->kind == TK_UNION) {
+    type->ty = TY_UNION;
+    type->object = struct_and_union_declaration(FALSE, TRUE, should_record, FALSE);
+  } else if (token->kind == TK_ENUM) {
+    type->ty = TY_INT;
+    type->object = enum_declaration(should_record, FALSE);
+  } else if (token->kind == TK_IDENT) {
+    ObjectTag *object_tag = find_object_tag(token);
     Object *enum_ = find_enum(token);
-    if (struct_) {
-      type->ty = TY_STRUCT;
-      type->object = struct_;
-    } else if (union_) {
-      type->ty = TY_UNION;
-      type->object = union_;
+    if (object_tag) {
+      switch (object_tag->kind) {
+      case OBJ_STRUCT:
+        type->ty = TY_STRUCT;
+        break;
+      case OBJ_UNION:
+        type->ty = TY_UNION;
+        break;
+      case OBJ_ENUM:
+        type->ty = TY_INT;
+        break;
+      default:
+        return NULL;
+      }
+      type->object = object_tag->object;
     } else if (enum_) {
       type->ty = TY_INT;
     } else {
       return NULL;
     }
+    token = token->next;
   } else if (token->kind != TK_TYPE) {
     return NULL;
   } else {
     type->ty = token->ty;
+    token = token->next;
   }
-
-  token = token->next;
 
   // 後続のconst
   if (token->kind == TK_CONST) {
@@ -54,7 +71,7 @@ Type *parse_base_type_internal(int should_consume) {
   return type;
 }
 
-Type *check_base_type() { return parse_base_type_internal(FALSE); }
+Type *check_base_type() { return parse_base_type_internal(FALSE, FALSE); }
 
 // ポインタ修飾子を解析
 Type *parse_pointer_qualifiers(Type *base_type) {
@@ -72,8 +89,8 @@ Type *parse_pointer_qualifiers(Type *base_type) {
   return type;
 }
 
-Type *consume_type() {
-  Type *type = parse_base_type_internal(TRUE);
+Type *consume_type(const int should_record) {
+  Type *type = parse_base_type_internal(TRUE, should_record);
   if (!type)
     return NULL;
   type = parse_pointer_qualifiers(type);
@@ -85,11 +102,12 @@ int is_type(Token *tok) {
     return TRUE;
   if (tok->kind == TK_CONST)
     return TRUE;
+  if (token->kind == TK_STRUCT || token->kind == TK_UNION || token->kind == TK_ENUM) {
+    return TRUE;
+  }
   if (tok->kind == TK_IDENT) {
-    Object *struct_ = find_struct(tok);
-    Object *union_ = find_union(tok);
-    Object *enum_ = find_enum(tok);
-    if (struct_ || union_ || enum_)
+    ObjectTag *object_tag = find_object_tag(token);
+    if (object_tag)
       return TRUE;
   }
   return FALSE;
@@ -159,20 +177,6 @@ Type *new_type_arr(Type *ptr_to, int array_size) {
   type->ty = TY_ARR;
   type->ptr_to = ptr_to;
   type->array_size = array_size;
-  return type;
-}
-
-Type *new_type_struct(Object *object) {
-  Type *type = malloc(sizeof(Type));
-  type->ty = TY_STRUCT;
-  type->object = object;
-  return type;
-}
-
-Type *new_type_union(Object *object) {
-  Type *type = malloc(sizeof(Type));
-  type->ty = TY_UNION;
-  type->object = object;
   return type;
 }
 

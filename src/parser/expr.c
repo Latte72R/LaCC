@@ -292,7 +292,7 @@ Node *type_cast() {
     token = tok;
     return unary();
   }
-  Type *type = consume_type();
+  Type *type = consume_type(TRUE);
   if (!type) {
     token = tok;
     return unary();
@@ -455,7 +455,6 @@ Node *access_member() {
 Node *primary() {
   Node *node;
   Token *tok;
-  Type *type;
 
   // 括弧
   if (consume("(")) {
@@ -479,8 +478,8 @@ Node *primary() {
   }
 
   // 型
-  type = consume_type();
-  if (type) {
+  if (is_type(token)) {
+    Type *type = consume_type(TRUE);
     node = new_node(ND_TYPE);
     node->type = type;
     return node;

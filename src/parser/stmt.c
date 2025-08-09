@@ -41,6 +41,7 @@ Node *goto_stmt() {
   node->label->len = tok->len;
   node->fn = current_fn;
   node->endline = TRUE;
+  expect(";", "after line", "goto statement");
   return node;
 }
 
@@ -124,7 +125,7 @@ Node *for_stmt() {
     node->init->endline = TRUE;
     init = FALSE;
   } else if (is_type(token)) {
-    Type *type = consume_type();
+    Type *type = consume_type(TRUE);
     Token *tok = expect_ident("variable declaration");
     node->init = local_variable_declaration(tok, type, FALSE);
     expect(";", "after initialization", "for");
@@ -276,13 +277,19 @@ int check_label() {
   return TRUE;
 }
 
+Node *expression_stmt() {
+  Node *node = expr();
+  node->endline = TRUE;
+  expect(";", "after line", "expression");
+  return node;
+}
+
 Node *stmt() {
   Node *node;
   if (consume("{")) {
     node = block_stmt();
   } else if (token->kind == TK_GOTO) {
     node = goto_stmt();
-    expect(";", "after line", "goto statement");
   } else if (check_label()) {
     node = label_stmt();
   } else if (token->kind == TK_EXTERN) {
@@ -293,10 +300,6 @@ Node *stmt() {
     node = vardec_and_funcdef_stmt(TRUE, FALSE);
   } else if (is_type(token)) {
     node = vardec_and_funcdef_stmt(FALSE, FALSE);
-  } else if (token->kind == TK_STRUCT) {
-    node = struct_stmt();
-  } else if (token->kind == TK_UNION) {
-    node = union_stmt();
   } else if (token->kind == TK_TYPEDEF) {
     node = typedef_stmt();
   } else if (token->kind == TK_SWITCH) {
@@ -320,9 +323,7 @@ Node *stmt() {
   } else if (token->kind == TK_RETURN) {
     node = return_stmt();
   } else {
-    node = expr();
-    expect(";", "after line", "expression");
-    node->endline = TRUE;
+    node = expression_stmt();
   }
   return node;
 }

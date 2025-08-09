@@ -90,21 +90,24 @@ struct LVar {
   int block;     // ブロックのID
 };
 
+typedef enum { OBJ_STRUCT, OBJ_UNION, OBJ_ENUM } ObjectKind;
+
 // struct, enum, unionの型
 typedef struct Object Object;
 struct Object {
-  Object *next; // 次の Object か NULL
-  LVar *var;    // 次の変数かNULL
-  char *name;   // 変数の名前
-  int len;      // 名前の長さ
-  int size;     // 構造体のサイズ
+  Object *next;   // 次の Object か NULL
+  LVar *var;      // 次の変数かNULL
+  char *name;     // 変数の名前
+  int len;        // 名前の長さ
+  int size;       // 構造体のサイズ
+  int is_defined; // 定義済みかどうか
 };
 
-// struct, unionのメンバー
 typedef struct ObjectTag ObjectTag;
 struct ObjectTag {
   ObjectTag *next; // 次の構造体かNULL
-  Object *main;    // struct
+  Object *object;  // struct または union の型
+  ObjectKind kind; // タグの型
   char *name;      // タグの名前
   int len;         // 名前の長さ
 };
@@ -254,8 +257,7 @@ Object *find_union(Token *tok);
 Object *find_enum(Token *tok);
 LVar *find_enum_member(Token *tok);
 LVar *find_object_member(Object *object, Token *tok);
-ObjectTag *find_struct_tag(Token *tok);
-ObjectTag *find_union_tag(Token *tok);
+ObjectTag *find_object_tag(Token *tok);
 Function *find_fn(Token *tok);
 
 // parse.c
@@ -274,10 +276,10 @@ String *string_literal();
 Array *array_literal();
 
 // type.c
-Type *parse_base_type_internal(int should_consume);
+Type *parse_base_type_internal(int should_consume, int should_record);
 Type *check_base_type();
 Type *parse_pointer_qualifiers(Type *base_type);
-Type *consume_type();
+Type *consume_type(int should_record);
 int is_type(Token *tok);
 int is_ptr_or_arr(Type *type);
 int is_number(Type *type);
@@ -286,8 +288,6 @@ int type_size(Type *type);
 Type *new_type(TypeKind ty);
 Type *new_type_ptr(Type *ptr_to);
 Type *new_type_arr(Type *ptr_to, int array_size);
-Type *new_type_struct(Object *object);
-Type *new_type_union(Object *object);
 Type *parse_array_dimensions(Type *base_type);
 char *type_name(Type *type);
 int is_same_type(Type *lhs, Type *rhs);
@@ -298,8 +298,9 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static);
 Node *global_variable_declaration(Token *tok, Type *type, int is_static);
 Node *extern_variable_declaration(Token *tok, Type *type);
 Node *vardec_and_funcdef_stmt(int is_static, int is_extern);
-Node *struct_stmt();
-Node *union_stmt();
+Object *struct_and_union_declaration(const int is_struct, const int is_union, const int should_record,
+                                     const int is_typedef);
+Object *enum_declaration(const int should_record, const int is_typedef);
 Node *typedef_stmt();
 Node *handle_array_initialization(Node *node, Type *type, Type *org_type);
 Node *handle_scalar_initialization(Node *node, Type *type, char *ptr);
@@ -316,6 +317,11 @@ Node *for_stmt();
 Node *break_stmt();
 Node *continue_stmt();
 Node *return_stmt();
+Node *switch_stmt();
+Node *case_stmt();
+Node *default_stmt();
+int check_label();
+Node *expression_stmt();
 Node *stmt();
 
 // expr.c
