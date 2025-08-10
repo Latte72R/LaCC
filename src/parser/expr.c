@@ -411,13 +411,13 @@ Node *access_member() {
       if (node->type->ty != TY_STRUCT && node->type->ty != TY_UNION) {
         error_at(prev_tok->str, "%.*s is not an object [in object reference]", prev_tok->len, prev_tok->str);
       }
-      tok = expect_ident("object reference");
       object = node->type->object;
       if (!object) {
         error_at(prev_tok->str, "unknown object: %.*s [in object reference]", prev_tok->len, prev_tok->str);
-      } else if (!object->size) {
-        error_at(prev_tok->str, "not initialized object: %.*s [in object reference]", prev_tok->len, prev_tok->str);
+      } else if (!object->is_defined) {
+        error_at(prev_tok->str, "incomplete definition of type [in object reference]");
       }
+      tok = expect_ident("object reference");
       var = find_object_member(object, tok);
       offset_node = new_num(var->offset);
       ptr = new_node(ND_ADDR);
@@ -433,13 +433,13 @@ Node *access_member() {
       if (node->type->ptr_to->ty != TY_STRUCT && node->type->ptr_to->ty != TY_UNION) {
         error_at(prev_tok->str, "%.*s is not a pointer of object [in struct reference]", prev_tok->len, prev_tok->str);
       }
-      tok = expect_ident("object reference");
       object = node->type->ptr_to->object;
       if (!object) {
         error_at(prev_tok->str, "unknown object: %.*s [in object reference]", prev_tok->len, prev_tok->str);
-      } else if (!object->size) {
-        error_at(prev_tok->str, "not initialized object: %.*s [in object reference]", prev_tok->len, prev_tok->str);
+      } else if (!object->is_defined) {
+        error_at(prev_tok->str, "incomplete definition of type [in object reference]", prev_tok->len, prev_tok->str);
       }
+      tok = expect_ident("object reference");
       var = find_object_member(object, tok);
       offset_node = new_num(var->offset);
       ptr = new_binary(ND_ADD, node, offset_node);

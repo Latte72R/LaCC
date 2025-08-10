@@ -21,7 +21,7 @@ int main(int argc, char **argv) {
   char *output_file_tmp = NULL;
 
   if (argc < 2) {
-    error("Invalid number of arguments.");
+    error("invalid number of arguments.");
   }
 
   for (int i = 1; i < argc; i++) {

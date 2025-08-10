@@ -277,7 +277,7 @@ Array *array_literal();
 
 // type.c
 Type *parse_base_type_internal(int should_consume, int should_record);
-Type *check_base_type();
+Type *peek_base_type();
 Type *parse_pointer_qualifiers(Type *base_type);
 Type *consume_type(int should_record);
 int is_type(Token *tok);

@@ -273,7 +273,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   }
 
   token = tok;
-  Type *ch_type = check_base_type();
+  Type *base_type = peek_base_type();
   type = consume_type(TRUE);
   tok = expect_ident("variable declaration");
 
@@ -284,6 +284,11 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
     } else {
       return function_definition(tok, type, is_static);
     }
+  }
+
+  if (!is_extern && type->object && !type->object->is_defined) {
+    // 変数定義でobjectの型が未定義の場合
+    error_at(tok->str, "variable has incomplete type [in variable declaration]");
   }
 
   node = new_node(ND_BLOCK);
@@ -301,7 +306,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
 
   // 追加の変数
   while (consume(",")) {
-    type = parse_pointer_qualifiers(ch_type);
+    type = parse_pointer_qualifiers(base_type);
     tok = expect_ident("variable declaration");
     node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
     if (is_extern) {

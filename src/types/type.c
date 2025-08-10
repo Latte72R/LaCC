@@ -7,9 +7,33 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
+Type *new_type(TypeKind ty) {
+  Type *type = malloc(sizeof(Type));
+  type->ty = ty;
+  type->ptr_to = NULL;
+  type->array_size = 0;
+  type->object = NULL;
+  type->is_const = FALSE;
+  return type;
+}
+
+Type *new_type_ptr(Type *ptr_to) {
+  Type *type = new_type(TY_PTR);
+  type->ptr_to = ptr_to;
+  type->array_size = 1;
+  return type;
+}
+
+Type *new_type_arr(Type *ptr_to, int array_size) {
+  Type *type = new_type(TY_ARR);
+  type->ptr_to = ptr_to;
+  type->array_size = array_size;
+  return type;
+}
+
 Type *parse_base_type_internal(const int should_consume, const int should_record) {
   Token *tok = token;
-  Type *type = malloc(sizeof(Type));
+  Type *type = new_type(TY_NONE);
 
   // const修飾子の処理
   if (token->kind == TK_CONST) {
@@ -71,7 +95,7 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
   return type;
 }
 
-Type *check_base_type() { return parse_base_type_internal(FALSE, FALSE); }
+Type *peek_base_type() { return parse_base_type_internal(FALSE, FALSE); }
 
 // ポインタ修飾子を解析
 Type *parse_pointer_qualifiers(Type *base_type) {
@@ -115,6 +139,9 @@ int is_type(Token *tok) {
 
 // 予約しているスタック領域のサイズ
 int get_sizeof(Type *type) {
+  if (type->object && !type->object->is_defined) {
+    error_at(token->str, "invalid application of 'sizeof' to an incomplete type [in get_sizeof]");
+  }
   switch (type->ty) {
   case TY_INT:
     return 4;
@@ -135,6 +162,9 @@ int get_sizeof(Type *type) {
 }
 
 int type_size(Type *type) {
+  if (type->object && !type->object->is_defined) {
+    error_at(token->str, "incomplete definition of type [in type_size]");
+  }
   switch (type->ty) {
   case TY_VOID:
     return 0;
@@ -153,31 +183,6 @@ int type_size(Type *type) {
     error_at(token->str, "invalid type [in type_size]");
     return 0;
   }
-}
-
-Type *new_type(TypeKind ty) {
-  Type *type = malloc(sizeof(Type));
-  type->ty = ty;
-  type->ptr_to = NULL;
-  type->array_size = 0;
-  type->is_const = FALSE;
-  return type;
-}
-
-Type *new_type_ptr(Type *ptr_to) {
-  Type *type = malloc(sizeof(Type));
-  type->ty = TY_PTR;
-  type->ptr_to = ptr_to;
-  type->array_size = 1;
-  return type;
-}
-
-Type *new_type_arr(Type *ptr_to, int array_size) {
-  Type *type = malloc(sizeof(Type));
-  type->ty = TY_ARR;
-  type->ptr_to = ptr_to;
-  type->array_size = array_size;
-  return type;
 }
 
 // 配列サイズ解析の共通処理
