@@ -224,3 +224,26 @@ cat "$TMP_C"
 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
+printf "\e[1;36mTest case 17:\e[0m\n"
+cat <<EOF > "$TMP_C"
+struct ST;
+extern struct ST st;
+int main() {
+  return st.x;
+}
+EOF
+cat "$TMP_C"
+$CC $TMP_C -S -o $TMP_S
+printf "\n"
+
+printf "\e[1;36mTest case 18:\e[0m\n"
+cat <<EOF > "$TMP_C"
+union U;
+int main() {
+  union U u;
+  return u.x;
+}
+EOF
+cat "$TMP_C"
+$CC $TMP_C -S -o $TMP_S
+printf "\n"
