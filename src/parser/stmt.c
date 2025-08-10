@@ -9,6 +9,10 @@ extern int block_cnt;
 extern int block_id;
 extern Function *current_fn;
 extern Node *current_switch;
+extern Object *structs;
+extern Object *unions;
+extern Object *enums;
+extern ObjectTag *object_tags;
 extern char *consumed_ptr;
 
 extern const int TRUE;
@@ -18,6 +22,10 @@ extern void *NULL;
 Node *block_stmt() {
   Node *node = new_node(ND_BLOCK);
   LVar *locals_prev = current_fn->locals;
+  Object *structs_prev = structs;
+  Object *unions_prev = unions;
+  Object *enums_prev = enums;
+  ObjectTag *object_tags_prev = object_tags;
   int block_id_prev = block_id;
   block_id = block_cnt++;
   node->body = malloc(sizeof(Node *));
@@ -27,8 +35,12 @@ Node *block_stmt() {
     node->body[i++] = stmt();
   }
   node->body[i] = new_node(ND_NONE);
-  current_fn->locals = locals_prev;
   block_id = block_id_prev;
+  current_fn->locals = locals_prev;
+  structs = structs_prev;
+  unions = unions_prev;
+  enums = enums_prev;
+  object_tags = object_tags_prev;
   return node;
 }
 
