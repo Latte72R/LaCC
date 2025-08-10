@@ -17,6 +17,7 @@ int block_id = 0;
 Node *current_switch;
 Function *functions;
 Function *current_fn;
+LVar *locals;
 LVar *globals;
 LVar *statics;
 Object *structs;
@@ -56,12 +57,13 @@ void init_global_variables() {
   object_tags = malloc(sizeof(ObjectTag));
   object_tags->next = NULL;
 
-  // グローバル変数の初期化
+  // 変数の初期化
+  locals = malloc(sizeof(LVar));
+  locals->next = NULL;
+  locals->type = new_type(TY_NONE);
   globals = malloc(sizeof(LVar));
   globals->next = NULL;
   globals->type = new_type(TY_NONE);
-
-  // 静的な変数の初期化
   statics = malloc(sizeof(LVar));
   statics->next = NULL;
   statics->type = new_type(TY_NONE);

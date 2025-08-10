@@ -133,7 +133,6 @@ struct Label {
 typedef struct Function Function;
 struct Function {
   Function *next;       // 次の関数かNULL
-  LVar *locals;         // ローカル変数
   char *name;           // 変数の名前
   int len;              // 名前の長さ
   int offset;           // RBPからのオフセット

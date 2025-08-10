@@ -1,11 +1,13 @@
-CC_FLAGS_2:=-std=c99 -Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option
-CC_FLAGS:=-std=c99 -I include -w
-LACC_FLAGS:=-I include
 SRC_DIR:=./src
+INCLUDE_DIR:=./include
 TEST_DIR:=./tests
 EXAMPLE_DIR:=./examples
 BUILD_DIR:=./build
+CC_FLAGS:=-std=c99 -I $(INCLUDE_DIR) -w
+CC_FLAGS_2:=-std=c99 -Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option
+LACC_FLAGS:=-I $(INCLUDE_DIR)
 EXTENSION:=$(SRC_DIR)/extension.c
+HEADERS:=$(wildcard $(INCLUDE_DIR)/*.h)
 SRCS:=$(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/**/*.c)
 SRCS:=$(filter-out $(EXTENSION),$(SRCS))
 OBJ_S:=$(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.s,$(SRCS))
@@ -48,7 +50,7 @@ run: .run-selfhost ## Run a file with the self-hosted compiler
 .run-selfhost: $(SELFHOST) | $(BUILD_DIR)
 	@$(call runfile, $(SELFHOST), $(FILE))
 
-$(BOOSTSTRAP): $(SRCS) $(EXTENSION) | $(BUILD_DIR)
+$(BOOSTSTRAP): $(SRCS) $(EXTENSION) $(HEADERS) | $(BUILD_DIR)
 	@$(CC) $(CC_FLAGS) -o $(BOOSTSTRAP) $(SRCS) $(EXTENSION)
 	@echo "Bootstrap compiler created at '$@'."
 

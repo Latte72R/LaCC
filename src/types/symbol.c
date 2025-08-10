@@ -3,6 +3,7 @@
 
 extern Function *functions;
 extern Function *current_fn;
+extern LVar *locals;
 extern LVar *globals;
 extern Object *structs;
 extern Object *unions;
@@ -56,7 +57,7 @@ LVar *new_lvar(Token *tok, Type *type, int is_static, int is_extern) {
 
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_lvar(Token *tok) {
-  for (LVar *var = current_fn->locals; var->next; var = var->next)
+  for (LVar *var = locals; var->next; var = var->next)
     if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;

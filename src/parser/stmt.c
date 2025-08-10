@@ -8,6 +8,7 @@ extern int loop_id;
 extern int block_cnt;
 extern int block_id;
 extern Function *current_fn;
+extern LVar *locals;
 extern Node *current_switch;
 extern Object *structs;
 extern Object *unions;
@@ -21,7 +22,7 @@ extern void *NULL;
 
 Node *block_stmt() {
   Node *node = new_node(ND_BLOCK);
-  LVar *locals_prev = current_fn->locals;
+  LVar *locals_prev = locals;
   Object *structs_prev = structs;
   Object *unions_prev = unions;
   Object *enums_prev = enums;
@@ -36,7 +37,7 @@ Node *block_stmt() {
   }
   node->body[i] = new_node(ND_NONE);
   block_id = block_id_prev;
-  current_fn->locals = locals_prev;
+  locals = locals_prev;
   structs = structs_prev;
   unions = unions_prev;
   enums = enums_prev;
@@ -169,7 +170,7 @@ Node *for_stmt() {
   loop_id = node->id;
   node->then = stmt();
   if (init) {
-    current_fn->locals = current_fn->locals->next;
+    locals = locals->next;
   }
   loop_id = loop_id_prev;
   return node;

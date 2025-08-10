@@ -6,6 +6,7 @@ extern int array_cnt;
 extern int block_id;
 extern Function *functions;
 extern Function *current_fn;
+extern LVar *locals;
 extern LVar *globals;
 extern LVar *statics;
 extern Object *structs;
@@ -115,10 +116,6 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   }
   fn->name = tok->str;
   fn->len = tok->len;
-  fn->locals = malloc(sizeof(LVar));
-  fn->locals->offset = 0;
-  fn->locals->type = new_type(TY_NONE);
-  fn->locals->next = NULL;
   fn->type = type;
   fn->offset = 0;
   fn->is_static = is_static;
@@ -127,6 +124,10 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   fn->type_check = TRUE;
   fn->labels = malloc(sizeof(Label));
   fn->labels->next = NULL;
+  locals = malloc(sizeof(LVar));
+  locals->offset = 0;
+  locals->type = new_type(TY_NONE);
+  locals->next = NULL;
   Function *prev_fn = current_fn;
   current_fn = fn;
   Node *node = new_node(ND_FUNCDEF);
@@ -158,17 +159,17 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
     Node *nd_lvar = new_node(ND_LVAR);
     node->args[i] = nd_lvar;
     LVar *lvar = new_lvar(tok_lvar, type, FALSE, FALSE);
-    lvar->next = fn->locals;
+    lvar->next = locals;
     if (is_ptr_or_arr(type)) {
-      lvar->offset = fn->locals->offset + 8;
+      lvar->offset = locals->offset + 8;
     } else {
-      lvar->offset = fn->locals->offset + get_sizeof(type);
+      lvar->offset = locals->offset + get_sizeof(type);
     }
     fn->offset = lvar->offset;
     fn->param_types[n] = type;
     nd_lvar->var = lvar;
     nd_lvar->type = type;
-    fn->locals = lvar;
+    locals = lvar;
     n += 1;
     if (!consume(","))
       break;
@@ -208,7 +209,7 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
     static_lvar->next = statics;
     statics = static_lvar;
   } else {
-    lvar->offset = current_fn->locals->offset + get_sizeof(type);
+    lvar->offset = locals->offset + get_sizeof(type);
     if (current_fn->offset < lvar->offset) {
       current_fn->offset = lvar->offset;
     }
@@ -216,8 +217,8 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
   node->var = lvar;
   node->type = type;
   lvar->type = type;
-  lvar->next = current_fn->locals;
-  current_fn->locals = lvar;
+  lvar->next = locals;
+  locals = lvar;
 
   // 要修正
   node = handle_variable_initialization(node, lvar, type, org_type, is_static);
