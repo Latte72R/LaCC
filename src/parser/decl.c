@@ -280,6 +280,10 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
 
   // 関数定義
   if (consume("(")) {
+    if (type->object && !type->object->is_defined) {
+      // 変数定義でobjectの型が未定義の場合
+      error_at(tok->str, "incomplete result type [in variable declaration]");
+    }
     if (current_fn->next) {
       error_at(token->str, "nested function is not supported [in function definition]");
     } else {
