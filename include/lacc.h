@@ -295,9 +295,8 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static);
 Node *global_variable_declaration(Token *tok, Type *type, int is_static);
 Node *extern_variable_declaration(Token *tok, Type *type);
 Node *vardec_and_funcdef_stmt(int is_static, int is_extern);
-Object *struct_and_union_declaration(const int is_struct, const int is_union, const int should_record,
-                                     const int is_typedef);
-Object *enum_declaration(const int should_record, const int is_typedef);
+Object *struct_and_union_declaration(const int is_struct, const int is_union, const int should_record);
+Object *enum_declaration(const int should_record);
 Node *typedef_stmt();
 Node *handle_array_initialization(Node *node, Type *type, Type *org_type);
 Node *handle_scalar_initialization(Node *node, Type *type, char *ptr);

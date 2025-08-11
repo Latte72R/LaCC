@@ -46,13 +46,13 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
   // 基本型の処理
   if (token->kind == TK_STRUCT) {
     type->ty = TY_STRUCT;
-    type->object = struct_and_union_declaration(TRUE, FALSE, should_record, FALSE);
+    type->object = struct_and_union_declaration(TRUE, FALSE, should_record);
   } else if (token->kind == TK_UNION) {
     type->ty = TY_UNION;
-    type->object = struct_and_union_declaration(FALSE, TRUE, should_record, FALSE);
+    type->object = struct_and_union_declaration(FALSE, TRUE, should_record);
   } else if (token->kind == TK_ENUM) {
     type->ty = TY_INT;
-    type->object = enum_declaration(should_record, FALSE);
+    type->object = enum_declaration(should_record);
   } else if (token->kind == TK_IDENT) {
     TypeTag *type_tag = find_type_tag(token);
     if (type_tag) {
