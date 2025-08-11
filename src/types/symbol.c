@@ -8,7 +8,7 @@ extern LVar *globals;
 extern Object *structs;
 extern Object *unions;
 extern Object *enums;
-extern ObjectTag *object_tags;
+extern TypeTag *type_tags;
 
 extern const int TRUE;
 extern const int FALSE;
@@ -113,9 +113,9 @@ LVar *find_object_member(Object *object, Token *tok) {
   return NULL;
 }
 
-// ObjectTag を名前で検索する。見つからなかった場合はNULLを返す。
-ObjectTag *find_object_tag(Token *tok) {
-  for (ObjectTag *var = object_tags; var->next; var = var->next)
+// TypeTag を名前で検索する。見つからなかった場合はNULLを返す。
+TypeTag *find_type_tag(Token *tok) {
+  for (TypeTag *var = type_tags; var->next; var = var->next)
     if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
       return var;
   return NULL;

@@ -12,7 +12,7 @@ extern LVar *statics;
 extern Object *structs;
 extern Object *unions;
 extern Object *enums;
-extern ObjectTag *object_tags;
+extern TypeTag *type_tags;
 extern Array *arrays;
 extern char *consumed_ptr;
 
@@ -484,32 +484,32 @@ Node *typedef_stmt() {
   if (token->kind == TK_STRUCT || token->kind == TK_UNION || token->kind == TK_ENUM) {
     Object *object;
     Type *type;
-    ObjectKind kind;
+    TypeKind kind;
     if (token->kind == TK_STRUCT) {
       object = struct_and_union_declaration(TRUE, FALSE, TRUE, TRUE);
-      kind = OBJ_STRUCT;
+      kind = TY_STRUCT;
     } else if (token->kind == TK_UNION) {
       object = struct_and_union_declaration(FALSE, TRUE, TRUE, TRUE);
-      kind = OBJ_UNION;
+      kind = TY_UNION;
     } else if (token->kind == TK_ENUM) {
       object = enum_declaration(TRUE, TRUE);
-      kind = OBJ_ENUM;
+      kind = TY_INT;
     } else {
       error_at(token->str, "expected struct or union [in typedef]");
     }
     node = new_node(ND_TYPEDEF);
     node->type = new_type(TY_NONE);
     Token *tok = expect_ident("typedef");
-    if (find_object_tag(tok)) {
+    if (find_type_tag(tok)) {
       error_duplicate_name(tok, "typedef");
     }
-    ObjectTag *tag = malloc(sizeof(ObjectTag));
+    TypeTag *tag = malloc(sizeof(TypeTag));
     tag->name = tok->str;
     tag->len = tok->len;
     tag->object = object;
     tag->kind = kind;
-    tag->next = object_tags;
-    object_tags = tag;
+    tag->next = type_tags;
+    type_tags = tag;
   } else {
     error_at(token->str, "expected a struct but got \"%.*s\" [in typedef]", token->len, token->str);
   }

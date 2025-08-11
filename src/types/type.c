@@ -54,25 +54,10 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
     type->ty = TY_INT;
     type->object = enum_declaration(should_record, FALSE);
   } else if (token->kind == TK_IDENT) {
-    ObjectTag *object_tag = find_object_tag(token);
-    Object *enum_ = find_enum(token);
-    if (object_tag) {
-      switch (object_tag->kind) {
-      case OBJ_STRUCT:
-        type->ty = TY_STRUCT;
-        break;
-      case OBJ_UNION:
-        type->ty = TY_UNION;
-        break;
-      case OBJ_ENUM:
-        type->ty = TY_INT;
-        break;
-      default:
-        return NULL;
-      }
-      type->object = object_tag->object;
-    } else if (enum_) {
-      type->ty = TY_INT;
+    TypeTag *type_tag = find_type_tag(token);
+    if (type_tag) {
+      type->ty = type_tag->kind;
+      type->object = type_tag->object;
     } else {
       return NULL;
     }
@@ -130,8 +115,8 @@ int is_type(Token *tok) {
     return TRUE;
   }
   if (tok->kind == TK_IDENT) {
-    ObjectTag *object_tag = find_object_tag(token);
-    if (object_tag)
+    TypeTag *type_tag = find_type_tag(token);
+    if (type_tag)
       return TRUE;
   }
   return FALSE;

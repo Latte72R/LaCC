@@ -90,8 +90,6 @@ struct LVar {
   int block;     // ブロックのID
 };
 
-typedef enum { OBJ_STRUCT, OBJ_UNION, OBJ_ENUM } ObjectKind;
-
 // struct, enum, unionの型
 typedef struct Object Object;
 struct Object {
@@ -103,13 +101,13 @@ struct Object {
   int is_defined; // 定義済みかどうか
 };
 
-typedef struct ObjectTag ObjectTag;
-struct ObjectTag {
-  ObjectTag *next; // 次の構造体かNULL
-  Object *object;  // struct または union の型
-  ObjectKind kind; // タグの型
-  char *name;      // タグの名前
-  int len;         // 名前の長さ
+typedef struct TypeTag TypeTag;
+struct TypeTag {
+  TypeTag *next;  // 次の構造体かNULL
+  Object *object; // struct または union の型
+  TypeKind kind;  // タグの型
+  char *name;     // タグの名前
+  int len;        // 名前の長さ
 };
 
 struct Type {
@@ -256,7 +254,7 @@ Object *find_union(Token *tok);
 Object *find_enum(Token *tok);
 LVar *find_enum_member(Token *tok);
 LVar *find_object_member(Object *object, Token *tok);
-ObjectTag *find_object_tag(Token *tok);
+TypeTag *find_type_tag(Token *tok);
 Function *find_fn(Token *tok);
 
 // parse.c

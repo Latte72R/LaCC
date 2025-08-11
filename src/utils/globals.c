@@ -23,7 +23,7 @@ LVar *statics;
 Object *structs;
 Object *unions;
 Object *enums;
-ObjectTag *object_tags;
+TypeTag *type_tags;
 String *strings;
 Array *arrays;
 String *filenames;
@@ -54,8 +54,8 @@ void init_global_variables() {
   structs->next = NULL;
   unions = malloc(sizeof(Object));
   unions->next = NULL;
-  object_tags = malloc(sizeof(ObjectTag));
-  object_tags->next = NULL;
+  type_tags = malloc(sizeof(TypeTag));
+  type_tags->next = NULL;
 
   // 変数の初期化
   locals = malloc(sizeof(LVar));

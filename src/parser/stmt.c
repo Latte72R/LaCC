@@ -13,7 +13,7 @@ extern Node *current_switch;
 extern Object *structs;
 extern Object *unions;
 extern Object *enums;
-extern ObjectTag *object_tags;
+extern TypeTag *type_tags;
 extern char *consumed_ptr;
 
 extern const int TRUE;
@@ -26,7 +26,7 @@ Node *block_stmt() {
   Object *structs_prev = structs;
   Object *unions_prev = unions;
   Object *enums_prev = enums;
-  ObjectTag *object_tags_prev = object_tags;
+  TypeTag *type_tags_prev = type_tags;
   int block_id_prev = block_id;
   block_id = block_cnt++;
   node->body = malloc(sizeof(Node *));
@@ -41,7 +41,7 @@ Node *block_stmt() {
   structs = structs_prev;
   unions = unions_prev;
   enums = enums_prev;
-  object_tags = object_tags_prev;
+  type_tags = type_tags_prev;
   return node;
 }
 
