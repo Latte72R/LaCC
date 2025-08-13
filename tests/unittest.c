@@ -1318,6 +1318,49 @@ int test141() {
   return (int)((int *)vp - arr); // arr[3] - arr[0] = 3
 }
 
+/* 1) 基本的な別名 */
+static int test142(void) {
+  typedef int I;
+  I x = 5;
+  return x;
+}
+
+/* 2) ポインタ別名 */
+static int test143(void) {
+  typedef int *IP;
+  int x = 0;
+  IP p = &x;
+  *p = 7;
+  return x;
+}
+
+/* 3) sizeof(別名) の確認 */
+static int test144(void) {
+  typedef int I;
+  return (int)sizeof(I); /* 想定: 4 */
+}
+
+/* 4) 無名 struct の typedef */
+static int test145(void) {
+  typedef struct {
+    int w;
+    char c;
+  } Pair;
+  Pair q;
+  q.w = 4;
+  q.c = 'A';
+  return q.w + q.c; /* 4 + 65 = 69 */
+}
+
+/* 8) 連鎖 typedef */
+static int test146(void) {
+  typedef int I;
+  typedef I J;
+  typedef J K;
+  K x = 5;
+  return x; /* 5 */
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1470,6 +1513,11 @@ int main() {
   check(test139(), 139, 100);
   check(test140(), 140, 99);
   check(test141(), 141, 3);
+  check(test142(), 142, 5);
+  check(test143(), 143, 7);
+  check(test144(), 144, 4);
+  check(test145(), 145, 69);
+  check(test146(), 146, 5);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

@@ -247,3 +247,16 @@ EOF
 cat "$TMP_C"
 $CC $TMP_C -S -o $TMP_S
 printf "\n"
+
+printf "\e[1;36mTest case 19:\e[0m\n"
+cat <<EOF > "$TMP_C"
+typedef char *A;
+typedef int A;
+int main() {
+  A x = 5;
+  return x;
+}
+EOF
+cat "$TMP_C"
+$CC $TMP_C -S -o $TMP_S
+printf "\n"
