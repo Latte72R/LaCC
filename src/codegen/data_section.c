@@ -72,7 +72,7 @@ void gen_array_literals() {
           write_file("  .long %d\n", arr->val[i]);
         }
       } else {
-        error("invalid array type [INIT]");
+        error("invalid array type [in gen_array_literals]");
       }
     }
   }

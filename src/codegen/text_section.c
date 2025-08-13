@@ -5,7 +5,6 @@ extern Node **code;
 extern LVar *globals;
 extern LVar *statics;
 extern String *strings;
-extern Array *arrays;
 
 extern const int TRUE;
 extern const int FALSE;

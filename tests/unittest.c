@@ -1361,6 +1361,12 @@ static int test146(void) {
   return x; /* 5 */
 }
 
+int test147() {
+  typedef int INT_ARR[3];
+  INT_ARR arr = {5, 2, 3};
+  return arr[0] * arr[1] + arr[2];
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1518,6 +1524,7 @@ int main() {
   check(test144(), 144, 4);
   check(test145(), 145, 69);
   check(test146(), 146, 5);
+  check(test147(), 147, 13);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

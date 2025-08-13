@@ -95,15 +95,16 @@ void program() {
   code[i] = new_node(ND_NONE);
 }
 
-Array *array_literal(Type *type, Type *org_type) {
+Array *array_literal(Type *type) {
+  Type *org_type = type->ptr_to;
   char *ptr = consumed_ptr;
   expect("{", "before array initializer", "array_literal");
   Array *array = malloc(sizeof(Array));
-  array->next = arrays;
-  arrays = array;
   array->id = array_cnt++;
   array->byte = get_sizeof(org_type);
   array->val = NULL;
+  array->next = arrays;
+  arrays = array;
   int i = 0;
   do {
     array->val = safe_realloc_array(array->val, sizeof(int), i + 1);

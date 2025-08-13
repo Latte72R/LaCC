@@ -13,18 +13,17 @@ extern Object *structs;
 extern Object *unions;
 extern Object *enums;
 extern TypeTag *type_tags;
-extern Array *arrays;
 extern char *consumed_ptr;
 
 extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
-Node *handle_array_initialization(Node *node, Type *type, Type *org_type) {
+Node *handle_array_initialization(Node *node, Type *type) {
   if (type->ty != TY_ARR) {
     error_at(token->str, "array initializer is only allowed for array type [in variable declaration]");
   }
-  Array *array = array_literal(type, org_type);
+  Array *array = array_literal(type);
   Node *arr_node = new_node(ND_ARRAY);
   arr_node->type = type;
   arr_node->id = array->id;
@@ -84,7 +83,7 @@ Node *handle_scalar_initialization(Node *node, Type *type, char *ptr) {
 }
 
 // 変数初期化の共通処理
-Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, Type *org_type, int set_offset) {
+Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int set_offset) {
   if (!consume("=")) {
     if (set_offset)
       lvar->offset = 0;
@@ -96,7 +95,7 @@ Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, Type *o
     return node;
   }
   if (peek("{")) {
-    node = handle_array_initialization(node, type, org_type);
+    node = handle_array_initialization(node, type);
   } else if (token->kind == TK_STRING) {
     node = handle_string_initialization(node, type, ptr);
   } else {
@@ -221,7 +220,7 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
   locals = lvar;
 
   // 要修正
-  node = handle_variable_initialization(node, lvar, type, org_type, is_static);
+  node = handle_variable_initialization(node, lvar, type, is_static);
   node->endline = TRUE;
   return node;
 }
@@ -240,7 +239,7 @@ Node *global_variable_declaration(Token *tok, Type *type, int is_static) {
   node->type = type;
 
   // 要修正
-  node = handle_variable_initialization(node, lvar, type, NULL, TRUE);
+  node = handle_variable_initialization(node, lvar, type, TRUE);
   node->endline = TRUE;
   return node;
 }
@@ -482,8 +481,9 @@ Node *typedef_stmt() {
   Node *node;
   Type *type = consume_type(TRUE);
   node = new_node(ND_TYPEDEF);
-  node->type = type;
   Token *tok = expect_ident("typedef");
+  type = parse_array_dimensions(type);
+  node->type = type;
   TypeTag *tag = find_type_tag(tok);
   if (tag) {
     if (is_same_type(type, tag->type)) {

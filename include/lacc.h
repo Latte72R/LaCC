@@ -269,7 +269,7 @@ int expect_number(char *stmt);
 int parse_sign();
 int expect_signed_number();
 String *string_literal();
-Array *array_literal();
+Array *array_literal(Type *org_type);
 
 // type.c
 Type *parse_base_type_internal(int should_consume, int should_record);
@@ -297,9 +297,9 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern);
 Object *struct_and_union_declaration(const int is_struct, const int is_union, const int should_record);
 Object *enum_declaration(const int should_record);
 Node *typedef_stmt();
-Node *handle_array_initialization(Node *node, Type *type, Type *org_type);
+Node *handle_array_initialization(Node *node, Type *type);
 Node *handle_scalar_initialization(Node *node, Type *type, char *ptr);
-Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, Type *org_type, int set_offset);
+Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int set_offset);
 
 // stmt.c
 Node *block_stmt();
