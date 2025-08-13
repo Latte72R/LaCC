@@ -103,11 +103,10 @@ struct Object {
 
 typedef struct TypeTag TypeTag;
 struct TypeTag {
-  TypeTag *next;  // 次の構造体かNULL
-  Object *object; // struct または union の型
-  TypeKind kind;  // タグの型
-  char *name;     // タグの名前
-  int len;        // 名前の長さ
+  TypeTag *next; // 次の構造体かNULL
+  Type *type;
+  char *name; // タグの名前
+  int len;    // 名前の長さ
 };
 
 struct Type {

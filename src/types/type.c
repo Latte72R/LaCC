@@ -56,8 +56,8 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
   } else if (token->kind == TK_IDENT) {
     TypeTag *type_tag = find_type_tag(token);
     if (type_tag) {
-      type->ty = type_tag->kind;
-      type->object = type_tag->object;
+      type_tag->type->is_const = type->is_const;
+      type = type_tag->type;
     } else {
       return NULL;
     }

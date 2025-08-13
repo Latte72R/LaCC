@@ -490,8 +490,7 @@ Node *typedef_stmt() {
   TypeTag *tag = malloc(sizeof(TypeTag));
   tag->name = tok->str;
   tag->len = tok->len;
-  tag->object = type->object;
-  tag->kind = type->ty;
+  tag->type = type;
   tag->next = type_tags;
   type_tags = tag;
   expect(";", "after line", "typedef");
