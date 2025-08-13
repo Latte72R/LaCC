@@ -484,10 +484,16 @@ Node *typedef_stmt() {
   node = new_node(ND_TYPEDEF);
   node->type = type;
   Token *tok = expect_ident("typedef");
-  if (find_type_tag(tok)) {
-    error_duplicate_name(tok, "typedef");
+  TypeTag *tag = find_type_tag(tok);
+  if (tag) {
+    if (is_same_type(type, tag->type)) {
+      expect(";", "after line", "typedef");
+      return node;
+    } else {
+      error_at(consumed_ptr, "typedef redefinition with different types [in typedef]");
+    }
   }
-  TypeTag *tag = malloc(sizeof(TypeTag));
+  tag = malloc(sizeof(TypeTag));
   tag->name = tok->str;
   tag->len = tok->len;
   tag->type = type;
