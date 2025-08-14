@@ -4,7 +4,7 @@
 extern Token *token;
 extern int loop_cnt;
 extern int logical_cnt;
-extern char *consumed_ptr;
+extern Location *consumed_loc;
 
 extern const int TRUE;
 extern const int FALSE;
@@ -12,15 +12,15 @@ extern void *NULL;
 
 Node *expr() { return assign(); }
 
-Node *assign_sub(Node *lhs, Node *rhs, char *ptr, int check_const) {
+Node *assign_sub(Node *lhs, Node *rhs, Location *loc, int check_const) {
   if (lhs->type->is_const && check_const) {
-    error_at(ptr, "constant variable cannot be assigned [in assign_sub]");
+    error_at(loc, "constant variable cannot be assigned [in assign_sub]");
   } else if (lhs->type->ty == TY_ARR) {
-    error_at(ptr, "array variable cannot be assigned [in assign_sub]");
+    error_at(loc, "array variable cannot be assigned [in assign_sub]");
   } else if (rhs->type->ty == TY_VOID) {
-    error_at(ptr, "void type cannot be assigned [in assign_sub]");
+    error_at(loc, "void type cannot be assigned [in assign_sub]");
   } else if (!is_same_type(lhs->type, rhs->type)) {
-    warning_at(ptr, "incompatible %s to %s conversion [in assign_sub]", type_name(rhs->type), type_name(lhs->type));
+    warning_at(loc, "incompatible %s to %s conversion [in assign_sub]", type_name(rhs->type), type_name(lhs->type));
   }
   Node *node = new_binary(ND_ASSIGN, lhs, rhs);
   return node;
@@ -28,25 +28,25 @@ Node *assign_sub(Node *lhs, Node *rhs, char *ptr, int check_const) {
 
 Node *assign() {
   Node *node = logical_or();
-  char *ptr;
+  Location *loc;
   if (consume("=")) {
-    ptr = consumed_ptr;
-    node = assign_sub(node, expr(), ptr, TRUE);
+    loc = consumed_loc;
+    node = assign_sub(node, expr(), loc, TRUE);
   } else if (consume("+=")) {
-    ptr = consumed_ptr;
-    node = assign_sub(node, new_binary(ND_ADD, node, expr()), ptr, TRUE);
+    loc = consumed_loc;
+    node = assign_sub(node, new_binary(ND_ADD, node, expr()), loc, TRUE);
   } else if (consume("-=")) {
-    ptr = consumed_ptr;
-    node = assign_sub(node, new_binary(ND_SUB, node, expr()), ptr, TRUE);
+    loc = consumed_loc;
+    node = assign_sub(node, new_binary(ND_SUB, node, expr()), loc, TRUE);
   } else if (consume("*=")) {
-    ptr = consumed_ptr;
-    node = assign_sub(node, new_binary(ND_MUL, node, expr()), ptr, TRUE);
+    loc = consumed_loc;
+    node = assign_sub(node, new_binary(ND_MUL, node, expr()), loc, TRUE);
   } else if (consume("/=")) {
-    ptr = consumed_ptr;
-    node = assign_sub(node, new_binary(ND_DIV, node, expr()), ptr, TRUE);
+    loc = consumed_loc;
+    node = assign_sub(node, new_binary(ND_DIV, node, expr()), loc, TRUE);
   } else if (consume("%=")) {
-    ptr = consumed_ptr;
-    node = assign_sub(node, new_binary(ND_MOD, node, expr()), ptr, TRUE);
+    loc = consumed_loc;
+    node = assign_sub(node, new_binary(ND_MOD, node, expr()), loc, TRUE);
   }
   return node;
 }
@@ -178,14 +178,14 @@ Node *bit_shift() {
 
 // ポインタ + 整数 または 整数 + ポインタ の場合に
 // 整数側を型サイズで乗算するラッパ
-Node *new_add(Node *lhs, Node *rhs, char *ptr) {
+Node *new_add(Node *lhs, Node *rhs, Location *loc) {
   Node *node;
   Node *mul_node;
-  // lhsがptr, rhsがptrなら
+  // lhsがloc, rhsがptrなら
   if (is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) {
-    error_at(ptr, "invalid operands to binary expression [in new_add]");
+    error_at(loc, "invalid operands to binary expression [in new_add]");
   }
-  // lhsがptr, rhsがintなら
+  // lhsがloc, rhsがintなら
   else if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
     mul_node = new_binary(ND_MUL, rhs, new_num(get_sizeof(lhs->type->ptr_to)));
     node = new_binary(ND_ADD, lhs, mul_node);
@@ -205,11 +205,11 @@ Node *new_add(Node *lhs, Node *rhs, char *ptr) {
   return node;
 }
 
-Node *new_sub(Node *lhs, Node *rhs, char *ptr) {
+Node *new_sub(Node *lhs, Node *rhs, Location *loc) {
   Node *node;
   Node *mul_node;
 
-  // lhsがptr, rhsがptrなら
+  // lhsがloc, rhsがptrなら
   if (is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) {
     node = new_binary(ND_SUB, lhs, rhs);
     node->type = lhs->type;
@@ -218,9 +218,9 @@ Node *new_sub(Node *lhs, Node *rhs, char *ptr) {
   }
   // lhsがint, rhsがptrなら
   else if (is_number(lhs->type) && is_ptr_or_arr(rhs->type)) {
-    error_at(ptr, "invalid operands to binary expression [in new_sub]");
+    error_at(loc, "invalid operands to binary expression [in new_sub]");
   }
-  // lhsがptr, rhsがintなら
+  // lhsがloc, rhsがintなら
   else if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
     mul_node = new_binary(ND_MUL, rhs, new_num(get_sizeof(lhs->type->ptr_to)));
     node = new_binary(ND_SUB, lhs, mul_node);
@@ -237,15 +237,15 @@ Node *new_sub(Node *lhs, Node *rhs, char *ptr) {
 // add = mul ("+" mul | "-" mul)*
 // ポインタ演算を挟み込む
 Node *add() {
-  char *consumed_ptr_prev;
+  Location *consumed_loc_prev;
   Node *node = mul();
   for (;;) {
     if (consume("+")) {
-      consumed_ptr_prev = consumed_ptr;
-      node = new_add(node, mul(), consumed_ptr_prev);
+      consumed_loc_prev = consumed_loc;
+      node = new_add(node, mul(), consumed_loc_prev);
     } else if (consume("-")) {
-      consumed_ptr_prev = consumed_ptr;
-      node = new_sub(node, mul(), consumed_ptr_prev);
+      consumed_loc_prev = consumed_loc;
+      node = new_sub(node, mul(), consumed_loc_prev);
     } else {
       break;
     }
@@ -253,32 +253,32 @@ Node *add() {
   return node;
 }
 
-Type *resolve_type_mul(Type *left, Type *right, char *ptr) {
+Type *resolve_type_mul(Type *left, Type *right, Location *loc) {
   if (is_number(left) && is_number(right)) {
     return new_type(TY_INT);
   }
-  error_at(ptr, "invalid operands to binary expression [in resolve_type_mul]");
+  error_at(loc, "invalid operands to binary expression [in resolve_type_mul]");
   return NULL;
 }
 
 // mul = unary ("*" unary | "/" unary)*
 Node *mul() {
-  char *consumed_ptr_prev;
+  Location *consumed_loc_prev;
   Node *node = type_cast();
 
   for (;;) {
     if (consume("*")) {
-      consumed_ptr_prev = consumed_ptr;
+      consumed_loc_prev = consumed_loc;
       node = new_binary(ND_MUL, node, type_cast());
-      node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
+      node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_loc_prev);
     } else if (consume("/")) {
-      consumed_ptr_prev = consumed_ptr;
+      consumed_loc_prev = consumed_loc;
       node = new_binary(ND_DIV, node, type_cast());
-      node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
+      node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_loc_prev);
     } else if (consume("%")) {
-      consumed_ptr_prev = consumed_ptr;
+      consumed_loc_prev = consumed_loc;
       node = new_binary(ND_MOD, node, type_cast());
-      node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_ptr_prev);
+      node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_loc_prev);
     } else {
       break;
     }
@@ -298,7 +298,7 @@ Node *type_cast() {
     return unary();
   }
   if (!consume(")")) {
-    error_at(token->str, "expected ')' after type cast [in type_cast]");
+    error_at(token->loc, "expected ')' after type cast [in type_cast]");
   }
   Node *node = new_node(ND_TYPECAST);
   node->lhs = unary();
@@ -307,17 +307,17 @@ Node *type_cast() {
     // void型へのキャストは評価のみ
     return node->lhs;
   } else if (type->ty == TY_VOID) {
-    error_at(tok->str, "cannot cast to void type [in type_cast]");
+    error_at(tok->loc, "cannot cast to void type [in type_cast]");
   } else if (type->ty == TY_STRUCT) {
-    error_at(tok->str, "cannot cast to struct type [in type_cast]");
+    error_at(tok->loc, "cannot cast to struct type [in type_cast]");
   } else if (type->ty == TY_UNION) {
-    error_at(tok->str, "cannot cast to union type [in type_cast]");
+    error_at(tok->loc, "cannot cast to union type [in type_cast]");
   } else if (node->lhs->type->ty == TY_STRUCT) {
-    error_at(tok->str, "cannot cast from struct type [in type_cast]");
+    error_at(tok->loc, "cannot cast from struct type [in type_cast]");
   } else if (node->lhs->type->ty == TY_UNION) {
-    error_at(tok->str, "cannot cast from union type [in type_cast]");
+    error_at(tok->loc, "cannot cast from union type [in type_cast]");
   } else if (type_size(node->lhs->type) > type_size(type)) {
-    warning_at(tok->str, "cast to smaller integer type [in type_cast]");
+    warning_at(tok->loc, "cast to smaller integer type [in type_cast]");
   }
   return node;
 }
@@ -344,11 +344,11 @@ Node *unary() {
     return node;
   }
   if (consume("*")) {
-    char *consumed_ptr_prev = consumed_ptr;
+    Location *consumed_loc_prev = consumed_loc;
     node = unary();
     node = new_deref(node);
     if (!is_ptr_or_arr(node->lhs->type)) {
-      error_at(consumed_ptr_prev, "invalid pointer dereference");
+      error_at(consumed_loc_prev, "invalid pointer dereference");
     }
     return node;
   }
@@ -369,82 +369,82 @@ Node *unary() {
 
 Node *increment_decrement() {
   Node *node;
-  char *ptr;
+  Location *loc;
   if (consume("++")) {
-    ptr = consumed_ptr;
+    loc = consumed_loc;
     node = access_member();
-    return assign_sub(node, new_add(node, new_num(1), consumed_ptr), ptr, TRUE);
+    return assign_sub(node, new_add(node, new_num(1), consumed_loc), loc, TRUE);
   } else if (consume("--")) {
-    ptr = consumed_ptr;
+    loc = consumed_loc;
     node = access_member();
-    return assign_sub(node, new_sub(node, new_num(1), consumed_ptr), ptr, TRUE);
+    return assign_sub(node, new_sub(node, new_num(1), consumed_loc), loc, TRUE);
   }
   node = access_member();
   if (consume("++")) {
-    node = new_binary(ND_POSTINC, node, new_add(node, new_num(1), consumed_ptr));
+    node = new_binary(ND_POSTINC, node, new_add(node, new_num(1), consumed_loc));
   } else if (consume("--")) {
-    node = new_binary(ND_POSTINC, node, new_sub(node, new_num(1), consumed_ptr));
+    node = new_binary(ND_POSTINC, node, new_sub(node, new_num(1), consumed_loc));
   }
   return node;
 }
 
 // Objecture Reference and Array Indexing
 Node *access_member() {
-  Node *ptr;
+  Node *ptr_node;
   Node *offset_node;
   Token *tok;
   Object *object;
   LVar *var;
-  char *consumed_ptr_prev;
+  Location *consumed_loc_prev;
   Token *prev_tok = token;
   Node *node = primary();
   for (;;) {
     if (consume("[")) {
-      consumed_ptr_prev = consumed_ptr;
+      consumed_loc_prev = consumed_loc;
       if (!is_ptr_or_arr(node->type)) {
-        error_at(consumed_ptr_prev, "invalid array access [in primary]");
+        error_at(consumed_loc_prev, "invalid array access [in primary]");
       }
-      node = new_add(node, expr(), consumed_ptr_prev);
+      node = new_add(node, expr(), consumed_loc_prev);
       expect("]", "after number", "array access");
       node = new_deref(node);
     } else if (consume(".")) {
       if (node->type->ty != TY_STRUCT && node->type->ty != TY_UNION) {
-        error_at(prev_tok->str, "%.*s is not an object [in object reference]", prev_tok->len, prev_tok->str);
+        error_at(prev_tok->loc, "%.*s is not an object [in object reference]", prev_tok->len, prev_tok->str);
       }
       object = node->type->object;
       if (!object) {
-        error_at(prev_tok->str, "unknown object: %.*s [in object reference]", prev_tok->len, prev_tok->str);
+        error_at(prev_tok->loc, "unknown object: %.*s [in object reference]", prev_tok->len, prev_tok->str);
       } else if (!object->is_defined) {
-        error_at(prev_tok->str, "incomplete definition of type [in object reference]");
+        error_at(prev_tok->loc, "incomplete definition of type [in object reference]");
       }
       tok = expect_ident("object reference");
       var = find_object_member(object, tok);
       offset_node = new_num(var->offset);
-      ptr = new_node(ND_ADDR);
-      ptr->lhs = node;
-      ptr->type = new_type_ptr(node->type);
-      ptr = new_binary(ND_ADD, ptr, offset_node);
-      ptr->type = new_type_ptr(var->type);
-      node = new_deref(ptr);
+      ptr_node = new_node(ND_ADDR);
+      ptr_node->lhs = node;
+      ptr_node->type = new_type_ptr(node->type);
+      ptr_node = new_binary(ND_ADD, ptr_node, offset_node);
+      ptr_node->type = new_type_ptr(var->type);
+      node = new_deref(ptr_node);
     } else if (consume("->")) {
       if (node->type->ty != TY_PTR) {
-        error_at(prev_tok->str, "%.*s is not a pointer [in struct reference]", prev_tok->len, prev_tok->str);
+        error_at(prev_tok->loc, "%.*s is not a pointer [in struct reference]", prev_tok->len, prev_tok->str);
       }
       if (node->type->ptr_to->ty != TY_STRUCT && node->type->ptr_to->ty != TY_UNION) {
-        error_at(prev_tok->str, "%.*s is not a pointer of object [in struct reference]", prev_tok->len, prev_tok->str);
+        error_at(prev_tok->loc, "%.*s is not a pointer of object [in struct reference]", prev_tok->len, prev_tok->str);
       }
       object = node->type->ptr_to->object;
       if (!object) {
-        error_at(prev_tok->str, "unknown object: %.*s [in object reference]", prev_tok->len, prev_tok->str);
+        error_at(prev_tok->loc, "unknown object: %.*s [in object reference]", prev_tok->len, prev_tok->str);
       } else if (!object->is_defined) {
-        error_at(prev_tok->str, "incomplete definition of type [in object reference]", prev_tok->len, prev_tok->str);
+        error_at(prev_tok->loc, "incomplete definition of type [in object reference]", prev_tok->len, prev_tok->str);
       }
       tok = expect_ident("object reference");
       var = find_object_member(object, tok);
       offset_node = new_num(var->offset);
-      ptr = new_binary(ND_ADD, node, offset_node);
-      ptr->type = new_type_ptr(var->type);
-      node = new_deref(ptr);
+      ptr_node = new_binary(ND_ADD, node, offset_node);
+      ptr_node->type = new_type_ptr(var->type);
+      node = new_deref(ptr_node);
     } else
       break;
   }
@@ -507,7 +507,7 @@ Node *primary() {
       node->var = gvar;
       node->type = gvar->type;
     } else {
-      error_at(tok->str, "undefined variable: %.*s [in primary]", tok->len, tok->str);
+      error_at(tok->loc, "undefined variable: %.*s [in primary]", tok->len, tok->str);
     }
     return node;
   }
@@ -515,10 +515,10 @@ Node *primary() {
   // 関数呼び出し
   else {
     consume("(");
-    char *ptr = consumed_ptr;
+    Location *loc = consumed_loc;
     Function *fn = find_fn(tok);
     if (!fn) {
-      error_at(tok->str, "undefined function: %.*s [in primary]", tok->len, tok->str);
+      error_at(tok->loc, "undefined function: %.*s [in primary]", tok->len, tok->str);
     }
     node = new_node(ND_FUNCALL);
     node->fn = fn;
@@ -539,13 +539,13 @@ Node *primary() {
     }
     if (!fn->type_check) {
     } else if (node->val > fn->param_count) {
-      error_at(ptr, "too many arguments to function call: %.*s [in primary]", tok->len, tok->str);
+      error_at(loc, "too many arguments to function call: %.*s [in primary]", tok->len, tok->str);
     } else if (node->val < fn->param_count) {
-      error_at(ptr, "not enough arguments to function call: %.*s [in primary]", tok->len, tok->str);
+      error_at(loc, "not enough arguments to function call: %.*s [in primary]", tok->len, tok->str);
     } else {
       for (int i = 0; i < node->val; i++) {
         if (!is_same_type(fn->param_types[i], node->args[i]->type)) {
-          warning_at(ptr, "incompatible %s to %s conversion [in primary]", type_name(node->args[i]->type),
+          warning_at(loc, "incompatible %s to %s conversion [in primary]", type_name(node->args[i]->type),
                      type_name(fn->param_types[i]));
           break;
         }
@@ -564,7 +564,7 @@ int compile_time_number() {
   } else if (token->kind == TK_IDENT) {
     LVar *member = find_enum_member(consume_ident());
     if (!member) {
-      error_at(token->str, "expected a compile time constant [in compile time number]");
+      error_at(token->loc, "expected a compile time constant [in compile time number]");
     }
     result = member->offset;
   } else {

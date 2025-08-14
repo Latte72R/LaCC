@@ -3,7 +3,7 @@
 
 extern Token *token;
 extern Node **code;
-extern char *consumed_ptr;
+extern Location *consumed_loc;
 extern int label_cnt;
 extern int array_cnt;
 extern String *strings;
@@ -22,7 +22,7 @@ int peek(char *op) {
 int consume(char *op) {
   if (!peek(op))
     return FALSE;
-  consumed_ptr = token->str;
+  consumed_loc = token->loc;
   token = token->next;
   return TRUE;
 }
@@ -31,7 +31,7 @@ Token *consume_ident() {
   if (token->kind != TK_IDENT)
     return NULL;
   Token *tok = token;
-  consumed_ptr = token->str;
+  consumed_loc = token->loc;
   token = token->next;
   return tok;
 }
@@ -39,14 +39,14 @@ Token *consume_ident() {
 // Ensure that the current token is `op`.
 void expect(char *op, char *err, char *stmt) {
   if (strncmp(token->str, op, token->len))
-    error_at(token->str, "expected \"%s\" %s [in %s statement]", op, err, stmt);
+    error_at(token->loc, "expected \"%s\" %s [in %s statement]", op, err, stmt);
   token = token->next;
 }
 
 Token *expect_ident(char *stmt) {
   Token *tok = consume_ident();
   if (!tok) {
-    error_at(token->str, "expected an identifier [in %s statement]", stmt);
+    error_at(token->loc, "expected an identifier [in %s statement]", stmt);
   }
   return tok;
 }
@@ -54,7 +54,7 @@ Token *expect_ident(char *stmt) {
 // Ensure that the current token is TK_NUM.
 int expect_number(char *stmt) {
   if (token->kind != TK_NUM)
-    error_at(token->str, "expected a number [in %s statement]", stmt);
+    error_at(token->loc, "expected a number [in %s statement]", stmt);
   int val = token->val;
   token = token->next;
   return val;
@@ -75,7 +75,7 @@ int expect_signed_number() {
 }
 
 void error_duplicate_name(Token *tok, const char *type) {
-  error_at(tok->str, "duplicated %s name: %.*s", type, tok->len, tok->str);
+  error_at(tok->loc, "duplicated %s name: %.*s", type, tok->len, tok->str);
 }
 
 void *safe_realloc_array(void *ptr, int element_size, int new_size) {
@@ -97,7 +97,6 @@ void program() {
 
 Array *array_literal(Type *type) {
   Type *org_type = type->ptr_to;
-  char *ptr = consumed_ptr;
   expect("{", "before array initializer", "array_literal");
   Array *array = malloc(sizeof(Array));
   array->id = array_cnt++;
@@ -118,7 +117,7 @@ Array *array_literal(Type *type) {
 
 String *string_literal() {
   if (token->kind != TK_STRING) {
-    error_at(token->str, "expected a string literal [in string_literal]");
+    error_at(token->loc, "expected a string literal [in string_literal]");
   }
   String *str = malloc(sizeof(String));
   str->text = token->str;

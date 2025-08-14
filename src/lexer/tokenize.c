@@ -54,7 +54,7 @@ char *parse_char_literal(char *p) {
       val = '\0';
       break;
     default:
-      error_at(p - 1, "invalid escape sequence in character literal");
+      error_at(new_location(p - 1), "invalid escape sequence in character literal");
     }
     p++;
     len = 4;
@@ -65,11 +65,11 @@ char *parse_char_literal(char *p) {
   }
 
   if (*p != '\'') {
-    error_at(p, "unclosed character literal");
+    error_at(new_location(p), "unclosed character literal");
   }
   p++;
 
-  new_token(TK_NUM, q, len);
+  new_token(TK_NUM, q, q, len);
   token->val = val;
   return p; // Return the position after the closing quote
 }
@@ -84,7 +84,7 @@ char *parse_string_literal(char *p) {
     switch (*p) {
     case '\0':
     case '\n':
-      error_at(p, "unclosed string literal [in tokenize]");
+      error_at(new_location(p), "unclosed string literal [in tokenize]");
       break;
     case '\\':
       switch (*(p + 1)) {
@@ -92,13 +92,14 @@ char *parse_string_literal(char *p) {
         p += 2; // 行継続をスキップ
         break;
       case 'a':
-        error_at(p, "unsupported escape sequence \"\\a\" in string literal. Use '\\007' for alert.");
+        error_at(new_location(p), "unsupported escape sequence \"\\a\" in string literal. Use '\\007' for alert.");
         break;
       case 'e':
-        error_at(p, "unsupported escape sequence \"\\e\" in string literal. Use '\\033' for escape.");
+        error_at(new_location(p), "unsupported escape sequence \"\\e\" in string literal. Use '\\033' for escape.");
         break;
       case 'v':
-        error_at(p, "unsupported escape sequence \"\\v\" in string literal. Use '\\012' for vertical tab.");
+        error_at(new_location(p),
+                 "unsupported escape sequence \"\\v\" in string literal. Use '\\012' for vertical tab.");
         break;
       default:
         buf[len++] = *p++;
@@ -120,7 +121,7 @@ char *parse_string_literal(char *p) {
     token->len += len;
     token->val += i - 1;
   } else {
-    new_token(TK_STRING, buf, len);
+    new_token(TK_STRING, q, buf, len);
     token->val = i;
   }
   p++;
@@ -130,7 +131,7 @@ char *parse_string_literal(char *p) {
 char *parse_number_literal(char *p) {
   char *q;
   if (startswith(p, "0b")) {
-    new_token(TK_NUM, p, 0);
+    new_token(TK_NUM, p, p, 0);
     p += 2;
     q = p;
     token->val = strtol(p, &p, 2);
@@ -138,17 +139,17 @@ char *parse_number_literal(char *p) {
   } else if (startswith(p, "0x")) {
     p += 2;
     q = p;
-    new_token(TK_NUM, p, 0);
+    new_token(TK_NUM, p, p, 0);
     token->val = strtol(p, &p, 16);
     token->len = p - q + 2;
   } else if (startswith(p, "0")) {
-    new_token(TK_NUM, p, 0);
+    new_token(TK_NUM, p, p, 0);
     p++;
     q = p;
     token->val = strtol(p, &p, 8);
     token->len = p - q + 2;
   } else {
-    new_token(TK_NUM, p, 0);
+    new_token(TK_NUM, p, p, 0);
     q = p;
     token->val = strtol(p, &p, 10);
     token->len = p - q;
@@ -180,7 +181,7 @@ void tokenize() {
     if (startswith(p, "/*")) {
       q = strstr(p + 2, "*/");
       if (!q)
-        error_at(p, "unclosed block comment [in tokenize]");
+        error_at(new_location(p), "unclosed block comment [in tokenize]");
       p = q + 2;
       continue;
     }
@@ -192,7 +193,7 @@ void tokenize() {
 
     // Multi-letter punctuator
     if (startswith(p, "...")) {
-      new_token(TK_RESERVED, p, 3);
+      new_token(TK_RESERVED, p, p, 3);
       p += 3;
       continue;
     }
@@ -202,14 +203,15 @@ void tokenize() {
         startswith(p, "&&") || startswith(p, "||") || startswith(p, "++") || startswith(p, "--") ||
         startswith(p, "+=") || startswith(p, "-=") || startswith(p, "*=") || startswith(p, "/=") ||
         startswith(p, "%=") || startswith(p, "->") || startswith(p, "<<") || startswith(p, ">>")) {
-      new_token(TK_RESERVED, p, 2);
+      new_token(TK_RESERVED, p, p, 2);
       p += 2;
       continue;
     }
 
     // Single-letter punctuator
     if (strchr("+-*/()<>={}[];&|^~,%!.:", *p)) {
-      new_token(TK_RESERVED, p++, 1);
+      new_token(TK_RESERVED, p, p, 1);
+      p++;
       continue;
     }
 
@@ -231,91 +233,91 @@ void tokenize() {
     }
 
     if (startswith(p, "switch") && !is_alnum(p[6])) {
-      new_token(TK_SWITCH, p, 6);
+      new_token(TK_SWITCH, p, p, 6);
       p += 6;
       continue;
     }
 
     if (startswith(p, "case") && !is_alnum(p[4])) {
-      new_token(TK_CASE, p, 4);
+      new_token(TK_CASE, p, p, 4);
       p += 4;
       continue;
     }
 
     if (startswith(p, "default") && !is_alnum(p[7])) {
-      new_token(TK_DEFAULT, p, 7);
+      new_token(TK_DEFAULT, p, p, 7);
       p += 7;
       continue;
     }
 
     if (startswith(p, "do") && !is_alnum(p[2])) {
-      new_token(TK_DO, p, 2);
+      new_token(TK_DO, p, p, 2);
       p += 2;
       continue;
     }
 
     if (startswith(p, "if") && !is_alnum(p[2])) {
-      new_token(TK_IF, p, 2);
+      new_token(TK_IF, p, p, 2);
       p += 2;
       continue;
     }
 
     if (startswith(p, "sizeof") && !is_alnum(p[6])) {
-      new_token(TK_SIZEOF, p, 6);
+      new_token(TK_SIZEOF, p, p, 6);
       p += 6;
       continue;
     }
 
     if (startswith(p, "else") && !is_alnum(p[4])) {
-      new_token(TK_ELSE, p, 4);
+      new_token(TK_ELSE, p, p, 4);
       p += 4;
       continue;
     }
 
     if (startswith(p, "return") && !is_alnum(p[6])) {
-      new_token(TK_RETURN, p, 6);
+      new_token(TK_RETURN, p, p, 6);
       p += 6;
       continue;
     }
 
     if (startswith(p, "goto") && !is_alnum(p[4])) {
-      new_token(TK_GOTO, p, 4);
+      new_token(TK_GOTO, p, p, 4);
       p += 4;
       continue;
     }
 
     if (startswith(p, "extern") && !is_alnum(p[6])) {
-      new_token(TK_EXTERN, p, 6);
+      new_token(TK_EXTERN, p, p, 6);
       p += 6;
       continue;
     }
 
     if (startswith(p, "enum") && !is_alnum(p[4])) {
-      new_token(TK_ENUM, p, 4);
+      new_token(TK_ENUM, p, p, 4);
       p += 4;
       continue;
     }
 
     if (startswith(p, "union") && !is_alnum(p[5])) {
-      new_token(TK_UNION, p, 5);
+      new_token(TK_UNION, p, p, 5);
       p += 5;
       continue;
     }
 
     if (startswith(p, "struct") && !is_alnum(p[6])) {
-      new_token(TK_STRUCT, p, 6);
+      new_token(TK_STRUCT, p, p, 6);
       p += 6;
       continue;
     }
 
     if (startswith(p, "typedef") && !is_alnum(p[7])) {
-      new_token(TK_TYPEDEF, p, 7);
+      new_token(TK_TYPEDEF, p, p, 7);
       p += 7;
       continue;
     }
 
     if (startswith(p, "const") && !is_alnum(p[5])) {
-      new_token(TK_CONST, p, 5);
+      new_token(TK_CONST, p, p, 5);
       p += 5;
       continue;
     }
@@ -328,52 +330,52 @@ void tokenize() {
     }
 
     if (startswith(p, "static") && !is_alnum(p[6])) {
-      new_token(TK_STATIC, p, 6);
+      new_token(TK_STATIC, p, p, 6);
       p += 6;
       continue;
     }
 
     if (startswith(p, "while") && !is_alnum(p[5])) {
-      new_token(TK_WHILE, p, 5);
+      new_token(TK_WHILE, p, p, 5);
       p += 5;
       continue;
     }
 
     if (startswith(p, "for") && !is_alnum(p[3])) {
-      new_token(TK_FOR, p, 3);
+      new_token(TK_FOR, p, p, 3);
       p += 3;
       continue;
     }
 
     if (startswith(p, "int") && !is_alnum(p[3])) {
-      new_token(TK_TYPE, p, 3);
+      new_token(TK_TYPE, p, p, 3);
       token->ty = TY_INT;
       p += 3;
       continue;
     }
 
     if (startswith(p, "char") && !is_alnum(p[4])) {
-      new_token(TK_TYPE, p, 4);
+      new_token(TK_TYPE, p, p, 4);
       token->ty = TY_CHAR;
       p += 4;
       continue;
     }
 
     if (startswith(p, "void") && !is_alnum(p[4])) {
-      new_token(TK_TYPE, p, 4);
+      new_token(TK_TYPE, p, p, 4);
       token->ty = TY_VOID;
       p += 4;
       continue;
     }
 
     if (startswith(p, "break") && !is_alnum(p[5])) {
-      new_token(TK_BREAK, p, 5);
+      new_token(TK_BREAK, p, p, 5);
       p += 5;
       continue;
     }
 
     if (startswith(p, "continue") && !is_alnum(p[8])) {
-      new_token(TK_CONTINUE, p, 8);
+      new_token(TK_CONTINUE, p, p, 8);
       p += 8;
       continue;
     }
@@ -388,11 +390,11 @@ void tokenize() {
       while (isspace(*(p + j))) {
         j++;
       }
-      new_token(TK_IDENT, p, i);
+      new_token(TK_IDENT, p, p, i);
       p += j;
       continue;
     }
 
-    error_at(p, "invalid token [in tokenize]");
+    error_at(new_location(p), "invalid token [in tokenize]");
   }
 }

@@ -5,10 +5,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+typedef struct {
+  char *path;
+  char *loc;
+  char *input;
+} Location;
+
 extern int show_warning;
 extern int warning_cnt;
-extern char *user_input;
-extern char *input_file;
 extern char *output_file;
 extern FILE *fp;
 
@@ -39,31 +43,28 @@ void error(char *fmt, ...) {
 }
 
 // エラーの起きた場所を報告するための関数
-void error_at(char *loc, char *fmt, ...) {
+void error_at(Location *location, char *fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
 
   // locが含まれている行の開始地点と終了地点を取得
-  char *line = loc;
-  while (user_input < line && line[-1] != '\n')
+  char *line = location->loc;
+  while (location->input < line && line[-1] != '\n')
     line--;
 
-  char *end = loc;
-  while (*end != '\n') {
-    if (*end == '\0') {
-      break;
-    }
+  char *end = location->loc;
+  while (*end != '\n' && *end != '\0') {
     end++;
   }
 
   // 見つかった行が全体の何行目なのかを調べる
   int line_num = 1;
-  for (char *p = user_input; p < line; p++)
+  for (char *p = location->input; p < line; p++)
     if (*p == '\n')
       line_num++;
 
   // 見つかった行のファイル名と行番号を表示
-  fprintf(stderr, "\033[1;32m%s:%d:\033[0m ", input_file, line_num);
+  fprintf(stderr, "\033[1;32m%s:%d:\033[0m ", location->path, line_num);
 
   // エラーメッセージを表示
   char fmt2[128];
@@ -74,7 +75,7 @@ void error_at(char *loc, char *fmt, ...) {
   fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
   // エラー箇所を"^"で指し示す
-  int pos = loc - line;
+  int pos = location->loc - line;
   fprintf(stderr, "%*s\033[1;32m^\033[0m\n", pos, "");
 
   // ファイルを削除してプログラムを終了
@@ -98,7 +99,7 @@ void warning(char *fmt, ...) {
 }
 
 // 警告の起きた場所を報告するための関数
-void warning_at(char *loc, char *fmt, ...) {
+void warning_at(Location *location, char *fmt, ...) {
   if (!show_warning) {
     return;
   }
@@ -106,26 +107,23 @@ void warning_at(char *loc, char *fmt, ...) {
   va_start(ap, fmt);
 
   // locが含まれている行の開始地点と終了地点を取得
-  char *line = loc;
-  while (user_input < line && line[-1] != '\n')
+  char *line = location->loc;
+  while (location->input < line && line[-1] != '\n')
     line--;
 
-  char *end = loc;
-  while (*end != '\n') {
-    if (*end == '\0') {
-      break;
-    }
+  char *end = location->loc;
+  while (*end != '\n' && *end != '\0') {
     end++;
   }
 
   // 見つかった行が全体の何行目なのかを調べる
   int line_num = 1;
-  for (char *p = user_input; p < line; p++)
+  for (char *p = location->input; p < line; p++)
     if (*p == '\n')
       line_num++;
 
   // 見つかった行のファイル名と行番号を表示
-  fprintf(stderr, "\033[1;32m%s:%d:\033[0m ", input_file, line_num);
+  fprintf(stderr, "\033[1;32m%s:%d:\033[0m ", location->path, line_num);
 
   // 警告メッセージを表示
   char fmt2[128];
@@ -136,7 +134,7 @@ void warning_at(char *loc, char *fmt, ...) {
   fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
   // 警告箇所を"^"で指し示す
-  int pos = loc - line;
+  int pos = location->loc - line;
   fprintf(stderr, "%*s\033[1;32m^\033[0m\n", pos, "");
 
   warning_cnt++;

@@ -29,7 +29,7 @@ Array *arrays;
 String *filenames;
 char *input_file;
 char *output_file;
-char *consumed_ptr;
+Location *consumed_loc;
 
 IncludePath *include_paths;
 FILE *fp;

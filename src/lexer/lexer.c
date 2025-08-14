@@ -10,13 +10,22 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
+Location *new_location(char *loc) {
+  Location *location = malloc(sizeof(Location));
+  location->loc = loc;
+  location->path = input_file;
+  location->input = user_input;
+  return location;
+}
+
 // Create a new token and add it as the next token of `cur`.
-void new_token(TokenKind kind, char *str, int len) {
+void new_token(TokenKind kind, char *loc, char *str, int len) {
   Token *tok = malloc(sizeof(Token));
   tok->kind = kind;
   tok->str = str;
   tok->len = len;
   token->next = tok;
+  tok->loc = new_location(loc);
   token = tok;
 }
 
@@ -33,13 +42,13 @@ char *handle_include_directive(char *p) {
     p++;
   }
   if (*p != '"') {
-    error_at(p, "expected \" before \"include\"");
+    error_at(new_location(p), "expected \" before \"include\"");
   }
   p++;
   q = p;
   while (*p != '"') {
     if (*p == '\0') {
-      error_at(q - 1, "unclosed string literal [in tokenize]");
+      error_at(new_location(q - 1), "unclosed string literal [in tokenize]");
     }
     if (*p == '\\') {
       p += 2;
@@ -71,7 +80,7 @@ char *handle_include_directive(char *p) {
   char *user_input_prev = user_input;
   char *new_input = find_file_includes(name);
   if (!new_input) {
-    error_at(q - 1, "Cannot open include file: %s", name);
+    error_at(new_location(q - 1), "Cannot open include file: %s", name);
   }
   user_input = new_input;
   tokenize();

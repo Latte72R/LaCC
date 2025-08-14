@@ -125,7 +125,7 @@ int is_type(Token *tok) {
 // 予約しているスタック領域のサイズ
 int get_sizeof(Type *type) {
   if (type->object && !type->object->is_defined) {
-    error_at(token->str, "invalid application of 'sizeof' to an incomplete type [in get_sizeof]");
+    error_at(token->loc, "invalid application of 'sizeof' to an incomplete type [in get_sizeof]");
   }
   switch (type->ty) {
   case TY_INT:
@@ -141,14 +141,14 @@ int get_sizeof(Type *type) {
   case TY_UNION:
     return type->object->size;
   default:
-    error_at(token->str, "invalid type [in get_sizeof]");
+    error_at(token->loc, "invalid type [in get_sizeof]");
     return 0;
   }
 }
 
 int type_size(Type *type) {
   if (type->object && !type->object->is_defined) {
-    error_at(token->str, "incomplete definition of type [in type_size]");
+    error_at(token->loc, "incomplete definition of type [in type_size]");
   }
   switch (type->ty) {
   case TY_VOID:
@@ -165,7 +165,7 @@ int type_size(Type *type) {
   case TY_UNION:
     return type->object->size;
   default:
-    error_at(token->str, "invalid type [in type_size]");
+    error_at(token->loc, "invalid type [in type_size]");
     return 0;
   }
 }

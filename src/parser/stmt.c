@@ -14,7 +14,7 @@ extern Object *structs;
 extern Object *unions;
 extern Object *enums;
 extern TypeTag *type_tags;
-extern char *consumed_ptr;
+extern Location *consumed_loc;
 
 extern const int TRUE;
 extern const int FALSE;
@@ -115,7 +115,7 @@ Node *do_while_stmt() {
   node->then = stmt();
   loop_id = loop_id_prev;
   if (token->kind != TK_WHILE) {
-    error_at(token->str, "expected 'while' after do-while statement [in do-while]");
+    error_at(token->loc, "expected 'while' after do-while statement [in do-while]");
   }
   token = token->next;
   expect("(", "before condition", "do-while");
@@ -178,7 +178,7 @@ Node *for_stmt() {
 
 Node *break_stmt() {
   if (loop_id == -1) {
-    error_at(token->str, "stray break statement [in break statement]");
+    error_at(token->loc, "stray break statement [in break statement]");
   }
   token = token->next;
   expect(";", "after line", "break");
@@ -190,7 +190,7 @@ Node *break_stmt() {
 
 Node *continue_stmt() {
   if (loop_id == -1) {
-    error_at(token->str, "stray continue statement [in continue statement]");
+    error_at(token->loc, "stray continue statement [in continue statement]");
   }
   token = token->next;
   expect(";", "after line", "continue");
@@ -202,19 +202,19 @@ Node *continue_stmt() {
 
 Node *return_stmt() {
   token = token->next;
-  char *ptr = token->str;
+  Location *loc = token->loc;
   Node *node = new_node(ND_RETURN);
   if (consume(";")) {
     node->rhs = new_num(0);
   } else {
     if (current_fn->type->ty == TY_VOID) {
-      warning_at(ptr, "returning value from void function [in return statement]");
+      warning_at(loc, "returning value from void function [in return statement]");
     }
     node->rhs = expr();
     expect(";", "after line", "return");
   }
   if (current_fn->type->ty != TY_VOID && !is_same_type(current_fn->type, node->rhs->type)) {
-    warning_at(ptr, "incompatible %s to %s conversion [in return statement]", type_name(node->rhs->type),
+    warning_at(loc, "incompatible %s to %s conversion [in return statement]", type_name(node->rhs->type),
                type_name(current_fn->type));
   }
   node->endline = TRUE;
@@ -245,7 +245,7 @@ Node *switch_stmt() {
 
 Node *case_stmt() {
   if (!current_switch) {
-    error_at(token->str, "stray case statement [in case statement]");
+    error_at(token->loc, "stray case statement [in case statement]");
   }
   token = token->next;
   Node *node = new_node(ND_CASE);
@@ -253,7 +253,7 @@ Node *case_stmt() {
   node->val = compile_time_number();
   for (int i = 0; i < current_switch->case_cnt; i++) {
     if (current_switch->cases[i] == node->val) {
-      error_at(token->str, "duplicate case value [in case statement]");
+      error_at(token->loc, "duplicate case value [in case statement]");
     }
   }
   current_switch->cases[current_switch->case_cnt] = node->val;
@@ -265,9 +265,9 @@ Node *case_stmt() {
 
 Node *default_stmt() {
   if (!current_switch) {
-    error_at(token->str, "stray default statement [in default statement]");
+    error_at(token->loc, "stray default statement [in default statement]");
   } else if (current_switch->has_default) {
-    error_at(token->str, "multiple default statements in switch [in default statement]");
+    error_at(token->loc, "multiple default statements in switch [in default statement]");
   }
   token = token->next;
   current_switch->has_default = TRUE;

@@ -71,7 +71,7 @@ Label *find_label(Function *fn, char *name, int len) {
       return label;
     }
   }
-  error_at(name, "undefined label: %.*s [in find_label]", len, name);
+  error("undefined label: %.*s [in find_label]", len, name);
   return NULL; // Unreachable, but avoids compiler warning.
 }
 

@@ -10,6 +10,12 @@ struct IncludePath {
   IncludePath *next;
 };
 
+typedef struct {
+  char *path;
+  char *loc;
+  char *input;
+} Location;
+
 //
 // Tokenizer
 //
@@ -73,7 +79,8 @@ struct Token {
   int val;        // If kind is TK_NUM, its value
   char *str;      // Token string
   int len;        // Token length
-  TypeKind ty;    // Token type
+  Location *loc;
+  TypeKind ty; // Token type
 };
 
 typedef struct Type Type;
@@ -146,7 +153,8 @@ struct Function {
 // lexer.c からエクスポートする関数
 int startswith(char *p, char *q);
 int is_alnum(char c);
-void new_token(TokenKind kind, char *str, int len);
+void new_token(TokenKind kind, char *loc, char *str, int len);
+Location *new_location(char *loc);
 char *handle_include_directive(char *p);
 
 // token_parser.c からエクスポートする関数
@@ -298,7 +306,7 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
 Object *enum_declaration(const int should_record);
 Node *typedef_stmt();
 Node *handle_array_initialization(Node *node, Type *type);
-Node *handle_scalar_initialization(Node *node, Type *type, char *ptr);
+Node *handle_scalar_initialization(Node *node, Type *type, Location *loc);
 Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int set_offset);
 
 // stmt.c
@@ -321,7 +329,7 @@ Node *stmt();
 
 // expr.c
 Node *expr();
-Node *assign_sub(Node *lhs, Node *rhs, char *ptr, int check_const);
+Node *assign_sub(Node *lhs, Node *rhs, Location *loc, int check_const);
 Node *assign();
 Node *type_cast();
 Node *logical_or();
@@ -332,10 +340,10 @@ Node *bit_and();
 Node *equality();
 Node *relational();
 Node *bit_shift();
-Node *new_add(Node *lhs, Node *rhs, char *ptr);
-Node *new_sub(Node *lhs, Node *rhs, char *ptr);
+Node *new_add(Node *lhs, Node *rhs, Location *loc);
+Node *new_sub(Node *lhs, Node *rhs, Location *loc);
 Node *add();
-Type *resolve_type_mul(Type *left, Type *right, char *ptr);
+Type *resolve_type_mul(Type *left, Type *right, Location *loc);
 Node *mul();
 Node *unary();
 Node *increment_decrement();
@@ -373,9 +381,9 @@ char *find_file_includes(char *name);
 // extension.c
 extern void write_file(char *fmt, ...);
 extern void error(char *fmt, ...);
-extern void error_at(char *loc, char *fmt, ...);
+extern void error_at(Location *loc, char *fmt, ...);
 extern void warning(char *fmt, ...);
-extern void warning_at(char *loc, char *fmt, ...);
+extern void warning_at(Location *loc, char *fmt, ...);
 
 //
 // Standard library functions

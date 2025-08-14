@@ -13,7 +13,7 @@ extern Object *structs;
 extern Object *unions;
 extern Object *enums;
 extern TypeTag *type_tags;
-extern char *consumed_ptr;
+extern Location *consumed_loc;
 
 extern const int TRUE;
 extern const int FALSE;
@@ -21,7 +21,7 @@ extern void *NULL;
 
 Node *handle_array_initialization(Node *node, Type *type) {
   if (type->ty != TY_ARR) {
-    error_at(token->str, "array initializer is only allowed for array type [in variable declaration]");
+    error_at(token->loc, "array initializer is only allowed for array type [in variable declaration]");
   }
   Array *array = array_literal(type);
   Node *arr_node = new_node(ND_ARRAY);
@@ -32,22 +32,22 @@ Node *handle_array_initialization(Node *node, Type *type) {
       // サイズ指定なしの文字列
       type->array_size = array->len;
     } else if (type->array_size < array->len) {
-      warning_at(consumed_ptr, "excess elements in array initializer [in variable declaration]");
+      warning_at(consumed_loc, "excess elements in array initializer [in variable declaration]");
     }
     array->len = type->array_size;
     node = new_binary(ND_ASSIGN, node, arr_node);
     node->type = type;
     node->val = TRUE;
   } else if (type->ty == TY_PTR) {
-    node = assign_sub(node, arr_node, consumed_ptr, FALSE);
+    node = assign_sub(node, arr_node, consumed_loc, FALSE);
     node->type = type;
   } else {
-    error_at(consumed_ptr, "array initializer is only allowed for array or pointer type [in variable declaration]");
+    error_at(consumed_loc, "array initializer is only allowed for array or pointer type [in variable declaration]");
   }
   return node;
 }
 
-Node *handle_string_initialization(Node *node, Type *type, char *ptr) {
+Node *handle_string_initialization(Node *node, Type *type, Location *loc) {
   String *str = string_literal();
   Node *string_node = new_node(ND_STRING);
   string_node->id = str->id;
@@ -57,24 +57,24 @@ Node *handle_string_initialization(Node *node, Type *type, char *ptr) {
       // サイズ指定なしの文字列
       type->array_size = str->len;
     } else if (type->array_size < str->len) {
-      warning_at(ptr, "initializer-string for char array is too long [in variable declaration]");
+      warning_at(loc, "initializer-string for char array is too long [in variable declaration]");
     } else if (type->ptr_to->ty != TY_CHAR) {
-      error_at(ptr, "initializing wide char array with non-wide string literal [in variable declaration]");
+      error_at(loc, "initializing wide char array with non-wide string literal [in variable declaration]");
     }
     node = new_binary(ND_ASSIGN, node, string_node);
     node->type = type;
     node->val = TRUE;
   } else if (type->ty == TY_PTR) {
-    node = assign_sub(node, string_node, ptr, FALSE);
+    node = assign_sub(node, string_node, loc, FALSE);
     node->type = type;
   } else {
-    error_at(ptr, "string literal is only allowed for array or pointer type [in variable declaration]");
+    error_at(loc, "string literal is only allowed for array or pointer type [in variable declaration]");
   }
   return node;
 }
 
-Node *handle_scalar_initialization(Node *node, Type *type, char *ptr) {
-  node = assign_sub(node, expr(), ptr, FALSE);
+Node *handle_scalar_initialization(Node *node, Type *type, Location *loc) {
+  node = assign_sub(node, expr(), loc, FALSE);
   node->type = type;
   if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR) {
     node->val = node->lhs->type->ptr_to->ty == TY_CHAR;
@@ -89,7 +89,7 @@ Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int set
       lvar->offset = 0;
     return node;
   }
-  char *ptr = consumed_ptr;
+  Location *loc = consumed_loc;
   if (set_offset) {
     lvar->offset = expect_signed_number();
     return node;
@@ -97,9 +97,9 @@ Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int set
   if (peek("{")) {
     node = handle_array_initialization(node, type);
   } else if (token->kind == TK_STRING) {
-    node = handle_string_initialization(node, type, ptr);
+    node = handle_string_initialization(node, type, loc);
   } else {
-    node = handle_scalar_initialization(node, type, ptr);
+    node = handle_scalar_initialization(node, type, loc);
   }
   return node;
 }
@@ -107,7 +107,7 @@ Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int set
 Node *function_definition(Token *tok, Type *type, int is_static) {
   Function *fn = find_fn(tok);
   if (fn && fn->is_defined) {
-    error_at(consumed_ptr, "duplicated function definition: %.*s [in function definition]", tok->len, tok->str);
+    error_at(consumed_loc, "duplicated function definition: %.*s [in function definition]", tok->len, tok->str);
   } else {
     fn = malloc(sizeof(Function));
     fn->next = functions;
@@ -141,12 +141,12 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
     type = consume_type(TRUE);
     if (!type) {
       if (i != 0) {
-        error_at(consumed_ptr, "expected a type [in function definition]");
+        error_at(consumed_loc, "expected a type [in function definition]");
       }
       break;
     } else if (type->ty == TY_VOID) {
       if (i != 0) {
-        error_at(consumed_ptr, "void type is only allowed for the first argument [in function definition]");
+        error_at(consumed_loc, "void type is only allowed for the first argument [in function definition]");
       }
       break;
     }
@@ -281,10 +281,10 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   if (consume("(")) {
     if (type->object && !type->object->is_defined) {
       // 変数定義でobjectの型が未定義の場合
-      error_at(tok->str, "incomplete result type [in variable declaration]");
+      error_at(tok->loc, "incomplete result type [in variable declaration]");
     }
     if (current_fn->next) {
-      error_at(token->str, "nested function is not supported [in function definition]");
+      error_at(token->loc, "nested function is not supported [in function definition]");
     } else {
       return function_definition(tok, type, is_static);
     }
@@ -292,7 +292,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
 
   if (!is_extern && type->object && !type->object->is_defined) {
     // 変数定義でobjectの型が未定義の場合
-    error_at(tok->str, "variable has incomplete type [in variable declaration]");
+    error_at(tok->loc, "variable has incomplete type [in variable declaration]");
   }
 
   node = new_node(ND_BLOCK);
@@ -331,9 +331,9 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
 Object *struct_and_union_declaration(const int is_struct, const int is_union, const int should_record) {
   token = token->next;
   if (is_struct && is_union) {
-    error_at(token->str, "cannot declare both struct and union at the same time [in object declaration]");
+    error_at(token->loc, "cannot declare both struct and union at the same time [in object declaration]");
   } else if (!is_struct && !is_union) {
-    error_at(token->str, "expected struct or union [in object declaration]");
+    error_at(token->loc, "expected struct or union [in object declaration]");
   }
   Token *tok;
   if (token->kind != TK_IDENT) {
@@ -350,7 +350,7 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
     }
   }
   if (object && object->is_defined && peek("{")) {
-    error_at(tok->str, "duplicate object declaration: %.*s [in object declaration]", tok->len, tok->str);
+    error_at(tok->loc, "duplicate object declaration: %.*s [in object declaration]", tok->len, tok->str);
   } else if (!object) {
     object = malloc(sizeof(Object));
     object->is_defined = FALSE;
@@ -409,7 +409,7 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
     if (consume(";")) {
       continue;
     } else {
-      error_at(token->str, "expected ';' after object member declaration [in object declaration]");
+      error_at(token->loc, "expected ';' after object member declaration [in object declaration]");
     }
   }
   if (is_struct) {
@@ -438,7 +438,7 @@ Object *enum_declaration(const int should_record) {
     object = find_enum(tok);
   }
   if (object && object->is_defined && peek("{")) {
-    error_at(tok->str, "duplicate object declaration: %.*s [in enum declaration]", tok->len, tok->str);
+    error_at(tok->loc, "duplicate object declaration: %.*s [in enum declaration]", tok->len, tok->str);
   } else if (!object) {
     object = malloc(sizeof(Object));
     object->is_defined = FALSE;
@@ -490,7 +490,7 @@ Node *typedef_stmt() {
       expect(";", "after line", "typedef");
       return node;
     } else {
-      error_at(consumed_ptr, "typedef redefinition with different types [in typedef]");
+      error_at(consumed_loc, "typedef redefinition with different types [in typedef]");
     }
   }
   tag = malloc(sizeof(TypeTag));

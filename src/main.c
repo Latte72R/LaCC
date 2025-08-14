@@ -85,7 +85,7 @@ int main(int argc, char **argv) {
   user_input = read_file(input_file);
 
   tokenize();
-  new_token(TK_EOF, NULL, 0);
+  new_token(TK_EOF, NULL, NULL, 0);
   token = token_cpy->next;
 
   program();
