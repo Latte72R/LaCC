@@ -262,20 +262,20 @@ Node *extern_variable_declaration(Token *tok, Type *type) {
 
 Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   // 変数宣言または関数定義
-  Token *tok = token;
+  Token *prev_tok = token;
   Type *type = consume_type(FALSE);
 
   Node *node;
-  if (token->kind != TK_IDENT) {
+  if (consume(";")) {
     // expression として扱う
-    token = tok;
+    token = prev_tok;
     return expression_stmt();
   }
 
-  token = tok;
+  token = prev_tok;
   Type *base_type = peek_base_type();
   type = consume_type(TRUE);
-  tok = expect_ident("variable declaration");
+  Token *tok = consume_ident("variable declaration");
 
   // 関数定義
   if (consume("(")) {
