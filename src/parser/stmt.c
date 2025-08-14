@@ -207,15 +207,15 @@ Node *return_stmt() {
   if (consume(";")) {
     node->rhs = new_num(0);
   } else {
-    if (current_fn->type->ty == TY_VOID) {
+    if (current_fn->return_type->ty == TY_VOID) {
       warning_at(loc, "returning value from void function [in return statement]");
     }
     node->rhs = expr();
     expect(";", "after line", "return");
   }
-  if (current_fn->type->ty != TY_VOID && !is_same_type(current_fn->type, node->rhs->type)) {
+  if (current_fn->return_type->ty != TY_VOID && !is_same_type(current_fn->return_type, node->rhs->type)) {
     warning_at(loc, "incompatible %s to %s conversion [in return statement]", type_name(node->rhs->type),
-               type_name(current_fn->type));
+               type_name(current_fn->return_type));
   }
   node->endline = TRUE;
   return node;

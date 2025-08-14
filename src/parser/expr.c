@@ -523,7 +523,7 @@ Node *primary() {
     node = new_node(ND_FUNCALL);
     node->fn = fn;
     node->id = loop_cnt++;
-    node->type = fn->type;
+    node->type = fn->return_type;
     if (!consume(")")) {
       int n = 0;
       for (int i = 0; i < 6; i++) {

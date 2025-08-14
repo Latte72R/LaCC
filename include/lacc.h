@@ -69,7 +69,7 @@ struct Array {
   int id;
 };
 
-typedef enum { TY_NONE, TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_ARGARR, TY_VOID, TY_STRUCT, TY_UNION } TypeKind;
+typedef enum { TY_NONE, TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_ARGARR, TY_VOID, TY_STRUCT, TY_UNION, TY_FUNC } TypeKind;
 
 // Token type
 typedef struct Token Token;
@@ -140,7 +140,6 @@ struct Function {
   char *name;           // 変数の名前
   int len;              // 名前の長さ
   int offset;           // RBPからのオフセット
-  Type *type;           // 関数の型
   int is_static;        // staticかどうか
   Label *labels;        // ラベルのリスト
   Type *return_type;    // 戻り値の型

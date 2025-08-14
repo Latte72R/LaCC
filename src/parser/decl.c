@@ -115,7 +115,6 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   }
   fn->name = tok->str;
   fn->len = tok->len;
-  fn->type = type;
   fn->offset = 0;
   fn->is_static = is_static;
   fn->return_type = type;
