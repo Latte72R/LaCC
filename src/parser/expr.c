@@ -523,7 +523,7 @@ Node *primary() {
     node = new_node(ND_FUNCALL);
     node->fn = fn;
     node->id = loop_cnt++;
-    node->type = fn->return_type;
+    node->type = fn->type->return_type;
     if (!consume(")")) {
       int n = 0;
       for (int i = 0; i < 6; i++) {
@@ -538,15 +538,15 @@ Node *primary() {
       node->val = 0;
     }
     if (!fn->type_check) {
-    } else if (node->val > fn->param_count) {
+    } else if (node->val > fn->type->param_count) {
       error_at(loc, "too many arguments to function call: %.*s [in primary]", tok->len, tok->str);
-    } else if (node->val < fn->param_count) {
+    } else if (node->val < fn->type->param_count) {
       error_at(loc, "not enough arguments to function call: %.*s [in primary]", tok->len, tok->str);
     } else {
       for (int i = 0; i < node->val; i++) {
-        if (!is_same_type(fn->param_types[i], node->args[i]->type)) {
+        if (!is_same_type(fn->type->param_types[i], node->args[i]->type)) {
           warning_at(loc, "incompatible %s to %s conversion [in primary]", type_name(node->args[i]->type),
-                     type_name(fn->param_types[i]));
+                     type_name(fn->type->param_types[i]));
           break;
         }
       }

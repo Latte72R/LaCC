@@ -92,6 +92,7 @@ void program() {
     code = safe_realloc_array(code, sizeof(Node *), i + 1);
     code[i++] = stmt();
   }
+  code = safe_realloc_array(code, sizeof(Node *), i + 1);
   code[i] = new_node(ND_NONE);
 }
 

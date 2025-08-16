@@ -62,9 +62,10 @@ int main(int argc, char **argv) {
           break;
         }
       }
-      output_file_tmp = malloc(length - start);
-      memcpy(output_file_tmp, input_file + start, length - start);
+      output_file_tmp = malloc(length - start + 1);
+      strncpy(output_file_tmp, input_file + start, length - start);
       output_file_tmp[length - start - 1] = 's';
+      output_file_tmp[length - start] = '\0';
     }
   }
 

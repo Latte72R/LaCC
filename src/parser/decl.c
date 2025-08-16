@@ -117,7 +117,13 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   fn->len = tok->len;
   fn->offset = 0;
   fn->is_static = is_static;
-  fn->return_type = type;
+  fn->type = malloc(sizeof(Type));
+  fn->type->ty = TY_FUNC;
+  fn->type->ptr_to = NULL;
+  fn->type->array_size = 0;
+  fn->type->object = NULL;
+  fn->type->is_const = FALSE;
+  fn->type->return_type = type;
   fn->is_defined = FALSE;
   fn->type_check = TRUE;
   fn->labels = malloc(sizeof(Label));
@@ -164,7 +170,7 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
       lvar->offset = locals->offset + get_sizeof(type);
     }
     fn->offset = lvar->offset;
-    fn->param_types[n] = type;
+    fn->type->param_types[n] = type;
     nd_lvar->var = lvar;
     nd_lvar->type = type;
     locals = lvar;
@@ -172,14 +178,14 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
     if (!consume(","))
       break;
   }
-  fn->param_count = n;
+  fn->type->param_count = n;
   node->val = n;
   expect(")", "after arguments", "function definition");
 
   if (!peek("{")) {
     node->kind = ND_EXTERN;
     expect(";", "after line", "function definition");
-    if (fn->param_count == 0) {
+    if (fn->type->param_count == 0) {
       // C99のprototypeでは、引数を省略可能
       fn->type_check = FALSE;
     }
@@ -272,8 +278,9 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   }
 
   token = prev_tok;
-  Type *base_type = peek_base_type();
-  type = consume_type(TRUE);
+  Type *base_type = parse_base_type_internal(TRUE, TRUE);
+  prev_tok = token;
+  type = parse_pointer_qualifiers(base_type);
   Token *tok = consume_ident("variable declaration");
 
   // 関数定義
@@ -295,20 +302,12 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   }
 
   node = new_node(ND_BLOCK);
-  node->body = malloc(sizeof(Node *));
+  node->body = NULL;
   int i = 0;
-
-  // 最初の変数
-  if (is_extern) {
-    node->body[i++] = extern_variable_declaration(tok, type);
-  } else if (current_fn->next) {
-    node->body[i++] = local_variable_declaration(tok, type, is_static);
-  } else {
-    node->body[i++] = global_variable_declaration(tok, type, is_static);
-  }
+  token = prev_tok;
 
   // 追加の変数
-  while (consume(",")) {
+  do {
     type = parse_pointer_qualifiers(base_type);
     tok = expect_ident("variable declaration");
     node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
@@ -319,7 +318,8 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
     } else {
       node->body[i++] = global_variable_declaration(tok, type, is_static);
     }
-  }
+  } while (consume(","));
+  node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
   node->body[i] = new_node(ND_NONE);
   expect(";", "after line", "variable declaration");
   node->endline = TRUE;

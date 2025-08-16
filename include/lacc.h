@@ -121,7 +121,10 @@ struct Type {
   Type *ptr_to;
   int array_size;
   Object *object;
-  int is_const; // constかどうか
+  int is_const;         // constかどうか
+  Type *return_type;    // 戻り値の型
+  Type *param_types[6]; // 引数の型の配列
+  int param_count;      // 引数の数
 };
 
 // Label
@@ -136,17 +139,15 @@ struct Label {
 // 関数の型
 typedef struct Function Function;
 struct Function {
-  Function *next;       // 次の関数かNULL
-  char *name;           // 変数の名前
-  int len;              // 名前の長さ
-  int offset;           // RBPからのオフセット
-  int is_static;        // staticかどうか
-  Label *labels;        // ラベルのリスト
-  Type *return_type;    // 戻り値の型
-  Type *param_types[6]; // 引数の型の配列
-  int param_count;      // 引数の数
-  int type_check;       // 型チェックするかどうか
-  int is_defined;       // 定義済みかどうか
+  Function *next; // 次の関数かNULL
+  char *name;     // 変数の名前
+  int len;        // 名前の長さ
+  int offset;     // RBPからのオフセット
+  int is_static;  // staticかどうか
+  Label *labels;  // ラベルのリスト
+  Type *type;     // 戻り値と引数の型
+  int type_check; // 型チェックするかどうか
+  int is_defined; // 定義済みかどうか
 };
 
 // lexer.c からエクスポートする関数
@@ -406,6 +407,7 @@ extern int isdigit();
 // string.h
 extern int strcmp();
 extern int strncmp();
+extern int strncpy();
 extern int memcpy();
 extern int strlen();
 extern int strtol();
