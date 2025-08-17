@@ -1367,6 +1367,58 @@ int test147() {
   return arr[0] * arr[1] + arr[2];
 }
 
+int test148() {
+  int x = 1, y = 2, z = 3, w = 4, u = 5, v = 6;
+  int *arr0[2];
+  arr0[0] = &x;
+  arr0[1] = &y;
+  int *arr1[2];
+  arr1[0] = &z;
+  arr1[1] = &w;
+  int *arr2[2];
+  arr2[0] = &u;
+  arr2[1] = &v;
+  int *(*(a)[3])[2];
+  a[0] = &arr0;
+  a[1] = &arr1;
+  a[2] = &arr2;
+  int **tmp = *a[1];
+  return *tmp[1];
+}
+
+static int *arr1_149[5];
+static int *arr2_149[5];
+int *(*select_arr_149(int which, int dummy))[5] {
+  if (which)
+    return &arr1_149;
+  else
+    return &arr2_149;
+}
+int test149() {
+  int x = 3, y = 4, z = 5, w = 6, q = 7;
+  arr1_149[0] = &x;
+  arr1_149[1] = &y;
+  arr1_149[2] = &z;
+  arr1_149[3] = &w;
+  arr1_149[4] = &q;
+  int *(*(*a)(int, int))[5] = select_arr_149;
+  int *(*r)[5] = select_arr_149(1, 2);
+  return *(*r)[3];
+}
+
+int add(int a, int b) { return a + b; }
+int mul(int a, int b) { return a * b; }
+int (*factory(int which))(int, int) {
+  if (which)
+    return mul;
+  else
+    return add;
+}
+int test150() {
+  int (*f)(int, int) = factory(0);
+  return f == add;
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1525,6 +1577,9 @@ int main() {
   check(test145(), 145, 69);
   check(test146(), 146, 5);
   check(test147(), 147, 13);
+  check(test148(), 148, 4);
+  check(test149(), 149, 6);
+  check(test150(), 150, 1);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

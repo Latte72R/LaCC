@@ -124,7 +124,9 @@ struct Type {
   int is_const;         // constかどうか
   Type *return_type;    // 戻り値の型
   Type *param_types[6]; // 引数の型の配列
+  Token *param_names[6]; // 引数名のトークン
   int param_count;      // 引数の数
+  int is_variadic;      // 可変長引数かどうか
 };
 
 // Label
