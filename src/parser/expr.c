@@ -507,7 +507,14 @@ Node *primary() {
       node->var = gvar;
       node->type = gvar->type;
     } else {
-      error_at(tok->loc, "undefined variable: %.*s [in primary]", tok->len, tok->str);
+      Function *fn = find_fn(tok);
+      if (fn) {
+        node = new_node(ND_FUNCNAME);
+        node->fn = fn;
+        node->type = new_type_ptr(fn->type);
+      } else {
+        error_at(tok->loc, "undefined variable: %.*s [in primary]", tok->len, tok->str);
+      }
     }
     return node;
   }

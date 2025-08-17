@@ -35,7 +35,7 @@ selfhost: $(SELFHOST) ## Build the self-hosted compiler
 define runfile
 	@mkdir -p ${BUILD_DIR}
 	@$(1) $(LACC_FLAGS) $(2) -S -o $(TMP_S)
-	@cc -o ${BUILD_DIR}/tmp $(TMP_S)
+        @cc -no-pie -o ${BUILD_DIR}/tmp $(TMP_S)
 	@${BUILD_DIR}/tmp
 endef
 

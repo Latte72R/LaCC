@@ -213,6 +213,7 @@ typedef enum {
   ND_RETURN,   // return
   ND_FUNCDEF,  // 関数定義
   ND_FUNCALL,  // 関数呼び出し
+  ND_FUNCNAME, // 関数名
   ND_EXTERN,   // extern
   ND_BLOCK,    // { ... }
   ND_ENUM,     // 列挙体
@@ -242,7 +243,7 @@ struct Node {
   Node *step;      // kindがND_FORの場合のみ使う
   Node **body;     // kindがND_BLOCKの場合のみ使う
   Node *args[6];   // kindがND_FUNCALLの場合のみ使う
-  Function *fn;    // kindがND_FUNCDEF, ND_FUNCALLの場合のみ使う
+  Function *fn;    // kindがND_FUNCDEF, ND_FUNCALL, ND_FUNCNAMEの場合のみ使う
   LVar *var;       // kindがND_LVAR, ND_GVARの場合のみ使う
   Type *type;
   Label *label;

@@ -164,6 +164,11 @@ void gen(Node *node) {
     if (!node->endline)
       write_file("  push rax\n");
     break;
+  case ND_FUNCNAME:
+    write_file("  lea rax, %.*s[rip]\n", node->fn->len, node->fn->name);
+    if (!node->endline)
+      write_file("  push rax\n");
+    break;
   case ND_LVAR:
   case ND_GVAR:
     gen_lval(node);

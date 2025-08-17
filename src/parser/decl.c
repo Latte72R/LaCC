@@ -265,6 +265,56 @@ Node *extern_variable_declaration(Token *tok, Type *type) {
   return node;
 }
 
+// Parse declarators like "(*p)[5]" or "(*f)(int, int)"
+static Type *parse_complex_declarator(Type *base_type, Token **tok, char *stmt) {
+  expect("(", "before pointer declarator", stmt);
+  int ptr_cnt = 0;
+  while (consume("*")) {
+    ptr_cnt++;
+  }
+  *tok = expect_ident(stmt);
+  expect(")", "after pointer declarator", stmt);
+
+  Type *type;
+  if (consume("(")) {
+    Type *func = new_type(TY_FUNC);
+    func->return_type = base_type;
+    int n = 0;
+    if (!consume(")")) {
+      for (int i = 0; i < 6; i++) {
+        Type *param = consume_type(TRUE);
+        if (!param) {
+          if (i != 0)
+            error_at(consumed_loc, "expected a type [in %s]", stmt);
+          break;
+        } else if (param->ty == TY_VOID) {
+          if (i != 0)
+            error_at(consumed_loc, "void type is only allowed for the first argument [in %s]", stmt);
+          break;
+        }
+        consume_ident();
+        param = parse_array_dimensions(param);
+        if (param->ty == TY_ARR)
+          param->ty = TY_ARGARR;
+        func->param_types[i] = param;
+        n += 1;
+        if (!consume(","))
+          break;
+      }
+      expect(")", "after arguments", stmt);
+    }
+    func->param_count = n;
+    type = func;
+  } else {
+    type = parse_array_dimensions(base_type);
+  }
+
+  while (ptr_cnt-- > 0)
+    type = new_type_ptr(type);
+
+  return type;
+}
+
 Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   // 変数宣言または関数定義
   Token *prev_tok = token;
@@ -280,20 +330,27 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   token = prev_tok;
   Type *base_type = parse_base_type_internal(TRUE, TRUE);
   prev_tok = token;
-  type = parse_pointer_qualifiers(base_type);
-  Token *tok = consume_ident("variable declaration");
 
-  // 関数定義
-  if (consume("(")) {
-    if (type->object && !type->object->is_defined) {
-      // 変数定義でobjectの型が未定義の場合
-      error_at(tok->loc, "incomplete result type [in variable declaration]");
+  Token *tok;
+  if (peek("(") && token->next->kind == TK_RESERVED && token->next->len == 1 && token->next->str[0] == '*') {
+    type = parse_complex_declarator(base_type, &tok, "variable declaration");
+  } else {
+    type = parse_pointer_qualifiers(base_type);
+    tok = consume_ident("variable declaration");
+    if (tok && consume("(")) {
+      if (type->object && !type->object->is_defined) {
+        // 変数定義でobjectの型が未定義の場合
+        error_at(tok->loc, "incomplete result type [in variable declaration]");
+      }
+      if (current_fn->next) {
+        error_at(token->loc, "nested function is not supported [in function definition]");
+      } else {
+        return function_definition(tok, type, is_static);
+      }
     }
-    if (current_fn->next) {
-      error_at(token->loc, "nested function is not supported [in function definition]");
-    } else {
-      return function_definition(tok, type, is_static);
-    }
+    if (!tok)
+      tok = expect_ident("variable declaration");
+    type = parse_array_dimensions(type);
   }
 
   if (!is_extern && type->object && !type->object->is_defined) {
@@ -304,12 +361,24 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   node = new_node(ND_BLOCK);
   node->body = NULL;
   int i = 0;
-  token = prev_tok;
 
-  // 追加の変数
-  do {
-    type = parse_pointer_qualifiers(base_type);
-    tok = expect_ident("variable declaration");
+  node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
+  if (is_extern) {
+    node->body[i++] = extern_variable_declaration(tok, type);
+  } else if (current_fn->next) {
+    node->body[i++] = local_variable_declaration(tok, type, is_static);
+  } else {
+    node->body[i++] = global_variable_declaration(tok, type, is_static);
+  }
+
+  while (consume(",")) {
+    if (peek("(") && token->next->kind == TK_RESERVED && token->next->len == 1 && token->next->str[0] == '*') {
+      type = parse_complex_declarator(base_type, &tok, "variable declaration");
+    } else {
+      type = parse_pointer_qualifiers(base_type);
+      tok = expect_ident("variable declaration");
+      type = parse_array_dimensions(type);
+    }
     node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
     if (is_extern) {
       node->body[i++] = extern_variable_declaration(tok, type);
@@ -318,7 +387,8 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
     } else {
       node->body[i++] = global_variable_declaration(tok, type, is_static);
     }
-  } while (consume(","));
+  }
+
   node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
   node->body[i] = new_node(ND_NONE);
   expect(";", "after line", "variable declaration");
@@ -480,8 +550,13 @@ Node *typedef_stmt() {
   Node *node;
   Type *type = consume_type(TRUE);
   node = new_node(ND_TYPEDEF);
-  Token *tok = expect_ident("typedef");
-  type = parse_array_dimensions(type);
+  Token *tok;
+  if (peek("(") && token->next->kind == TK_RESERVED && token->next->len == 1 && token->next->str[0] == '*') {
+    type = parse_complex_declarator(type, &tok, "typedef");
+  } else {
+    tok = expect_ident("typedef");
+    type = parse_array_dimensions(type);
+  }
   node->type = type;
   TypeTag *tag = find_type_tag(tok);
   if (tag) {
