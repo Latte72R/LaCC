@@ -1495,7 +1495,7 @@ int test154() {
   // union 内の配列ポインタと関数ポインタ
   int a[2] = {7, 8};
   union {
-    int (*func)(int);
+    int (*func)(int), (*f)(int);
     int (*arr)[2];
   } u;
   u.func = inc_test153;

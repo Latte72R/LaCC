@@ -528,8 +528,7 @@ void gen(Node *node) {
       write_file(".Lend%d:\n", node->id);
     } else {
       // スタックから関数ポインタを取り出して呼び出す
-      write_file("  pop rax\n");
-      write_file("  mov r10, rax\n");
+      write_file("  pop r10\n");
       write_file("  mov rdx, rsp\n");
       write_file("  and rdx, 0xF\n");
       write_file("  cmp rdx, 0\n");

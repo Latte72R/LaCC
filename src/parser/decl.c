@@ -341,8 +341,8 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
   while (!consume("}")) {
     Type *base_type = parse_base_type_internal(TRUE, TRUE);
     Token *member_tok;
-    Type *type = parse_declarator(base_type, &member_tok, "object member declaration");
     for (;;) {
+      Type *type = parse_declarator(base_type, &member_tok, "object member declaration");
       LVar *member_var = new_lvar(member_tok, type, FALSE, FALSE);
       member_var->next = object->var;
       object->var = member_var;
@@ -368,7 +368,6 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
 
       if (!consume(","))
         break;
-      type = parse_declarator(base_type, &member_tok, "object member declaration");
     }
     expect(";", "after object member declaration", "object declaration");
   }

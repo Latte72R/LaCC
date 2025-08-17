@@ -20,6 +20,7 @@ WARN_TEST:=$(TEST_DIR)/warntest.c
 TMP_C:=$(BUILD_DIR)/tmp.c
 TMP_S:=$(BUILD_DIR)/tmp.s
 TMP_OUT:=$(BUILD_DIR)/tmp
+STAGE3_DIR := $(BUILD_DIR)/stage3
 
 .DEFAULT_GOAL := help
 help:
@@ -110,11 +111,40 @@ errortest: .errortest-selfhost ## Run error tests with the self-hosted compiler
 .errortest-selfhost: $(SELFHOST) | $(BUILD_DIR)
 	@$(call errortest, $(SELFHOST))
 
+# selfhost で src/*.c → stage3/*.s を生成
+$(STAGE3_DIR)/%.s: $(SRC_DIR)/%.c $(SELFHOST) | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	@$(SELFHOST) $(LACC_FLAGS) $< -o $@
+
+# コンパイラ本体のみ比較（SRCS 全部）
+asmcmp: $(SELFHOST) $(patsubst $(SRC_DIR)/%.c,$(STAGE3_DIR)/%.s,$(SRCS)) ## Compare stage2 vs stage3 assembly for compiler sources
+	@set -eu; \
+	fail=0; \
+	green=$$(printf '\033[32m'); \
+	red=$$(printf '\033[31m'); \
+	reset=$$(printf '\033[0m'); \
+	for f in $(SRCS); do \
+	  rel=$${f#$(SRC_DIR)/}; \
+	  s2="$(BUILD_DIR)/$${rel%.c}.s"; \
+	  s3="$(STAGE3_DIR)/$${rel%.c}.s"; \
+	  if diff -u "$$s2" "$$s3" >/dev/null; then \
+	    printf '%sOK%s: %s\n' "$$green" "$$reset" "$$rel"; \
+	  else \
+	    printf '%sNG%s: %s\n' "$$red" "$$reset" "$$rel"; \
+	    fail=1; \
+	  fi; \
+	done; \
+	if [ "$$fail" -eq 0 ]; then \
+	  printf '%sAll files match!%s\n' "$$green" "$$reset"; \
+	else \
+	  exit 1; \
+	fi
+
 clean: ## Clean up generated files
 	@rm -rf $(BUILD_DIR)
 	@echo "Cleaned up generated files."
 
-.PHONY: help run unittest warntest errortest clean \
+.PHONY: help run unittest warntest errortest asmcmp clean \
         bootstrap selfhost .run-cc .run-bootstrap .run-selfhost \
         .unittest-cc .unittest-bootstrap .unittest-selfhost \
 		.warntest-cc .warntest-bootstrap .warntest-selfhost \
