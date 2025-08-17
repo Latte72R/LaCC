@@ -5,6 +5,7 @@ extern int show_warning;
 extern int warning_cnt;
 extern char *user_input;
 extern Token *token;
+extern Token *token_head;
 extern String *filenames;
 extern char *input_file;
 extern char *output_file;
@@ -16,7 +17,6 @@ extern void *NULL;
 
 int main(int argc, char **argv) {
   init_global_variables();
-  Token *token_cpy;
   input_file = NULL;
   char *output_file_tmp = NULL;
 
@@ -45,7 +45,6 @@ int main(int argc, char **argv) {
       if (input_file) {
         error("multiple source files specified: %s and %s", input_file, argv[i]);
       }
-      token_cpy = token;
       input_file = argv[i];
       int length = strlen(input_file);
       filenames = malloc(sizeof(String));
@@ -87,7 +86,7 @@ int main(int argc, char **argv) {
 
   tokenize();
   new_token(TK_EOF, NULL, NULL, 0);
-  token = token_cpy->next;
+  token = token_head;
 
   program();
 

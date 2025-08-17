@@ -115,7 +115,7 @@ char *parse_string_literal(char *p) {
   }
   buf[len] = '\0';
   i++;
-  if (token->kind == TK_STRING) {
+  if (token && token->kind == TK_STRING) {
     token->str = realloc(token->str, token->len + len);
     memcpy(token->str + token->len, buf, len);
     token->len += len;

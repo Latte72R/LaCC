@@ -13,7 +13,7 @@ extern void *NULL;
 
 // 文字列リテラルの生成
 void gen_string_literal() {
-  for (String *str = strings; str->next; str = str->next) {
+  for (String *str = strings; str; str = str->next) {
     write_file(".L.str%d:\n", str->id);
     write_file("  .asciz \"%.*s\"\n", str->len, str->text);
   }
@@ -21,7 +21,7 @@ void gen_string_literal() {
 
 // グローバル変数の生成
 void gen_global_variables() {
-  for (LVar *var = globals; var->next; var = var->next) {
+  for (LVar *var = globals; var; var = var->next) {
     if (var->is_extern) {
       continue;
     }
@@ -42,7 +42,7 @@ void gen_global_variables() {
 
 // staticな変数の生成
 void gen_static_variables() {
-  for (LVar *var = statics; var->next; var = var->next) {
+  for (LVar *var = statics; var; var = var->next) {
     write_file("  .local %.*s.%d\n", var->len, var->name, var->block);
     write_file("  .p2align 3\n");
     write_file("%.*s.%d:\n", var->len, var->name, var->block);
@@ -56,7 +56,7 @@ void gen_static_variables() {
 
 // 配列リテラルの生成
 void gen_array_literals() {
-  for (Array *arr = arrays; arr->next; arr = arr->next) {
+  for (Array *arr = arrays; arr; arr = arr->next) {
     write_file(".L.arr%d:\n", arr->id);
     for (int i = 0; i < arr->len; i++) {
       if (arr->byte == 1) {

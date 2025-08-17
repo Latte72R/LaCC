@@ -66,7 +66,7 @@ void asm_memcpy(Node *lhs, Node *rhs) {
 }
 
 Label *find_label(Function *fn, char *name, int len) {
-  for (Label *label = fn->labels; label->next; label = label->next) {
+  for (Label *label = fn->labels; label; label = label->next) {
     if (label->len == len && !strncmp(label->name, name, len)) {
       return label;
     }

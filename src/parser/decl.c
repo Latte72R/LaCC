@@ -120,12 +120,8 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   fn->type = type;
   fn->is_defined = FALSE;
   fn->type_check = !type->is_variadic;
-  fn->labels = malloc(sizeof(Label));
-  fn->labels->next = NULL;
-  locals = malloc(sizeof(LVar));
-  locals->offset = 0;
-  locals->type = new_type(TY_NONE);
-  locals->next = NULL;
+  fn->labels = NULL;
+  locals = NULL;
   Function *prev_fn = current_fn;
   current_fn = fn;
   Node *node = new_node(ND_FUNCDEF);
@@ -137,11 +133,14 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
     Node *nd_lvar = new_node(ND_LVAR);
     node->args[i] = nd_lvar;
     LVar *lvar = new_lvar(tok_lvar, ptype, FALSE, FALSE);
+    int base = 0;
+    if (locals)
+      base = locals->offset;
     lvar->next = locals;
     if (is_ptr_or_arr(ptype)) {
-      lvar->offset = locals->offset + 8;
+      lvar->offset = base + 8;
     } else {
-      lvar->offset = locals->offset + get_sizeof(ptype);
+      lvar->offset = base + get_sizeof(ptype);
     }
     fn->offset = lvar->offset;
     nd_lvar->var = lvar;
@@ -181,7 +180,10 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
     static_lvar->next = statics;
     statics = static_lvar;
   } else {
-    lvar->offset = locals->offset + get_sizeof(type);
+    int base = 0;
+    if (locals)
+      base = locals->offset;
+    lvar->offset = base + get_sizeof(type);
     if (current_fn->offset < lvar->offset) {
       current_fn->offset = lvar->offset;
     }
@@ -342,7 +344,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   type = parse_declarator(base_type, &tok, "variable declaration");
 
   if (type->ty == TY_FUNC) {
-    if (current_fn->next)
+    if (current_fn)
       error_at(token->loc, "nested function is not supported [in function definition]");
     return function_definition(tok, type, is_static);
   }
@@ -358,7 +360,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
   if (is_extern) {
     node->body[i++] = extern_variable_declaration(tok, type);
-  } else if (current_fn->next) {
+  } else if (current_fn) {
     node->body[i++] = local_variable_declaration(tok, type, is_static);
   } else {
     node->body[i++] = global_variable_declaration(tok, type, is_static);
@@ -369,7 +371,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
     node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
     if (is_extern) {
       node->body[i++] = extern_variable_declaration(tok, type);
-    } else if (current_fn->next) {
+    } else if (current_fn) {
       node->body[i++] = local_variable_declaration(tok, type, is_static);
     } else {
       node->body[i++] = global_variable_declaration(tok, type, is_static);
@@ -431,9 +433,7 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
     return object;
   }
   object->is_defined = TRUE;
-  object->var = malloc(sizeof(LVar));
-  object->var->next = NULL;
-  object->var->type = new_type(TY_NONE);
+  object->var = NULL;
   int offset = 0;
   int max_size = 0;
   expect("{", "before object members", "object");
@@ -498,9 +498,7 @@ Object *enum_declaration(const int should_record) {
   } else if (!object) {
     object = malloc(sizeof(Object));
     object->is_defined = FALSE;
-    object->var = malloc(sizeof(LVar));
-    object->var->next = NULL;
-    object->var->type = new_type(TY_NONE);
+    object->var = NULL;
     if (tok) {
       object->name = tok->str;
       object->len = tok->len;

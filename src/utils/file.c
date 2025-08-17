@@ -36,7 +36,7 @@ char *find_file_includes(char *name) {
   if (src)
     return src;
 
-  for (IncludePath *ip = include_paths; ip->next; ip = ip->next) {
+  for (IncludePath *ip = include_paths; ip; ip = ip->next) {
     int plen = strlen(ip->path);
     int nlen = strlen(name);
     char *full = malloc(plen + 1 + nlen + 1);
