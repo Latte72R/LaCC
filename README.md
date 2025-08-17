@@ -98,9 +98,8 @@ LaCC does **not** support the following:
 - No initializer lists for structs (e.g.,  `struct AB p = {.a = 1, .b = 2};`)  
 - Inline assembly  
 - Preprocessor directives: `#define`, `#ifdef`, etc.  
-- Variadic functions (functions with `...` parameters)  
+- Variadic functions (macros such as `va_list`, `va_start`, and `va_arg` are not supported)  
 - The comma operator
-- Function pointers
 - Nested functions (functions defined within other functions) 
 - Variable Length Arrays (VLAs)
 
