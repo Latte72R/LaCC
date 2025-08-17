@@ -339,30 +339,24 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
   int max_size = 0;
   expect("{", "before object members", "object");
   while (!consume("}")) {
-    Type *type = consume_type(TRUE);
-    Type *org_type = type;
-    do {
-      /*
-      Type *base_type = parse_base_type_internal(TRUE, TRUE);
-      Token *prev_tok = token;
-      Type *org_type = parse_pointer_qualifiers(base_type);
-      token = prev_tok;
-      Token *tok;
-      Type *type = parse_declarator(base_type, &tok, "object declaration");
-      type = parse_array_dimensions(type);
-      */
-      Token *member_tok = expect_ident("object member declaration");
-      type = parse_array_dimensions(type);
+    Type *base_type = parse_base_type_internal(TRUE, TRUE);
+    Token *member_tok;
+    Type *type = parse_declarator(base_type, &member_tok, "object member declaration");
+    for (;;) {
       LVar *member_var = new_lvar(member_tok, type, FALSE, FALSE);
       member_var->next = object->var;
       object->var = member_var;
-      int single_size = get_sizeof(org_type);
-      if (offset % single_size != 0) {
+
+      Type *align_type = type;
+      while (align_type->ty == TY_ARR || align_type->ty == TY_ARGARR)
+        align_type = align_type->ptr_to;
+
+      int single_size = get_sizeof(align_type);
+      if (offset % single_size != 0)
         offset += single_size - (offset % single_size);
-      }
-      if (max_size < single_size) {
+      if (max_size < single_size)
         max_size = single_size;
-      }
+
       if (is_struct) {
         // 構造体のメンバーはオフセットを持つ
         member_var->offset = offset;
@@ -371,12 +365,12 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
         member_var->offset = 0;
       }
       offset += get_sizeof(type);
-    } while (consume(","));
-    if (consume(";")) {
-      continue;
-    } else {
-      error_at(token->loc, "expected ';' after object member declaration [in object declaration]");
+
+      if (!consume(","))
+        break;
+      type = parse_declarator(base_type, &member_tok, "object member declaration");
     }
+    expect(";", "after object member declaration", "object declaration");
   }
   if (is_struct) {
     // 構造体のサイズはメンバーの合計サイズ

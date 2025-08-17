@@ -1477,6 +1477,33 @@ int test152() {
   return funcs[0].func(6, 7) + funcs[1].func(8, 9); // 13 + 72 = 85
 }
 
+int inc_test153(int x) { return x + 1; }
+
+int test153() {
+  // struct 内の配列ポインタと関数ポインタ
+  struct {
+    int (*func)(int);
+    int (*arr)[2];
+  } s;
+  int a[2] = {3, 4};
+  s.func = inc_test153;
+  s.arr = &a;
+  return s.func((*s.arr)[1]);
+}
+
+int test154() {
+  // union 内の配列ポインタと関数ポインタ
+  int a[2] = {7, 8};
+  union {
+    int (*func)(int);
+    int (*arr)[2];
+  } u;
+  u.func = inc_test153;
+  int r = u.func(5);
+  u.arr = &a;
+  return r + (*u.arr)[0];
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1640,6 +1667,8 @@ int main() {
   check(test150(), 150, 37);
   check(test151(), 151, 25);
   check(test152(), 152, 85);
+  check(test153(), 153, 5);
+  check(test154(), 154, 13);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);
