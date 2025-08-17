@@ -485,6 +485,10 @@ void gen(Node *node) {
     }
     break;
   case ND_FUNCALL:
+    if (!node->fn) {
+      // 関数ポインタの場合は先にポインタを評価してスタックに保持
+      gen(node->lhs);
+    }
     for (int i = 0; i < node->val; i++) {
       gen(node->args[i]);
     }
@@ -523,8 +527,7 @@ void gen(Node *node) {
       write_file("  add rsp, 8\n");
       write_file(".Lend%d:\n", node->id);
     } else {
-      // Evaluate function pointer and call via register
-      gen(node->lhs);
+      // スタックから関数ポインタを取り出して呼び出す
       write_file("  pop rax\n");
       write_file("  mov r10, rax\n");
       write_file("  mov rdx, rsp\n");
