@@ -1415,8 +1415,9 @@ int (*factory(int which))(int, int) {
     return add;
 }
 int test150() {
-  int (*f)(int, int) = factory(0);
-  return f == add;
+  int (*a)(int, int) = factory(0);
+  int (*m)(int, int) = factory(1);
+  return (*a)(3, 4) + m(5, 6);
 }
 
 int test_cnt = 0;
@@ -1579,7 +1580,7 @@ int main() {
   check(test147(), 147, 13);
   check(test148(), 148, 4);
   check(test149(), 149, 6);
-  check(test150(), 150, 1);
+  check(test150(), 150, 37);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

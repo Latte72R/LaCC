@@ -506,21 +506,41 @@ void gen(Node *node) {
         error("invalid type [in ND_FUNCALL]");
       }
     }
-    // Align stack
-    write_file("  mov rax, rsp\n");
-    write_file("  and rax, 0xF\n");
-    write_file("  cmp rax, 0\n");
-    write_file("  je .Laligned%d\n", node->id);
-    write_file("  sub rsp, 8\n");
-    write_file("  jmp .Lfixup%d\n", node->id);
-    write_file(".Laligned%d:\n", node->id);
-    write_file("  mov rax, 0\n");
-    write_file("  call %.*s\n", node->fn->len, node->fn->name);
-    write_file("  jmp .Lend%d\n", node->id);
-    write_file(".Lfixup%d:\n", node->id);
-    write_file("  call %.*s\n", node->fn->len, node->fn->name);
-    write_file("  add rsp, 8\n");
-    write_file(".Lend%d:\n", node->id);
+    if (node->fn) {
+      // Align stack and call by name
+      write_file("  mov rax, rsp\n");
+      write_file("  and rax, 0xF\n");
+      write_file("  cmp rax, 0\n");
+      write_file("  je .Laligned%d\n", node->id);
+      write_file("  sub rsp, 8\n");
+      write_file("  jmp .Lfixup%d\n", node->id);
+      write_file(".Laligned%d:\n", node->id);
+      write_file("  mov rax, 0\n");
+      write_file("  call %.*s\n", node->fn->len, node->fn->name);
+      write_file("  jmp .Lend%d\n", node->id);
+      write_file(".Lfixup%d:\n", node->id);
+      write_file("  call %.*s\n", node->fn->len, node->fn->name);
+      write_file("  add rsp, 8\n");
+      write_file(".Lend%d:\n", node->id);
+    } else {
+      // Evaluate function pointer and call via register
+      gen(node->lhs);
+      write_file("  pop rax\n");
+      write_file("  mov r10, rax\n");
+      write_file("  mov rdx, rsp\n");
+      write_file("  and rdx, 0xF\n");
+      write_file("  cmp rdx, 0\n");
+      write_file("  je .Laligned%d\n", node->id);
+      write_file("  sub rsp, 8\n");
+      write_file("  mov rax, 0\n");
+      write_file("  call r10\n");
+      write_file("  add rsp, 8\n");
+      write_file("  jmp .Lend%d\n", node->id);
+      write_file(".Laligned%d:\n", node->id);
+      write_file("  mov rax, 0\n");
+      write_file("  call r10\n");
+      write_file(".Lend%d:\n", node->id);
+    }
     if (!node->endline)
       write_file("  push rax\n");
     break;
