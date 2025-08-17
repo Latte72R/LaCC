@@ -44,54 +44,59 @@ int is_alnum(char c) {
 
 char *handle_include_directive(char *p) {
   char *q;
-  p += 8;
+  p += 8;              // "#include" の直後まで進める
   while (isspace(*p)) {
-    p++;
+    p++;               // 空白を読み飛ばす
   }
   if (*p != '"') {
     error_at(new_location(p), "expected \" before \"include\"");
   }
-  p++;
-  q = p;
+  p++;                 // 先頭の引用符をスキップ
+  q = p;               // ファイル名の開始位置を記録
   while (*p != '"') {
     if (*p == '\0') {
       error_at(new_location(q - 1), "unclosed string literal [in tokenize]");
     }
     if (*p == '\\') {
-      p += 2;
+      p += 2;          // エスケープされた文字を飛ばす
     } else {
       p++;
     }
   }
+  // 抽出したファイル名を確保してコピー
   char *name = malloc(sizeof(char) * (p - q + 1));
   memcpy(name, q, p - q);
   name[p - q] = '\0';
-  p++;
-  int flag = 1;
+  p++;                 // 閉じる引用符の次へ進める
+  int already_included = FALSE;
   for (String *s = filenames; s; s = s->next) {
     if (!strncmp(s->text, name, strlen(name))) {
-      flag = 0;
+      // 同じファイルを二重に取り込まない
+      already_included = TRUE;
       break;
     }
   }
-  if (flag == 0) {
+  if (already_included) {
     free(name);
-    return p; // Already included
+    return p;          // 既にインクルード済みならそのまま返す
   }
   char *input_file_prev = input_file;
-  input_file = name;
+  input_file = name;   // 現在処理中のファイル名を更新
+  // filenames に現在のファイルを追加
   filenames = malloc(sizeof(String));
   filenames->text = input_file;
   filenames->len = strlen(input_file);
   filenames->next = NULL;
   char *user_input_prev = user_input;
-  char *new_input = find_file_includes(name);
+  char *new_input = read_include_file(name); // ファイル内容を取得
   if (!new_input) {
     error_at(new_location(q - 1), "Cannot open include file: %s", name);
   }
+  // 新しいファイルをトークナイズ
   user_input = new_input;
   tokenize();
+  // トークナイズ後は元の入力に戻す
   user_input = user_input_prev;
   input_file = input_file_prev;
-  return p; // Return the position after the closing quote
+  return p; // 閉じる引用符の直後の位置を返す
 }
