@@ -14,6 +14,13 @@ Type *new_type(TypeKind ty) {
   type->array_size = 0;
   type->object = NULL;
   type->is_const = FALSE;
+  type->return_type = NULL;
+  for (int i = 0; i < 6; i++) {
+    type->param_types[i] = NULL;
+    type->param_names[i] = NULL;
+  }
+  type->param_count = 0;
+  type->is_variadic = FALSE;
   return type;
 }
 
@@ -25,6 +32,13 @@ Type *new_type_ptr(Type *ptr_to) {
 }
 
 Type *new_type_arr(Type *ptr_to, int array_size) {
+  Type *type = new_type(TY_ARR);
+  type->ptr_to = ptr_to;
+  type->array_size = array_size;
+  return type;
+}
+
+Type *new_type_func(Type *ptr_to, int array_size) {
   Type *type = new_type(TY_ARR);
   type->ptr_to = ptr_to;
   type->array_size = array_size;
@@ -81,6 +95,74 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
 }
 
 Type *peek_base_type() { return parse_base_type_internal(FALSE, FALSE); }
+/*
+LVar *declaration();
+LVar *declarator();
+LVar *suffix();
+LVar *pointer();
+LVar *direct_decl();
+LVar *abstruct_decl();
+
+LVar *declaration() {
+  Type *base = parse_base_type_internal(TRUE, TRUE);
+  return declarator();
+}
+
+LVar *declarator() { return pointer(); }
+
+LVar *pointer() {
+  if (consume("*")) {
+    LVar *var = suffix();
+    var->type = new_type_ptr(var->type);
+    return var;
+  }
+  return suffix();
+}
+
+LVar *suffix() {
+  LVar *base = direct_decl(type);
+  if (consume("(")) {
+    type = new_type(TY_FUNC);
+    type->return_type = base;
+    int i = 0;
+    do {
+      type->param_types[i++] = abstruct_decl(base);
+    } while (consume(","));
+    expect(")", "after suffix", "suffix");
+    return type;
+  } else if (consume("[")) {
+    type = new_type_arr(base, compile_time_number());
+    expect("]", "after suffix", "suffix");
+    return type;
+  } else {
+    return base;
+  }
+}
+
+LVar *direct_decl() {
+  if (consume("(")) {
+    LVar *var = declarator();
+    expect(")", "after suffix", "suffix");
+    return var;
+  }
+  Token *tok = expect_ident("direct_decl");
+  Type *type;
+  if (consume("(")) {
+    type = new_type(TY_FUNC);
+    int i = 0;
+    do {
+      type->param_types[i] = declaration();
+    } while (consume(","));
+    expect(")", "after function arguments", "direct_decl");
+  } else {
+    type = malloc(sizeof(Type));
+  }
+  LVar *var = new_lvar(NULL, type, FALSE, FALSE);
+  return var;
+}
+
+LVar *abstruct_decl() { return malloc(sizeof(LVar)); }
+*/
 
 // ポインタ修飾子を解析
 Type *parse_pointer_qualifiers(Type *base_type) {

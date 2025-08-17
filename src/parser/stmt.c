@@ -29,12 +29,13 @@ Node *block_stmt() {
   TypeTag *type_tags_prev = type_tags;
   int block_id_prev = block_id;
   block_id = block_cnt++;
-  node->body = malloc(sizeof(Node *));
+  node->body = NULL;
   int i = 0;
   while (!consume("}")) {
     node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
     node->body[i++] = stmt();
   }
+  node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
   node->body[i] = new_node(ND_NONE);
   block_id = block_id_prev;
   locals = locals_prev;
@@ -207,15 +208,15 @@ Node *return_stmt() {
   if (consume(";")) {
     node->rhs = new_num(0);
   } else {
-    if (current_fn->type->ty == TY_VOID) {
+    if (current_fn->type->return_type->ty == TY_VOID) {
       warning_at(loc, "returning value from void function [in return statement]");
     }
     node->rhs = expr();
     expect(";", "after line", "return");
   }
-  if (current_fn->type->ty != TY_VOID && !is_same_type(current_fn->type, node->rhs->type)) {
+  if (current_fn->type->return_type->ty != TY_VOID && !is_same_type(current_fn->type->return_type, node->rhs->type)) {
     warning_at(loc, "incompatible %s to %s conversion [in return statement]", type_name(node->rhs->type),
-               type_name(current_fn->type));
+               type_name(current_fn->type->return_type));
   }
   node->endline = TRUE;
   return node;

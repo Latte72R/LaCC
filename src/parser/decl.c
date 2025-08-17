@@ -115,12 +115,11 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   }
   fn->name = tok->str;
   fn->len = tok->len;
-  fn->type = type;
   fn->offset = 0;
   fn->is_static = is_static;
-  fn->return_type = type;
+  fn->type = type;
   fn->is_defined = FALSE;
-  fn->type_check = TRUE;
+  fn->type_check = !type->is_variadic;
   fn->labels = malloc(sizeof(Label));
   fn->labels->next = NULL;
   locals = malloc(sizeof(LVar));
@@ -131,56 +130,30 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   current_fn = fn;
   Node *node = new_node(ND_FUNCDEF);
   node->fn = fn;
-  int n = 0;
-  for (int i = 0; i < 6; i++) {
-    if (consume("...")) {
-      // 可変長引数
-      fn->type_check = FALSE;
-      break;
-    }
-    type = consume_type(TRUE);
-    if (!type) {
-      if (i != 0) {
-        error_at(consumed_loc, "expected a type [in function definition]");
-      }
-      break;
-    } else if (type->ty == TY_VOID) {
-      if (i != 0) {
-        error_at(consumed_loc, "void type is only allowed for the first argument [in function definition]");
-      }
-      break;
-    }
-    Token *tok_lvar = expect_ident("function definition");
-    type = parse_array_dimensions(type);
-    if (type->ty == TY_ARR) {
-      type->ty = TY_ARGARR;
-    }
+  int n = type->param_count;
+  for (int i = 0; i < n; i++) {
+    Token *tok_lvar = type->param_names[i];
+    Type *ptype = type->param_types[i];
     Node *nd_lvar = new_node(ND_LVAR);
     node->args[i] = nd_lvar;
-    LVar *lvar = new_lvar(tok_lvar, type, FALSE, FALSE);
+    LVar *lvar = new_lvar(tok_lvar, ptype, FALSE, FALSE);
     lvar->next = locals;
-    if (is_ptr_or_arr(type)) {
+    if (is_ptr_or_arr(ptype)) {
       lvar->offset = locals->offset + 8;
     } else {
-      lvar->offset = locals->offset + get_sizeof(type);
+      lvar->offset = locals->offset + get_sizeof(ptype);
     }
     fn->offset = lvar->offset;
-    fn->param_types[n] = type;
     nd_lvar->var = lvar;
-    nd_lvar->type = type;
+    nd_lvar->type = ptype;
     locals = lvar;
-    n += 1;
-    if (!consume(","))
-      break;
   }
-  fn->param_count = n;
   node->val = n;
-  expect(")", "after arguments", "function definition");
 
   if (!peek("{")) {
     node->kind = ND_EXTERN;
     expect(";", "after line", "function definition");
-    if (fn->param_count == 0) {
+    if (fn->type->param_count == 0) {
       // C99のprototypeでは、引数を省略可能
       fn->type_check = FALSE;
     }
@@ -260,6 +233,95 @@ Node *extern_variable_declaration(Token *tok, Type *type) {
   return node;
 }
 
+static Type *parse_declarator_suffix(Type *type, char *stmt) {
+  for (;;) {
+    if (consume("(")) {
+      Type *func = new_type(TY_FUNC);
+      func->return_type = type;
+      int n = 0;
+      if (!consume(")")) {
+        for (int i = 0; i < 6; i++) {
+          if (consume("...")) {
+            func->is_variadic = TRUE;
+            break;
+          }
+          Type *param = consume_type(TRUE);
+          if (!param) {
+            if (i != 0)
+              error_at(consumed_loc, "expected a type [in %s]", stmt);
+            break;
+          } else if (param->ty == TY_VOID) {
+            if (i != 0)
+              error_at(consumed_loc, "void type is only allowed for the first argument [in %s]", stmt);
+            break;
+          }
+          Token *ptok = consume_ident();
+          param = parse_array_dimensions(param);
+          if (param->ty == TY_ARR)
+            param->ty = TY_ARGARR;
+          func->param_types[i] = param;
+          func->param_names[i] = ptok;
+          n += 1;
+          if (!consume(","))
+            break;
+        }
+        expect(")", "after arguments", stmt);
+      }
+      func->param_count = n;
+      type = func;
+      continue;
+    }
+    if (peek("[")) {
+      type = parse_array_dimensions(type);
+      continue;
+    }
+    return type;
+  }
+}
+
+static void substitute_type(Type *where, Type *placeholder, Type *actual) {
+  if (!where)
+    return;
+  if (where == placeholder) {
+    *where = *actual;
+    return;
+  }
+  if (where->ptr_to) {
+    if (where->ptr_to == placeholder)
+      where->ptr_to = actual;
+    else
+      substitute_type(where->ptr_to, placeholder, actual);
+  }
+  if (where->return_type) {
+    if (where->return_type == placeholder)
+      where->return_type = actual;
+    else
+      substitute_type(where->return_type, placeholder, actual);
+  }
+  for (int i = 0; i < where->param_count; i++) {
+    if (where->param_types[i] == placeholder)
+      where->param_types[i] = actual;
+    else
+      substitute_type(where->param_types[i], placeholder, actual);
+  }
+}
+
+static Type *parse_declarator(Type *base_type, Token **tok, char *stmt) {
+  Type *type = parse_pointer_qualifiers(base_type);
+
+  if (consume("(")) {
+    Type *placeholder = new_type(TY_NONE);
+    Type *inner = parse_declarator(placeholder, tok, stmt);
+    expect(")", "after declarator", stmt);
+    Type *suffix = parse_declarator_suffix(type, stmt);
+    substitute_type(inner, placeholder, suffix);
+    return inner;
+  }
+
+  *tok = expect_ident(stmt);
+  return parse_declarator_suffix(type, stmt);
+}
+
 Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   // 変数宣言または関数定義
   Token *prev_tok = token;
@@ -273,33 +335,27 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   }
 
   token = prev_tok;
-  Type *base_type = peek_base_type();
-  type = consume_type(TRUE);
-  Token *tok = consume_ident("variable declaration");
+  Type *base_type = parse_base_type_internal(TRUE, TRUE);
+  prev_tok = token;
 
-  // 関数定義
-  if (consume("(")) {
-    if (type->object && !type->object->is_defined) {
-      // 変数定義でobjectの型が未定義の場合
-      error_at(tok->loc, "incomplete result type [in variable declaration]");
-    }
-    if (current_fn->next) {
+  Token *tok;
+  type = parse_declarator(base_type, &tok, "variable declaration");
+
+  if (type->ty == TY_FUNC) {
+    if (current_fn->next)
       error_at(token->loc, "nested function is not supported [in function definition]");
-    } else {
-      return function_definition(tok, type, is_static);
-    }
+    return function_definition(tok, type, is_static);
   }
 
   if (!is_extern && type->object && !type->object->is_defined) {
-    // 変数定義でobjectの型が未定義の場合
     error_at(tok->loc, "variable has incomplete type [in variable declaration]");
   }
 
   node = new_node(ND_BLOCK);
-  node->body = malloc(sizeof(Node *));
+  node->body = NULL;
   int i = 0;
 
-  // 最初の変数
+  node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
   if (is_extern) {
     node->body[i++] = extern_variable_declaration(tok, type);
   } else if (current_fn->next) {
@@ -308,10 +364,8 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
     node->body[i++] = global_variable_declaration(tok, type, is_static);
   }
 
-  // 追加の変数
   while (consume(",")) {
-    type = parse_pointer_qualifiers(base_type);
-    tok = expect_ident("variable declaration");
+    type = parse_declarator(base_type, &tok, "variable declaration");
     node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
     if (is_extern) {
       node->body[i++] = extern_variable_declaration(tok, type);
@@ -321,6 +375,8 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
       node->body[i++] = global_variable_declaration(tok, type, is_static);
     }
   }
+
+  node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
   node->body[i] = new_node(ND_NONE);
   expect(";", "after line", "variable declaration");
   node->endline = TRUE;
@@ -481,8 +537,8 @@ Node *typedef_stmt() {
   Node *node;
   Type *type = consume_type(TRUE);
   node = new_node(ND_TYPEDEF);
-  Token *tok = expect_ident("typedef");
-  type = parse_array_dimensions(type);
+  Token *tok;
+  type = parse_declarator(type, &tok, "typedef");
   node->type = type;
   TypeTag *tag = find_type_tag(tok);
   if (tag) {
