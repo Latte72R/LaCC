@@ -7,46 +7,46 @@ extern IncludePath *include_paths;
 
 // 指定されたファイルの内容を返す
 char *read_file(char *path) {
-  // ファイルを開く
-  FILE *fp = fopen(path, "r");
-  if (!fp)
+  // ファイルを開く。開けなければ NULL を返す
+  FILE *file = fopen(path, "r");
+  if (!file)
     return NULL;
 
-  // ファイルの長さを調べる
-  if (fseek(fp, 0, SEEK_END) == -1)
+  // いったん末尾までシークしてファイルサイズを取得
+  if (fseek(file, 0, SEEK_END) == -1)
     error("%s: fseek", path);
-  int size = ftell(fp);
-  if (fseek(fp, 0, SEEK_SET) == -1)
+  int size = ftell(file);
+  if (fseek(file, 0, SEEK_SET) == -1)
     error("%s: fseek", path);
 
-  // ファイル内容を読み込む
+  // サイズ+終端記号分のバッファを確保して読み込み
   char *buf = malloc(size + 2);
-  fread(buf, size, 1, fp);
+  fread(buf, size, 1, file);
 
-  // ファイルが必ず"\n\0"で終わっているようにする
+  // 読み込んだ内容の末尾に改行とヌル終端を追加
   if (size == 0 || buf[size - 1] != '\n')
     buf[size++] = '\n';
   buf[size] = '\0';
-  fclose(fp);
+  fclose(file); // ファイルを閉じる
   return buf;
 }
 
-char *find_file_includes(char *name) {
+char *read_include_file(char *name) {
+  // まずは指定された名前のファイルを直接試す
   char *src = read_file(name);
   if (src)
     return src;
 
-  for (IncludePath *ip = include_paths; ip; ip = ip->next) {
-    int plen = strlen(ip->path);
-    int nlen = strlen(name);
-    char *full = malloc(plen + 1 + nlen + 1);
-    memcpy(full, ip->path, plen);
-    full[plen] = '/';
-    memcpy(full + plen + 1, name, nlen + 1);
-    src = read_file(full);
+  // 見つからなければ登録されたインクルードパスを順番に探索
+  for (IncludePath *path = include_paths; path; path = path->next) {
+    int len = strlen(path->path) + strlen(name) + 2;
+    // ディレクトリとファイル名を結合して完全パスを作成
+    char *full = malloc(len);
+    snprintf(full, len, "%s/%s", path->path, name);
+    src = read_file(full); // 生成したパスでファイルを読み込む
     free(full);
     if (src)
-      return src;
+      return src; // 最初に見つかったものを返す
   }
-  return NULL;
+  return NULL; // どのパスにも存在しない
 }

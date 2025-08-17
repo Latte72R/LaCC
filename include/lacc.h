@@ -374,8 +374,8 @@ void init_global_variables();
 
 // file.c
 typedef enum { SEEK_SET, SEEK_CUR, SEEK_END } SeekWhence;
-char *read_file();
-char *find_file_includes(char *name);
+char *read_file(char *path);
+char *read_include_file(char *name);
 
 //
 // Extensions
@@ -395,6 +395,7 @@ extern void warning_at(Location *loc, char *fmt, ...);
 // stdio.h
 extern int printf(char *fmt, ...);
 extern int sprintf(char *fmt, ...);
+extern int snprintf();
 typedef struct _IO_FILE FILE;
 extern FILE *fopen(const char *filename, const char *mode);
 extern int fprintf();
