@@ -357,17 +357,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   node->body = NULL;
   int i = 0;
 
-  node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
-  if (is_extern) {
-    node->body[i++] = extern_variable_declaration(tok, type);
-  } else if (current_fn) {
-    node->body[i++] = local_variable_declaration(tok, type, is_static);
-  } else {
-    node->body[i++] = global_variable_declaration(tok, type, is_static);
-  }
-
-  while (consume(",")) {
-    type = parse_declarator(base_type, &tok, "variable declaration");
+  for (;;) {
     node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
     if (is_extern) {
       node->body[i++] = extern_variable_declaration(tok, type);
@@ -376,6 +366,9 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
     } else {
       node->body[i++] = global_variable_declaration(tok, type, is_static);
     }
+    if (!consume(","))
+      break;
+    type = parse_declarator(base_type, &tok, "variable declaration");
   }
 
   node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
