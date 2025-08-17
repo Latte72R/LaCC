@@ -7,9 +7,9 @@
 int printf(char *msg);
 int usleep(int time);
 
-int count_nbr(int grid[20][20], int i, int j, int size);
+int count_nbr(int (*grid)[20], int i, int j, int size);
 
-void init_grid(int grid[20][20], int grid_binaries[20]) {
+int init_grid(int (*grid)[20], int *grid_binaries) {
   for (int i = 0; i < 20; i = i + 1) {
     for (int j = 0; j < 20; j = j + 1) {
       grid[i][j] = (grid_binaries[i] >> (19 - j)) & 1;
@@ -28,12 +28,10 @@ int main() {
       0b00000000000000000000, 0b00000000000000000000, 0b00000000000000000000, 0b00000000000000000000,
       0b00000000000000000000, 0b00000000000000000000, 0b00111100000000000000, 0b01000100000000000000,
       0b00000100000000000000, 0b01001000000000000000, 0b00000000000000000000, 0b00000000000000000000};
+  init_grid(grid, grid_binaries);
   int i;
   int j;
   int steps;
-
-  printf("\033[2J");
-  init_grid(grid, grid_binaries);
 
   for (steps = 0; steps < N_STEP; steps = steps + 1) {
     printf("\033[0;0H");
@@ -66,7 +64,7 @@ int main() {
   return 0;
 }
 
-int count_nbr(int grid[20][20], int i, int j, int size) {
+int count_nbr(int (*grid)[20], int i, int j, int size) {
   int n_count = 0;
   if (i - 1 >= 0) {
     if (j - 1 >= 0) {

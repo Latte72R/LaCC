@@ -1,4 +1,3 @@
-
 // This is a comment.
 
 void printf();
@@ -6,13 +5,16 @@ void *calloc();
 
 int failures;
 
+// 4倍にするヘルパー関数
 int foo_test11(int n) { return n * 4; }
 
+// ポインタ経由で値を5倍にするヘルパー関数
 int foo_test14(int *n) {
   *n = *n * 5;
   return 0;
 }
 
+// 再帰によるフィボナッチ計算
 int fibo_test18(int n) {
   if (n < 2)
     return n;
@@ -20,24 +22,32 @@ int fibo_test18(int n) {
     return fibo_test18(n - 1) + fibo_test18(n - 2);
 }
 
+// 四則演算と括弧を含む演算子優先順位のテスト
 int test1() { return 5 * 3 - 12 / (2 + 4); }
 
+// 単項マイナスと加減乗算の評価
 int test2() { return -8 + 20 + 2 * (-5); }
 
+// 剰余演算子のテスト
 int test3() { return 5 + 35 % 9; }
 
+// 等価比較 (==) のテスト
 int test4() { return 1 == (3 - 2); }
 
+// 関係演算子 (<) の結果 (偽=0) のテスト
 int test5() {
   int a = 5;
   int b = 2;
   return a < b;
 }
 
+// 論理OR (||) と比較演算の組合せ
 int test6() { return (1 == 2) || (8 > 4); }
 
+// 論理AND (&&) と論理否定(!) の組合せ
 int test7() { return (1 != 2) && !(8 > 4); }
 
+// for ループとインクリメント
 int test8() {
   int a = 5;
   int i;
@@ -46,6 +56,7 @@ int test8() {
   return a;
 }
 
+// while ループとインクリメント
 int test9() {
   int a = 0;
   while (a < 10)
@@ -53,6 +64,7 @@ int test9() {
   return a;
 }
 
+// if / else 分岐
 int test10() {
   int a = 0;
   if (a < 1)
@@ -61,13 +73,16 @@ int test10() {
     return 3;
 }
 
+// 単純な関数呼び出し
 int test11() { return foo_test11(3); }
 
+// アドレス演算子(&)と間接参照
 int test12() {
   int a = 3;
   return *(&a);
 }
 
+// ポインタ経由の加算代入
 int test13() {
   int a = 3;
   int *b = &a;
@@ -75,6 +90,7 @@ int test13() {
   return a;
 }
 
+// ポインタ引数経由での更新
 int test14() {
   int a = 5;
   foo_test14(&a);
@@ -82,6 +98,7 @@ int test14() {
 }
 
 int test15_sub;
+// sizeof(グローバル変数) のテスト
 int test15() { return sizeof(test15_sub); }
 
 /*
@@ -95,6 +112,7 @@ int test16() {
 }
 */
 
+// 配列要素の更新と差分
 int test17() {
   int a[2];
   a[0] = 3;
@@ -103,8 +121,10 @@ int test17() {
   return a[0] - a[1];
 }
 
+// 再帰関数呼び出し (フィボナッチ)
 int test18() { return fibo_test18(9); }
 
+// for + continue の挙動
 int test19() {
   int a = 0;
   for (int i = 0; i < 10; i++) {
@@ -115,6 +135,7 @@ int test19() {
   return a;
 }
 
+// while + break の挙動
 int test20() {
   int a = 0;
   while (a < 10) {
@@ -125,11 +146,13 @@ int test20() {
   return a;
 }
 
+// 文字列リテラルと配列添字アクセス
 int test21() {
   char *s = "hello";
   return s[0];
 }
 
+// char 配列と要素の積
 int test22() {
   char str[2];
   str[0] = 3;
@@ -137,6 +160,7 @@ int test22() {
   return str[0] * str[1];
 }
 
+// calloc で確保した構造体とメンバ/配列アクセス
 typedef struct {
   int a;
   int b[2];
@@ -149,14 +173,17 @@ int test23() {
   return c->a * (c->b[0] + c->b[1]);
 }
 
+// enum の代入と返却
 typedef enum { A24, B24, C24 } ENUM24;
 ENUM24 test24() {
   ENUM24 a = C24;
   return a;
 }
 
+// 文字定数の返却
 char test25() { return 'a'; }
 
+// while + continue の挙動
 int test26() {
   int a = 0;
   int i = 0;
@@ -169,6 +196,7 @@ int test26() {
   return a;
 }
 
+// 後置インクリメントの評価順
 int test27() {
   int a = 2;
   int b = a++;
@@ -176,6 +204,7 @@ int test27() {
   return a * b;
 }
 
+// 単方向リスト状の next チェーンアクセス
 typedef struct ST28 ST28;
 struct ST28 {
   ST28 *next;
@@ -191,6 +220,7 @@ int test28() {
   return a->next->next->ch;
 }
 
+// 前置インクリメントの評価
 int test29() {
   int a = 2;
   int b = ++a;
@@ -198,6 +228,7 @@ int test29() {
   return a * b;
 }
 
+// 無限 for ループと break
 int test30() {
   int a = 0;
   for (;;) {
@@ -208,6 +239,7 @@ int test30() {
   return a;
 }
 
+// 代入式の値の評価
 int test31() {
   int a;
   return (a = 7);
@@ -389,6 +421,7 @@ int test54() {
 }
 */
 
+// 乗算と加算の組み合わせ
 int test55() {
   int nn = 4;
   int nnn = 3;
@@ -396,15 +429,15 @@ int test55() {
   return n * nn * nnn;
 }
 
+// 文字列リテラルの代入
 int test56() {
-  // 文字列リテラルの代入
   char str[15] = "Hello, "
                  "World!\n";
   return str[4] - str[1];
 }
 
+// 配列の初期化と要素アクセス
 int test57() {
-  // 文字列リテラルの代入
   int arr[3] = {3, 6, 2};
   return arr[0] + arr[1] * arr[2];
 }
@@ -422,8 +455,8 @@ int test60() {
 }
 */
 
+// 段階的なポインタ操作
 int test61() {
-  /* 2 段間接ポインタでの書き込み */
   int v = 6;
   int *p = &v;
   int **pp = &p;
@@ -431,15 +464,15 @@ int test61() {
   return v;
 }
 
+// 配列とポインタのサイズ比較
 int test62() {
-  /* sizeof 配列 vs sizeof ポインタ */
   int arr[10];
   int *p = arr;
   return sizeof(arr) / sizeof(*p); /* 10 */
 }
 
+// 短絡評価による副作用の確認
 int test63() {
-  /* && の短絡評価で右辺が呼ばれないことを確認 */
   int a = 0, b = 0;
   if (a && (b = 1)) { /* 左辺が 0 なので右辺は評価されない */
     return -1;
@@ -455,31 +488,30 @@ int test64() {
   }
 */
 
-int test65() {
-  /* 括弧付きシフトと算術の優先順位 */
-  return (2 + 1) << (1 + 1); /* 3 << 2 = 12 */
-}
+// 括弧付きシフトと算術の優先順位
+int test65() { return (2 + 1) << (1 + 1); /* 3 << 2 = 12 */ }
 
+// char 配列でのポインタ差
 int test66() {
-  /* char 配列でのポインタ差 */
   char buf[20];
   return &buf[15] - &buf[5]; /* 10 */
 }
 
+// 2 次元配列をポインタ算術で横断
 int test67() {
-  /* 2 次元配列をポインタ算術で横断 */
   int m[3][4];
   m[2][3] = 7;
   return *(*(m + 2) + 3); /* 7 */
 }
 
+// || の短絡評価で副作用をスキップ
 int test68() {
-  /* || の短絡評価で副作用をスキップ */
   int a = 0;
   (1 || (a = 5)); /* 左辺が真なので右辺は評価されない */
   return a;       /* 0 */
 }
 
+// 2 次元配列を引数に渡す
 void test69_helper(int arr[2][2]) {
   arr[0][0] = 5;
   arr[0][1] = 2;
@@ -494,11 +526,13 @@ int test69() {
   return a[0][0] * a[0][1] + a[1][0] * a[1][1];
 }
 
+// 16進数リテラルのテスト
 int test70() {
   // hexadecimal literal
   return 0x5 * 0x3f; // 5 * 63 = 315
 }
 
+// 2進数リテラルのテスト (GCC拡張)
 int test71() {
   // binary literal (GCC拡張)
   return 0b010110 | 0b001011 & 0b110011; // 0b010111 = 23
@@ -548,8 +582,10 @@ int test78_helper(int n) {
   return cnt;
 }
 
+// static 変数の副作用と演算
 int test78() { return test78_helper(3) * test78_helper(4) + test78_helper(2); }
 
+// goto の基本的な使い方
 int test79(void) {
   int i = 0;
 start:
@@ -560,6 +596,7 @@ start:
   return i;
 }
 
+// ラベルと goto の組み合わせ
 int test80(void) {
   int n = 0;
   goto ahead;
@@ -573,57 +610,55 @@ int test81() {
   return sizeof('A'); // C標準ではint(4)
 }
 
+// 文字リテラルのエスケープシーケンス処理
 int test82() {
-  /* 文字リテラルのエスケープシーケンス処理 */
   return '\a' + '\v'; // BEL(7) + VT(11) = 18
 }
 
+// octal literal
 int test83() {
-  // octal literal
   return 010 + 011; // 8 + 9 = 17
 }
 
+// 連続する文字列リテラルの連結
 int test84() {
-  /* 連続する文字列リテラルの連結 */
   char *s = "Hello"
             " "
             "World";
   return s[5]; /* ' ' = 32 - 文字列連結の実装 */
 }
 
+// 長い識別子名の処理
 int test85() {
-  /* 長い識別子名の処理 */
   int very_very_very_very_very_very_very_very_very_very_long_variable_name = 42;
   return very_very_very_very_very_very_very_very_very_very_long_variable_name;
 }
 
+// 改行を含む文字列リテラル
 int test86() {
-  // 改行を含む文字列リテラル
   char *s = "line1\
 line2";
   return s[6]; // '\' - 行継続の処理
 }
 
-int test87() {
-  /* 演算子の優先順位の微妙なケース */
-  return sizeof(int) + 1; /* sizeof演算子の優先順位 */
-}
+// 演算子の優先順位の微妙なケース
+int test87() { return sizeof(int) + 1; /* sizeof演算子の優先順位 */ }
 
+// 複雑な式の評価
 int test88() {
-  // 複雑な式の評価
   int a = 1, b = 2, c = 3;
   int result = a + b * c << 1 & 7;
   return result; // 1 + 2 * 3 << 1 & 7 = 1 + 6 << 1 & 7 = 14 & 7 = 6
 }
 
+// ビット演算と比較演算の組み合わせ
 int test89() {
-  // ビット演算と比較演算の組み合わせ
   int result = 5 & 3 == 1;
   return result; // 5 & 3 == 1 は false (0) なので 0
 }
 
+// 基本的なswitch文
 int test90() {
-  /* 基本的なswitch文 */
   int a = 2;
   int result = 0;
   switch (a) {
@@ -643,8 +678,8 @@ int test90() {
   return result; // 20
 }
 
+// fall-through動作のテスト
 int test91() {
-  /* fall-through動作のテスト */
   int a = 1;
   int result = 0;
   switch (a) {
@@ -661,8 +696,8 @@ int test91() {
   return result; // 5 + 10 + 15 = 30
 }
 
+// default節のテスト
 int test92() {
-  /* default節のテスト */
   int a = 99;
   switch (a) {
   case 1:
@@ -675,8 +710,8 @@ int test92() {
   return 0; // 到達しない
 }
 
+// ネストしたswitch文
 int test93() {
-  /* ネストしたswitch文 */
   int x = 1, y = 2;
   int result = 0;
   switch (x) {
@@ -701,8 +736,8 @@ int test93() {
   return result; // 12
 }
 
+// 文字定数を使ったswitch
 int test94() {
-  /* 文字定数を使ったswitch */
   char c = 'B';
   int result = 0;
   switch (c) {
@@ -721,8 +756,8 @@ int test94() {
   return result; // 2
 }
 
+// 複数のcaseラベルが同じ処理を共有
 int test95() {
-  /* 複数のcaseラベルが同じ処理を共有 */
   int day = 6; // 土曜日
   int result = 0;
   switch (day) {
@@ -743,8 +778,8 @@ int test95() {
   return result; // 2
 }
 
+// switchの中でループとbreak/continueの混在
 int test96() {
-  /* switchの中でループとbreak/continueの混在 */
   int sum = 0;
   for (int i = 1; i <= 3; i++) {
     switch (i) {
@@ -766,8 +801,8 @@ int test96() {
   return sum; // (1+2+4+5) + 10 + 20 = 42
 }
 
+// switchの中でgoto
 int test97() {
-  /* switchの中でgoto */
   int result = 0;
   int n = 2;
   switch (n) {
@@ -788,8 +823,8 @@ end:
   return result; // 25 (20 + 5)
 }
 
+// 負の数のcase
 int test98() {
-  /* 負の数のcase */
   int x = -2;
   switch (x) {
   case -3:
@@ -805,8 +840,8 @@ int test98() {
   }
 }
 
+// 16進数リテラルを使ったcase
 int test99() {
-  /* 16進数リテラルを使ったcase */
   int x = 0xFF;
   switch (x) {
   case 0x00:
@@ -976,20 +1011,20 @@ int test108() {
   return sum; // 0 + 1 + 2 = 3
 }
 
-/*
 int test109() {
   // Partial array initialization
-  int arr[5] = {1, 2};                               // Rest should be 0
+  // Rest should be 0
+  int arr[5] = {1, 2};
   return arr[0] + arr[1] + arr[2] + arr[3] + arr[4]; // 1 + 2 + 0 + 0 + 0 = 3
 }
-*/
 
+// 単項演算子の組み合わせ
 int test110() {
-  /* Multiple unary operators */
   int a = 5;
   return !!a + !0; // double negation + logical not of 0 = 1 + 1 = 2
 }
 
+// 配列の decay とポインタ演算
 int test111_helper(int *arr) { return arr[0] + arr[1] + arr[2]; }
 
 int test111() {
@@ -1003,6 +1038,7 @@ int test112() {
   return (int)a;
 }
 
+// ポインタを異なる型にキャストしてから戻す
 int test113() {
   // Pointer to int cast (size dependent)
   int arr[5] = {10, 20, 30, 40, 50};
@@ -1013,6 +1049,7 @@ int test113() {
   return *back_ptr; // Should return 30
 }
 
+// void ポインタのキャスト
 int test114() {
   // Void pointer cast
   int value = 42;
@@ -1021,6 +1058,7 @@ int test114() {
   return *int_ptr; // Should return 42
 }
 
+// 関数引数でのキャスト
 int test115() {
   // Cast with function argument
   int arr[3] = {1, 2, 3};
@@ -1029,6 +1067,7 @@ int test115() {
   return ptr[1]; // Should return 2
 }
 
+// const 修飾子を外すキャスト
 int test116() {
   const int arr[3] = {1, 2, 3};
   // Cast away constness (not recommended in practice)
@@ -1131,14 +1170,14 @@ int test123() {
   return ns.x + ns.inner.a + ns.inner.b[0] - ns.inner.b[1]; // 5 + 10 + 15 - 20 = 10
 }
 
+// 配列の部分初期化（残りは0で初期化される）
 int test124() {
-  // 配列の部分初期化（残りは0で初期化される）
   int arr[5] = {1, 2};
   return arr[0] + arr[1] + arr[2] + arr[3] + arr[4]; // 1 + 2 + 0 + 0 + 0 = 3
 }
 
+// 3次元配列のアクセスとsizeof
 int test125() {
-  // 3次元配列のアクセスとsizeof
   int arr3d[2][3][4];
   arr3d[1][2][3] = 42;
 
@@ -1539,7 +1578,7 @@ int main() {
   check(test106(), 106, 42);
   check(test107(), 107, 0);
   check(test108(), 108, 3);
-  // check(test109(), 109, 3);
+  check(test109(), 109, 3);
   check(test110(), 110, 2);
   check(test111(), 111, 21);
   check(test112(), 112, 5);
