@@ -103,10 +103,7 @@ Array *array_literal(Type *type) {
   array->id = array_cnt++;
   array->byte = get_sizeof(org_type);
   array->val = NULL;
-  if (arrays)
-    array->next = arrays;
-  else
-    array->next = NULL;
+  array->next = arrays;
   arrays = array;
   int i = 0;
   do {
@@ -127,10 +124,7 @@ String *string_literal() {
   str->text = token->str;
   str->len = token->len;
   str->id = label_cnt++;
-  if (strings)
-    str->next = strings;
-  else
-    str->next = NULL;
+  str->next = strings;
   strings = str;
   token = token->next;
   return str;
