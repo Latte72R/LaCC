@@ -3,7 +3,6 @@
 int printf();
 void *malloc();
 
-// ttest.c からのテスト対象関数
 int test(int x) { return x; }
 
 // 1. int→pointer 変換警告
