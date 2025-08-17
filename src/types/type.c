@@ -17,8 +17,10 @@ Type *new_type(TypeKind ty) {
   type->return_type = NULL;
   for (int i = 0; i < 6; i++) {
     type->param_types[i] = NULL;
+    type->param_names[i] = NULL;
   }
   type->param_count = 0;
+  type->is_variadic = FALSE;
   return type;
 }
 

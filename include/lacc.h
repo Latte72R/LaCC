@@ -124,7 +124,9 @@ struct Type {
   int is_const;         // constかどうか
   Type *return_type;    // 戻り値の型
   Type *param_types[6]; // 引数の型の配列
+  Token *param_names[6]; // 引数名のトークン
   int param_count;      // 引数の数
+  int is_variadic;      // 可変長引数かどうか
 };
 
 // Label
@@ -213,6 +215,7 @@ typedef enum {
   ND_RETURN,   // return
   ND_FUNCDEF,  // 関数定義
   ND_FUNCALL,  // 関数呼び出し
+  ND_FUNCNAME, // 関数名
   ND_EXTERN,   // extern
   ND_BLOCK,    // { ... }
   ND_ENUM,     // 列挙体
@@ -242,7 +245,7 @@ struct Node {
   Node *step;      // kindがND_FORの場合のみ使う
   Node **body;     // kindがND_BLOCKの場合のみ使う
   Node *args[6];   // kindがND_FUNCALLの場合のみ使う
-  Function *fn;    // kindがND_FUNCDEF, ND_FUNCALLの場合のみ使う
+  Function *fn;    // kindがND_FUNCDEF, ND_FUNCALL, ND_FUNCNAMEの場合のみ使う
   LVar *var;       // kindがND_LVAR, ND_GVARの場合のみ使う
   Type *type;
   Label *label;

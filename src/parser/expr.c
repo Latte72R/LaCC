@@ -407,6 +407,60 @@ Node *access_member() {
       node = new_add(node, expr(), consumed_loc_prev);
       expect("]", "after number", "array access");
       node = new_deref(node);
+    } else if (consume("(")) {
+      Location *loc = consumed_loc;
+      if (node->kind == ND_DEREF && node->lhs->type->ty == TY_PTR && node->lhs->type->ptr_to->ty == TY_FUNC)
+        node = node->lhs;
+      Node *call = new_node(ND_FUNCALL);
+      call->lhs = node;
+      call->id = loop_cnt++;
+      if (node->kind == ND_FUNCNAME)
+        call->fn = node->fn;
+      Type *ftype;
+      if (node->kind == ND_FUNCNAME) {
+        ftype = node->fn->type;
+      } else if (node->type->ty == TY_PTR && node->type->ptr_to->ty == TY_FUNC) {
+        ftype = node->type->ptr_to;
+      } else if (node->type->ty == TY_FUNC) {
+        ftype = node->type;
+      } else {
+        error_at(loc, "not a function or function pointer [in function call]");
+      }
+      call->type = ftype->return_type;
+      if (!consume(")")) {
+        int n = 0;
+        for (int i = 0; i < 6; i++) {
+          call->args[i] = expr();
+          n += 1;
+          if (!consume(","))
+            break;
+        }
+        call->val = n;
+        expect(")", "after arguments", "function call");
+      } else {
+        call->val = 0;
+      }
+      int check;
+      if (call->fn)
+        check = call->fn->type_check;
+      else
+        check = !ftype->is_variadic;
+      if (check) {
+        if (call->val > ftype->param_count) {
+          error_at(loc, "too many arguments to function call");
+        } else if (call->val < ftype->param_count) {
+          error_at(loc, "not enough arguments to function call");
+        } else {
+          for (int i = 0; i < call->val; i++) {
+            if (!is_same_type(ftype->param_types[i], call->args[i]->type)) {
+              warning_at(loc, "incompatible %s to %s conversion [in function call]",
+                         type_name(call->args[i]->type), type_name(ftype->param_types[i]));
+              break;
+            }
+          }
+        }
+      }
+      node = call;
     } else if (consume(".")) {
       if (node->type->ty != TY_STRUCT && node->type->ty != TY_UNION) {
         error_at(prev_tok->loc, "%.*s is not an object [in object reference]", prev_tok->len, prev_tok->str);
@@ -494,66 +548,28 @@ Node *primary() {
     return node;
   }
 
-  // 変数
-  if (!peek("(")) {
-    LVar *lvar = find_lvar(tok);
-    LVar *gvar = find_gvar(tok);
-    if (lvar) {
-      node = new_node(ND_LVAR);
-      node->var = lvar;
-      node->type = lvar->type;
-    } else if (gvar) {
-      node = new_node(ND_GVAR);
-      node->var = gvar;
-      node->type = gvar->type;
+  // 変数または関数名
+  LVar *lvar = find_lvar(tok);
+  LVar *gvar = find_gvar(tok);
+  if (lvar) {
+    node = new_node(ND_LVAR);
+    node->var = lvar;
+    node->type = lvar->type;
+  } else if (gvar) {
+    node = new_node(ND_GVAR);
+    node->var = gvar;
+    node->type = gvar->type;
+  } else {
+    Function *fn = find_fn(tok);
+    if (fn) {
+      node = new_node(ND_FUNCNAME);
+      node->fn = fn;
+      node->type = new_type_ptr(fn->type);
     } else {
       error_at(tok->loc, "undefined variable: %.*s [in primary]", tok->len, tok->str);
     }
-    return node;
   }
-
-  // 関数呼び出し
-  else {
-    consume("(");
-    Location *loc = consumed_loc;
-    Function *fn = find_fn(tok);
-    if (!fn) {
-      error_at(tok->loc, "undefined function: %.*s [in primary]", tok->len, tok->str);
-    }
-    node = new_node(ND_FUNCALL);
-    node->fn = fn;
-    node->id = loop_cnt++;
-    node->type = fn->type->return_type;
-    if (!consume(")")) {
-      int n = 0;
-      for (int i = 0; i < 6; i++) {
-        node->args[i] = expr();
-        n += 1;
-        if (!consume(","))
-          break;
-      }
-      node->val = n;
-      expect(")", "after arguments", "function call");
-    } else {
-      node->val = 0;
-    }
-    if (!fn->type_check) {
-    } else if (node->val > fn->type->param_count) {
-      error_at(loc, "too many arguments to function call: %.*s [in primary]", tok->len, tok->str);
-    } else if (node->val < fn->type->param_count) {
-      error_at(loc, "not enough arguments to function call: %.*s [in primary]", tok->len, tok->str);
-    } else {
-      for (int i = 0; i < node->val; i++) {
-        if (!is_same_type(fn->type->param_types[i], node->args[i]->type)) {
-          warning_at(loc, "incompatible %s to %s conversion [in primary]", type_name(node->args[i]->type),
-                     type_name(fn->type->param_types[i]));
-          break;
-        }
-      }
-    }
-
-    return node;
-  }
+  return node;
 }
 
 int compile_time_number() {
