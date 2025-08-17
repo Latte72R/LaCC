@@ -3,6 +3,7 @@
 
 extern char *user_input;
 extern Token *token;
+extern Token *token_head;
 extern String *filenames;
 extern char *input_file;
 
@@ -24,9 +25,15 @@ void new_token(TokenKind kind, char *loc, char *str, int len) {
   tok->kind = kind;
   tok->str = str;
   tok->len = len;
-  token->next = tok;
+  tok->next = NULL;
   tok->loc = new_location(loc);
-  token = tok;
+  if (!token) {
+    token_head = tok;
+    token = tok;
+  } else {
+    token->next = tok;
+    token = tok;
+  }
 }
 
 int startswith(char *p, char *q) { return !strncmp(p, q, strlen(q)); }

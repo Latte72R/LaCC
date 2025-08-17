@@ -171,7 +171,10 @@ Node *for_stmt() {
   loop_id = node->id;
   node->then = stmt();
   if (init) {
-    locals = locals->next;
+    if (locals)
+      locals = locals->next;
+    else
+      locals = NULL;
   }
   loop_id = loop_id_prev;
   return node;
