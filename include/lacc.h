@@ -121,12 +121,12 @@ struct Type {
   Type *ptr_to;
   int array_size;
   Object *object;
-  int is_const;         // constかどうか
-  Type *return_type;    // 戻り値の型
-  Type *param_types[6]; // 引数の型の配列
+  int is_const;          // constかどうか
+  Type *return_type;     // 戻り値の型
+  Type *param_types[6];  // 引数の型の配列
   Token *param_names[6]; // 引数名のトークン
-  int param_count;      // 引数の数
-  int is_variadic;      // 可変長引数かどうか
+  int param_count;       // 引数の数
+  int is_variadic;       // 可変長引数かどうか
 };
 
 // Label
@@ -286,6 +286,9 @@ Array *array_literal(Type *org_type);
 Type *parse_base_type_internal(int should_consume, int should_record);
 Type *peek_base_type();
 Type *parse_pointer_qualifiers(Type *base_type);
+Type *parse_declarator(Type *base_type, Token **tok, char *stmt);
+void substitute_type(Type *where, Type *placeholder, Type *actual);
+Type *parse_declarator_suffix(Type *type, char *stmt);
 Type *consume_type(int should_record);
 int is_type(Token *tok);
 int is_ptr_or_arr(Type *type);

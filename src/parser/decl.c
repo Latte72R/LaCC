@@ -172,7 +172,6 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
   Node *node = new_node(ND_VARDEC);
   lvar = new_lvar(tok, type, is_static, FALSE);
   Type *org_type = type;
-  type = parse_array_dimensions(type);
   if (is_static) {
     lvar->block = block_id;
     LVar *static_lvar = new_lvar(tok, type, TRUE, FALSE);
@@ -206,7 +205,6 @@ Node *global_variable_declaration(Token *tok, Type *type, int is_static) {
     error_duplicate_name(tok, "global variable declaration");
   }
   Node *node = new_node(ND_GLBDEC);
-  type = parse_array_dimensions(type);
   lvar = new_lvar(tok, type, is_static, FALSE);
   lvar->next = globals;
   globals = lvar;
@@ -225,7 +223,6 @@ Node *extern_variable_declaration(Token *tok, Type *type) {
   if (lvar) {
     return node;
   }
-  type = parse_array_dimensions(type);
   lvar = new_lvar(tok, type, FALSE, TRUE);
   lvar->next = globals;
   globals = lvar;
@@ -233,105 +230,6 @@ Node *extern_variable_declaration(Token *tok, Type *type) {
   node->type = type;
   node->endline = TRUE;
   return node;
-}
-
-// 宣言子の後ろに続く "()" や "[]" を解析し、関数・配列の型情報を再帰的に組み立てる
-static Type *parse_declarator_suffix(Type *type, char *stmt) {
-  for (;;) {
-    if (consume("(")) {
-      // 関数宣言: 引数リストを解析して関数型を構築
-      Type *func = new_type(TY_FUNC);
-      func->return_type = type; // 既に解析済みの型は戻り値
-      int n = 0;
-      if (!consume(")")) {
-        for (int i = 0; i < 6; i++) {
-          if (consume("...")) {
-            func->is_variadic = TRUE; // 可変長引数
-            break;
-          }
-          Type *param = consume_type(TRUE); // 引数の型を読み取る
-          if (!param) {
-            if (i != 0)
-              error_at(consumed_loc, "expected a type [in %s]", stmt);
-            break;
-          } else if (param->ty == TY_VOID) {
-            if (i != 0)
-              error_at(consumed_loc, "void type is only allowed for the first argument [in %s]", stmt);
-            break;
-          }
-          Token *ptok = consume_ident(); // 引数名
-          param = parse_array_dimensions(param); // 引数が配列であれば寸法を解析
-          if (param->ty == TY_ARR)
-            param->ty = TY_ARGARR; // 引数の配列はポインタに退化
-          func->param_types[i] = param;
-          func->param_names[i] = ptok;
-          n += 1;
-          if (!consume(","))
-            break; // 引数リストの終了
-        }
-        expect(")", "after arguments", stmt); // 閉じ括弧を確認
-      }
-      func->param_count = n; // 引数の個数を保存
-      type = func;            // 解析結果を新しい型として続行
-      continue;
-    }
-    if (peek("[")) {
-      // 配列宣言: [] の連なりを処理
-      type = parse_array_dimensions(type);
-      continue;
-    }
-    return type; // 追加の修飾が無ければ確定
-  }
-}
-
-// 複雑な宣言子の解析で仮置きした型 placeholder を、実際の型 actual で再帰的に置き換える
-static void substitute_type(Type *where, Type *placeholder, Type *actual) {
-  if (!where)
-    return; // 末端に到達したら終了
-  if (where == placeholder) {
-    *where = *actual; // placeholder 自体を actual で置換
-    return;
-  }
-  // ポインタ先の型を再帰的に置換
-  if (where->ptr_to) {
-    if (where->ptr_to == placeholder)
-      where->ptr_to = actual;
-    else
-      substitute_type(where->ptr_to, placeholder, actual);
-  }
-  // 関数の戻り値型を再帰的に置換
-  if (where->return_type) {
-    if (where->return_type == placeholder)
-      where->return_type = actual;
-    else
-      substitute_type(where->return_type, placeholder, actual);
-  }
-  // 関数引数の型を順次置換
-  for (int i = 0; i < where->param_count; i++) {
-    if (where->param_types[i] == placeholder)
-      where->param_types[i] = actual;
-    else
-      substitute_type(where->param_types[i], placeholder, actual);
-  }
-}
-
-// ベース型から宣言子全体を読み取り、識別子とポインタ・配列・関数などの修飾を解析して最終的な型を得る
-static Type *parse_declarator(Type *base_type, Token **tok, char *stmt) {
-  // 先頭の "*" などポインタ修飾子を処理
-  Type *type = parse_pointer_qualifiers(base_type);
-
-  if (consume("(")) {
-    // 括弧で囲まれた宣言子を再帰的に解析
-    Type *placeholder = new_type(TY_NONE);            // 仮の型を用意
-    Type *inner = parse_declarator(placeholder, tok, stmt);
-    expect(")", "after declarator", stmt);         // 対応する閉じ括弧
-    Type *suffix = parse_declarator_suffix(type, stmt); // 括弧の後ろの修飾
-    substitute_type(inner, placeholder, suffix);      // 仮の型を実際の型で置換
-    return inner;
-  }
-
-  *tok = expect_ident(stmt);                         // 識別子を取得
-  return parse_declarator_suffix(type, stmt);         // 後続の修飾を解析
 }
 
 Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
@@ -444,6 +342,15 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
     Type *type = consume_type(TRUE);
     Type *org_type = type;
     do {
+      /*
+      Type *base_type = parse_base_type_internal(TRUE, TRUE);
+      Token *prev_tok = token;
+      Type *org_type = parse_pointer_qualifiers(base_type);
+      token = prev_tok;
+      Token *tok;
+      Type *type = parse_declarator(base_type, &tok, "object declaration");
+      type = parse_array_dimensions(type);
+      */
       Token *member_tok = expect_ident("object member declaration");
       type = parse_array_dimensions(type);
       LVar *member_var = new_lvar(member_tok, type, FALSE, FALSE);

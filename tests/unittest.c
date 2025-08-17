@@ -1459,6 +1459,24 @@ int test150() {
   return (*a)(3, 4) + m(5, 6);
 }
 
+int test151() {
+  // 関数ポインタの配列
+  int (*funcs[2])(int, int);
+  funcs[0] = add;
+  funcs[1] = mul;
+  return funcs[0](2, 3) + funcs[1](4, 5); // 5 + 20 = 25
+}
+
+int test152() {
+  // struct 内の関数ポインタ
+  struct {
+    int (*func)(int, int);
+  } funcs[2];
+  funcs[0].func = add;
+  funcs[1].func = mul;
+  return funcs[0].func(6, 7) + funcs[1].func(8, 9); // 13 + 72 = 85
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1620,6 +1638,8 @@ int main() {
   check(test148(), 148, 4);
   check(test149(), 149, 6);
   check(test150(), 150, 37);
+  check(test151(), 151, 25);
+  check(test152(), 152, 85);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);
