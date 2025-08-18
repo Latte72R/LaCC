@@ -88,11 +88,13 @@ Both global and local (stack) variable declarations are supported.
 - **Explicit type casting**  
   LaCC allows explicit type casting between compatible pointer types.
 
+- **Ternary conditional operator**
+  LaCC supports the ternary conditional operator (`?:`) for inline conditional expressions.
+
 ## Unsupported Constructs
 
 LaCC does **not** support the following:
- 
-- Ternary conditional operator (`?:`)  
+
 - Extended primitive types: `unsigned`, `long`, `float`, `double`, etc.  
 - Type qualifiers & storage-class specifiers: `register`, `auto`, etc.  
 - No initializer lists for structs (e.g.,  `struct AB p = {.a = 1, .b = 2};`)  
