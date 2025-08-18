@@ -209,7 +209,7 @@ void tokenize() {
     }
 
     // Single-letter punctuator
-    if (strchr("+-*/()<>={}[];&|^~,%!.:", *p)) {
+    if (strchr("+-*/()<>={}[];&|^~,%!.:?", *p)) {
       new_token(TK_RESERVED, p, p, 1);
       p++;
       continue;

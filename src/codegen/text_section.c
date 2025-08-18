@@ -339,6 +339,17 @@ void gen(Node *node) {
       write_file(".Lend%d:\n", node->id);
     }
     break;
+  case ND_TERNARY:
+    gen(node->cond);
+    write_file("  pop rax\n");
+    write_file("  cmp rax, 0\n");
+    write_file("  je .Lelse%d\n", node->id);
+    gen(node->then);
+    write_file("  jmp .Lend%d\n", node->id);
+    write_file(".Lelse%d:\n", node->id);
+    gen(node->els);
+    write_file(".Lend%d:\n", node->id);
+    break;
   case ND_WHILE:
     write_file(".Lbegin%d:\n", node->id);
     gen(node->cond);

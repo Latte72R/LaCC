@@ -2,8 +2,8 @@
 #include "lacc.h"
 
 extern Token *token;
-extern int loop_cnt;
-extern int logical_cnt;
+extern int label_cnt;
+extern int label_cnt;
 extern Location *consumed_loc;
 
 extern const int TRUE;
@@ -27,7 +27,7 @@ Node *assign_sub(Node *lhs, Node *rhs, Location *loc, int check_const) {
 }
 
 Node *assign() {
-  Node *node = logical_or();
+  Node *node = ternary_operator();
   Location *loc;
   if (consume("=")) {
     loc = consumed_loc;
@@ -51,13 +51,30 @@ Node *assign() {
   return node;
 }
 
+Node *ternary_operator() {
+  Node *node = logical_or();
+  if (consume("?")) {
+    Node *then_branch = expr();
+    expect(":", "after then branch", "ternary operator");
+    Node *else_branch = expr();
+    Node *ternary = new_node(ND_TERNARY);
+    ternary->cond = node;
+    ternary->then = then_branch;
+    ternary->els = else_branch;
+    ternary->id = label_cnt++;
+    ternary->type = then_branch->type;
+    node = ternary;
+  }
+  return node;
+}
+
 Node *logical_or() {
   Node *node = logical_and();
   for (;;) {
     if (consume("||")) {
       node = new_binary(ND_OR, node, logical_and());
       node->type = node->lhs->type;
-      node->id = logical_cnt++;
+      node->id = label_cnt++;
     } else {
       break;
     }
@@ -71,7 +88,7 @@ Node *logical_and() {
     if (consume("&&")) {
       node = new_binary(ND_AND, node, bit_or());
       node->type = node->lhs->type;
-      node->id = logical_cnt++;
+      node->id = label_cnt++;
     } else {
       break;
     }
@@ -413,7 +430,7 @@ Node *access_member() {
         node = node->lhs;
       Node *call = new_node(ND_FUNCALL);
       call->lhs = node;
-      call->id = loop_cnt++;
+      call->id = label_cnt++;
       if (node->kind == ND_FUNCNAME)
         call->fn = node->fn;
       Type *ftype;
@@ -453,8 +470,8 @@ Node *access_member() {
         } else {
           for (int i = 0; i < call->val; i++) {
             if (!is_same_type(ftype->param_types[i], call->args[i]->type)) {
-              warning_at(loc, "incompatible %s to %s conversion [in function call]",
-                         type_name(call->args[i]->type), type_name(ftype->param_types[i]));
+              warning_at(loc, "incompatible %s to %s conversion [in function call]", type_name(call->args[i]->type),
+                         type_name(ftype->param_types[i]));
               break;
             }
           }

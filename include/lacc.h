@@ -210,6 +210,7 @@ typedef enum {
   ND_BREAK,    // break
   ND_CONTINUE, // continue
   ND_DOWHILE,  // do-while
+  ND_TERNARY,  // 三項演算子
   ND_GOTO,     // goto
   ND_LABEL,    // ラベル
   ND_RETURN,   // return
@@ -337,6 +338,7 @@ Node *stmt();
 Node *expr();
 Node *assign_sub(Node *lhs, Node *rhs, Location *loc, int check_const);
 Node *assign();
+Node *ternary_operator();
 Node *type_cast();
 Node *logical_or();
 Node *logical_and();
