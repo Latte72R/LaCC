@@ -1504,6 +1504,73 @@ int test154() {
   return r + (*u.arr)[0];
 }
 
+int test155() {
+  int a = 3;
+  return a ? 7 : 5; /* 条件真 */
+}
+
+int test156() {
+  int a = 0;
+  return a ? 7 : 5; /* 条件偽 */
+}
+
+int test157() {
+  int a = 1, b = 2, c = 3;
+  return a ? (b ? 10 : 20) : (c ? 30 : 40); /* ネスト */
+}
+
+int test158() {
+  int x = 0;
+  int y = (x++ ? x + 100 : x + 200); /* 偽側のみ評価 (x++ は 0 を返し x=1) */
+  return y + x;                      /* 201 + 1 = 202 */
+}
+
+int test159() {
+  char c = 'A';
+  int flag = 0;
+  return flag ? c + 1 : c + 2; /* 'A'+2 = 67 */
+}
+
+int test160() {
+  int a = 2, b = 5;
+  return (a < b ? a * b : a - b) + (b < a ? 1 : 2); /* 10 + 2 = 12 */
+}
+
+int test161() {
+  /* ポインタ選択 */
+  int x = 5, y = 9;
+  int *p = (x < y ? &x : &y);
+  return *p; /* 5 */
+}
+
+int test162() {
+  /* ネスト + 副作用 (選ばれない側の c++ は評価されない) */
+  int a = 1, b = 2, c = 3;
+  int r = a ? (b++ ? b : 100) : (c++ ? 200 : 300);
+  /* b++ は 2 を返し非ゼロ -> b オペランド採用。b は 3。c は未変更 */
+  return r + b * 10 + c * 100; /* 3 + 30 + 300 = 333 */
+}
+
+int test163() {
+  /* 分岐内での代入と戻り値利用 */
+  int a = 2, b = 3;
+  int r = ((a += 1) > b ? (b *= 5) : (a *= 7)); /* a=3, 3>3 偽 -> a=21, r=21 */
+  return a + b + r;                             /* 21 + 3 + 21 = 45 */
+}
+
+int test164() {
+  /* 右結合確認: x ? 1 : x+1 ? 2 : 3  == x ? 1 : (x+1 ? 2 : 3) */
+  int x = 0;
+  int r = x ? 1 : x + 1 ? 2 : 3; /* x=0 -> (0+1)真 -> 2 */
+  return r;                      /* 2 */
+}
+
+int test165() {
+  /* || と 三項演算子の優先順位: a || b ? c : d == (a || b) ? c : d */
+  int a = 0, b = 1;
+  return a || b ? 5 : 9; /* (0||1)=真 -> 5 */
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1669,6 +1736,17 @@ int main() {
   check(test152(), 152, 85);
   check(test153(), 153, 5);
   check(test154(), 154, 13);
+  check(test155(), 155, 7);
+  check(test156(), 156, 5);
+  check(test157(), 157, 10);
+  check(test158(), 158, 202);
+  check(test159(), 159, 67);
+  check(test160(), 160, 12);
+  check(test161(), 161, 5);
+  check(test162(), 162, 333);
+  check(test163(), 163, 45);
+  check(test164(), 164, 2);
+  check(test165(), 165, 5);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

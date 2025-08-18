@@ -3,7 +3,7 @@
 
 extern Token *token;
 extern int label_cnt;
-extern int loop_cnt;
+extern int label_cnt;
 extern int loop_id;
 extern int block_cnt;
 extern int block_id;
@@ -77,7 +77,7 @@ Node *label_stmt() {
 Node *if_stmt() {
   token = token->next;
   Node *node = new_node(ND_IF);
-  node->id = loop_cnt++;
+  node->id = label_cnt++;
   expect("(", "before condition", "if");
   node->cond = expr();
   node->cond->endline = FALSE;
@@ -96,7 +96,7 @@ Node *while_stmt() {
   token = token->next;
   expect("(", "before condition", "while");
   Node *node = new_node(ND_WHILE);
-  node->id = loop_cnt++;
+  node->id = label_cnt++;
   node->cond = expr();
   node->cond->endline = FALSE;
   expect(")", "after equality", "while");
@@ -111,7 +111,7 @@ Node *do_while_stmt() {
   token = token->next;
   Node *node = new_node(ND_DOWHILE);
   int loop_id_prev = loop_id;
-  node->id = loop_cnt++;
+  node->id = label_cnt++;
   loop_id = node->id;
   node->then = stmt();
   loop_id = loop_id_prev;
@@ -133,7 +133,7 @@ Node *for_stmt() {
   token = token->next;
   expect("(", "before initialization", "for");
   Node *node = new_node(ND_FOR);
-  node->id = loop_cnt++;
+  node->id = label_cnt++;
   if (consume(";")) {
     node->init = new_node(ND_NONE);
     node->init->endline = TRUE;
@@ -229,7 +229,7 @@ Node *switch_stmt() {
   token = token->next;
   expect("(", "before condition", "switch");
   Node *node = new_node(ND_SWITCH);
-  node->id = loop_cnt++;
+  node->id = label_cnt++;
   node->cond = expr();
   node->cond->endline = FALSE;
   node->cases = malloc(sizeof(int *));

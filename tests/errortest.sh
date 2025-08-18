@@ -260,3 +260,14 @@ EOF
 cat "$TMP_C"
 $CC $TMP_C -S -o $TMP_S
 printf "\n"
+
+printf "\e[1;36mTest case 20:\e[0m\n"
+cat <<EOF > "$TMP_C"
+int main() {
+  int a = 1, b = 2, cond = 0;
+  (cond ? a : b) = 15;
+  return a + b;
+}
+EOF
+cat "$TMP_C"
+$CC $TMP_C -S -o $TMP_S
