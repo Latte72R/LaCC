@@ -46,6 +46,17 @@ int test7() {
 // 8. ポインタを整数にキャストする警告
 int *test8() { return 5; }
 
+void test9() {
+  int *a;
+  int *b;
+  a -= b;
+}
+
+int test10() {
+  int *a;
+  return (0 ? 1 : a);
+}
+
 int main() {
   test1();
   test2();

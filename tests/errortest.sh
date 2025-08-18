@@ -271,3 +271,20 @@ int main() {
 EOF
 cat "$TMP_C"
 $CC $TMP_C -S -o $TMP_S
+printf "\n"
+
+printf "\e[1;36mTest case 21:\e[0m\n"
+cat <<EOF > "$TMP_C"
+typedef struct {
+  int x;
+} A;
+int main() {
+  A a;
+  int b;
+  a = b;
+  return 0;
+}
+EOF
+cat "$TMP_C"
+$CC $TMP_C -S -o $TMP_S
+printf "\n"

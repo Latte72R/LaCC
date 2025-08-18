@@ -15,12 +15,16 @@ Node *expr() { return assign(); }
 Node *assign_sub(Node *lhs, Node *rhs, Location *loc, int check_const) {
   if (lhs->type->is_const && check_const) {
     error_at(loc, "constant variable cannot be assigned [in assign_sub]");
-  } else if (lhs->type->ty == TY_ARR) {
+  } else if (lhs->type->ty == TY_ARR || lhs->type->ty == TY_ARGARR) {
     error_at(loc, "array variable cannot be assigned [in assign_sub]");
   } else if (rhs->type->ty == TY_VOID) {
     error_at(loc, "void type cannot be assigned [in assign_sub]");
-  } else if (!is_same_type(lhs->type, rhs->type)) {
-    warning_at(loc, "incompatible %s to %s conversion [in assign_sub]", type_name(rhs->type), type_name(lhs->type));
+  } else if (!is_type_assignable(lhs->type, rhs->type)) {
+    error_at(loc, "incompatible operand types ('%s' and '%s') [in assign_sub]", type_name(lhs->type),
+             type_name(rhs->type));
+  } else if (!is_type_compatible(lhs->type, rhs->type)) {
+    warning_at(loc, "incompatible operand types ('%s' and '%s') [in assign_sub]", type_name(lhs->type),
+               type_name(rhs->type));
   }
   Node *node = new_binary(ND_ASSIGN, lhs, rhs);
   return node;
@@ -28,25 +32,50 @@ Node *assign_sub(Node *lhs, Node *rhs, Location *loc, int check_const) {
 
 Node *assign() {
   Node *node = ternary_operator();
+  Node *rhs;
   Location *loc;
   if (consume("=")) {
     loc = consumed_loc;
     node = assign_sub(node, expr(), loc, TRUE);
   } else if (consume("+=")) {
     loc = consumed_loc;
-    node = assign_sub(node, new_binary(ND_ADD, node, expr()), loc, TRUE);
+    rhs = expr();
+    if (is_ptr_or_arr(node->type) && is_ptr_or_arr(rhs->type)) {
+      error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
+               type_name(rhs->type));
+    }
+    node = assign_sub(node, new_binary(ND_ADD, node, rhs), loc, TRUE);
   } else if (consume("-=")) {
     loc = consumed_loc;
-    node = assign_sub(node, new_binary(ND_SUB, node, expr()), loc, TRUE);
+    rhs = expr();
+    if (is_ptr_or_arr(node->type) && is_ptr_or_arr(rhs->type)) {
+      warning_at(loc, "incompatible integer to pointer conversion [in assign]");
+    }
+    node = assign_sub(node, new_binary(ND_SUB, node, rhs), loc, TRUE);
   } else if (consume("*=")) {
     loc = consumed_loc;
-    node = assign_sub(node, new_binary(ND_MUL, node, expr()), loc, TRUE);
+    rhs = expr();
+    if (is_ptr_or_arr(node->type) && is_ptr_or_arr(rhs->type)) {
+      error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
+               type_name(rhs->type));
+    }
+    node = assign_sub(node, new_binary(ND_MUL, node, rhs), loc, TRUE);
   } else if (consume("/=")) {
     loc = consumed_loc;
-    node = assign_sub(node, new_binary(ND_DIV, node, expr()), loc, TRUE);
+    rhs = expr();
+    if (is_ptr_or_arr(node->type) && is_ptr_or_arr(rhs->type)) {
+      error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
+               type_name(rhs->type));
+    }
+    node = assign_sub(node, new_binary(ND_DIV, node, rhs), loc, TRUE);
   } else if (consume("%=")) {
     loc = consumed_loc;
-    node = assign_sub(node, new_binary(ND_MOD, node, expr()), loc, TRUE);
+    rhs = expr();
+    if (is_ptr_or_arr(node->type) && is_ptr_or_arr(rhs->type)) {
+      error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
+               type_name(rhs->type));
+    }
+    node = assign_sub(node, new_binary(ND_MOD, node, rhs), loc, TRUE);
   }
   return node;
 }
@@ -57,6 +86,10 @@ Node *ternary_operator() {
     Node *then_branch = expr();
     expect(":", "after then branch", "ternary operator");
     Node *else_branch = expr();
+    if (!is_type_identical(then_branch->type, else_branch->type)) {
+      warning_at(consumed_loc, "incompatible operand types ('%s' and '%s') [in ternary operator]",
+                 type_name(then_branch->type), type_name(else_branch->type));
+    }
     Node *ternary = new_node(ND_TERNARY);
     ternary->cond = node;
     ternary->then = then_branch;
@@ -469,7 +502,7 @@ Node *access_member() {
           error_at(loc, "not enough arguments to function call");
         } else {
           for (int i = 0; i < call->val; i++) {
-            if (!is_same_type(ftype->param_types[i], call->args[i]->type)) {
+            if (!is_type_compatible(ftype->param_types[i], call->args[i]->type)) {
               warning_at(loc, "incompatible %s to %s conversion [in function call]", type_name(call->args[i]->type),
                          type_name(ftype->param_types[i]));
               break;
@@ -556,6 +589,9 @@ Node *primary() {
     return node;
   }
 
+  if (token->kind != TK_IDENT) {
+    error_at(token->loc, "expected expression [in primary]");
+  }
   tok = expect_ident("primary");
 
   // enumのメンバー

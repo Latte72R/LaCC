@@ -326,7 +326,24 @@ char *type_name(Type *type) {
   }
 }
 
-int is_same_type(Type *lhs, Type *rhs) {
+int is_type_assignable(Type *lhs, Type *rhs) {
+  // int と char の比較は許容
+  // void* と他のポインタ型の比較も許容
+  if (is_ptr_or_arr(lhs) && is_ptr_or_arr(rhs)) {
+    return TRUE; // ポインタ型同士は常に代入可能
+  } else if (lhs->ty == rhs->ty) {
+    if (lhs->ty == TY_STRUCT || lhs->ty == TY_UNION) {
+      return lhs->object == rhs->object;
+    }
+    return TRUE;
+  } else if ((is_number(lhs) || is_ptr_or_arr(lhs)) && (is_number(rhs) || is_ptr_or_arr(rhs))) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+int is_type_compatible(Type *lhs, Type *rhs) {
   // int と char の比較は許容
   // void* と他のポインタ型の比較も許容
   if (is_ptr_or_arr(lhs) && is_ptr_or_arr(rhs)) {
@@ -335,12 +352,27 @@ int is_same_type(Type *lhs, Type *rhs) {
     } else if (lhs->ptr_to->ty == TY_VOID || rhs->ptr_to->ty == TY_VOID) {
       return TRUE;
     }
-    return is_same_type(lhs->ptr_to, rhs->ptr_to);
+    return is_type_compatible(lhs->ptr_to, rhs->ptr_to);
   } else if (lhs->ty == rhs->ty) {
+    if (lhs->ty == TY_STRUCT || lhs->ty == TY_UNION) {
+      return lhs->object == rhs->object;
+    }
     return TRUE;
-  } else if (lhs->ty == TY_INT && rhs->ty == TY_CHAR) {
+  } else if (is_number(lhs) && is_number(rhs)) {
     return TRUE;
-  } else if (lhs->ty == TY_CHAR && rhs->ty == TY_INT) {
+  } else {
+    return FALSE;
+  }
+}
+
+int is_type_identical(Type *lhs, Type *rhs) {
+  // const 修飾子の有無を無視して型の同一性を確認
+  if (is_ptr_or_arr(lhs) && is_ptr_or_arr(rhs)) {
+    return is_type_identical(lhs->ptr_to, rhs->ptr_to);
+  } else if (lhs->ty == rhs->ty) {
+    if (lhs->ty == TY_STRUCT || lhs->ty == TY_UNION) {
+      return lhs->object == rhs->object;
+    }
     return TRUE;
   } else {
     return FALSE;

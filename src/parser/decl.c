@@ -443,7 +443,7 @@ Node *typedef_stmt() {
   node->type = type;
   TypeTag *tag = find_type_tag(tok);
   if (tag) {
-    if (is_same_type(type, tag->type)) {
+    if (is_type_identical(type, tag->type)) {
       expect(";", "after line", "typedef");
       return node;
     } else {
