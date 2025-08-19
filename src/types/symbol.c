@@ -17,12 +17,27 @@ extern void *NULL;
 Node *new_node(NodeKind kind) {
   Node *node = malloc(sizeof(Node));
   node->kind = kind;
-  node->endline = FALSE;
+  node->lhs = NULL;
+  node->rhs = NULL;
   node->val = 0;
+  node->id = 0;
+  node->endline = FALSE;
   node->cases = NULL;
   node->case_cnt = 0;
   node->case_cap = 0;
   node->has_default = FALSE;
+  node->cond = NULL;
+  node->then = NULL;
+  node->els = NULL;
+  node->init = NULL;
+  node->step = NULL;
+  node->body = NULL;
+  for (int i = 0; i < 6; i++)
+    node->args[i] = NULL;
+  node->fn = NULL;
+  node->var = NULL;
+  node->type = NULL;
+  node->label = NULL;
   return node;
 }
 
