@@ -111,30 +111,14 @@ int main(int argc, char **argv) {
   generate_assembly();
 
   free_all_nodes();
-  free_all_functions(functions);
-  functions = NULL;
-  free_all_lvars(locals);
-  locals = NULL;
-  free_all_lvars(globals);
-  globals = NULL;
-  free_all_lvars(statics);
-  statics = NULL;
-  free_all_objects(structs);
-  structs = NULL;
-  free_all_objects(unions);
-  unions = NULL;
-  free_all_objects(enums);
-  enums = NULL;
-  free_all_type_tags(type_tags);
-  type_tags = NULL;
-  free_all_strings(strings);
-  strings = NULL;
-  free_all_arrays(arrays);
-  arrays = NULL;
-  free_all_include_paths(include_paths);
-  include_paths = NULL;
-  free_all_strings(filenames);
-  filenames = NULL;
+  free_all_functions();
+  free_all_lvars();
+  free_all_objects();
+  free_all_type_tags();
+  free_all_strings();
+  free_all_arrays();
+  free_all_include_paths();
+  free_all_filenames();
   free(user_input);
   free_all_types();
 

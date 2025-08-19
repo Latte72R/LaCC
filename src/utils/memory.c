@@ -4,6 +4,18 @@ extern Token *token_head;
 extern Token *token;
 extern Node **code;
 extern void *NULL;
+extern Function *functions;
+extern LVar *locals;
+extern LVar *globals;
+extern LVar *statics;
+extern Object *structs;
+extern Object *unions;
+extern Object *enums;
+extern TypeTag *type_tags;
+extern String *strings;
+extern String *filenames;
+extern Array *arrays;
+extern IncludePath *include_paths;
 
 void free_all_tokens() {
   Token *cur = token_head;
@@ -109,7 +121,7 @@ static void free_labels(Label *label) {
   }
 }
 
-void free_all_functions(Function *fn) {
+static void free_functions(Function *fn) {
   while (fn) {
     Function *next = fn->next;
     free_labels(fn->labels);
@@ -118,7 +130,7 @@ void free_all_functions(Function *fn) {
   }
 }
 
-void free_all_lvars(LVar *var) {
+static void free_lvars(LVar *var) {
   while (var) {
     LVar *next = var->next;
     free(var);
@@ -126,17 +138,17 @@ void free_all_lvars(LVar *var) {
   }
 }
 
-void free_all_objects(Object *obj) {
+static void free_objects_list(Object *obj) {
   while (obj) {
     Object *next = obj->next;
     if (obj->var)
-      free_all_lvars(obj->var);
+      free_lvars(obj->var);
     free(obj);
     obj = next;
   }
 }
 
-void free_all_type_tags(TypeTag *tag) {
+static void free_type_tags_list(TypeTag *tag) {
   while (tag) {
     TypeTag *next = tag->next;
     free(tag);
@@ -144,7 +156,7 @@ void free_all_type_tags(TypeTag *tag) {
   }
 }
 
-void free_all_strings(String *str) {
+static void free_strings_list(String *str) {
   while (str) {
     String *next = str->next;
     free(str);
@@ -152,7 +164,7 @@ void free_all_strings(String *str) {
   }
 }
 
-void free_all_arrays(Array *arr) {
+static void free_arrays_list(Array *arr) {
   while (arr) {
     Array *next = arr->next;
     if (arr->val)
@@ -162,10 +174,54 @@ void free_all_arrays(Array *arr) {
   }
 }
 
-void free_all_include_paths(IncludePath *path) {
+static void free_include_paths_list(IncludePath *path) {
   while (path) {
     IncludePath *next = path->next;
     free(path);
     path = next;
   }
+}
+
+void free_all_functions() {
+  free_functions(functions);
+  functions = NULL;
+}
+
+void free_all_lvars() {
+  free_lvars(locals);
+  free_lvars(globals);
+  free_lvars(statics);
+  locals = globals = statics = NULL;
+}
+
+void free_all_objects() {
+  free_objects_list(structs);
+  free_objects_list(unions);
+  free_objects_list(enums);
+  structs = unions = enums = NULL;
+}
+
+void free_all_type_tags() {
+  free_type_tags_list(type_tags);
+  type_tags = NULL;
+}
+
+void free_all_strings() {
+  free_strings_list(strings);
+  strings = NULL;
+}
+
+void free_all_filenames() {
+  free_strings_list(filenames);
+  filenames = NULL;
+}
+
+void free_all_arrays() {
+  free_arrays_list(arrays);
+  arrays = NULL;
+}
+
+void free_all_include_paths() {
+  free_include_paths_list(include_paths);
+  include_paths = NULL;
 }
