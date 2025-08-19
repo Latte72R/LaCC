@@ -238,6 +238,7 @@ struct Node {
   int endline;
   int *cases;      // kindがND_SWITCHの場合のみ使う
   int case_cnt;    // kindがND_SWITCHの場合のみ使う
+  int case_cap;    // capacity of cases array
   int has_default; // kindがND_SWITCHの場合のみ使う
   Node *cond;      // kindがND_IF, ND_WHILE, ND_FORの場合のみ使う
   Node *then;      // kindがND_IFの場合のみ使う

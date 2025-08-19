@@ -79,7 +79,10 @@ char *parse_string_literal(char *p) {
   char *q = p;
   int len = 0;
   int i = 0;
-  char *buf = malloc(sizeof(char) * 1024);
+  int cap = 16;
+  char *buf = malloc(cap);
+  if (!buf)
+    error("memory allocation failed");
   while (*p != '"') {
     switch (*p) {
     case '\0':
@@ -102,6 +105,14 @@ char *parse_string_literal(char *p) {
                  "unsupported escape sequence \"\\v\" in string literal. Use '\\012' for vertical tab.");
         break;
       default:
+        if (len + 2 >= cap) {
+          do {
+            cap *= 2;
+          } while (len + 2 >= cap);
+          buf = realloc(buf, cap);
+          if (!buf)
+            error("memory allocation failed");
+        }
         buf[len++] = *p++;
         buf[len++] = *p++;
         i++;
@@ -109,17 +120,36 @@ char *parse_string_literal(char *p) {
       }
       break;
     default:
+      if (len + 1 >= cap) {
+        do {
+          cap *= 2;
+        } while (len + 1 >= cap);
+        buf = realloc(buf, cap);
+        if (!buf)
+          error("memory allocation failed");
+      }
       buf[len++] = *p++;
       i++;
     }
+  }
+  if (len + 1 >= cap) {
+    do {
+      cap *= 2;
+    } while (len + 1 >= cap);
+    buf = realloc(buf, cap);
+    if (!buf)
+      error("memory allocation failed");
   }
   buf[len] = '\0';
   i++;
   if (token && token->kind == TK_STRING) {
     token->str = realloc(token->str, token->len + len);
+    if (!token->str)
+      error("memory allocation failed");
     memcpy(token->str + token->len, buf, len);
     token->len += len;
     token->val += i - 1;
+    free(buf);
   } else {
     new_token(TK_STRING, q, buf, len);
     token->val = i;

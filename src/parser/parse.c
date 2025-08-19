@@ -87,12 +87,15 @@ void *safe_realloc_array(void *ptr, int element_size, int new_size) {
 
 void program() {
   int i = 0;
-  code = NULL;
+  int cap = 16;
+  code = safe_realloc_array(NULL, sizeof(Node *), cap);
   while (token->kind != TK_EOF) {
-    code = safe_realloc_array(code, sizeof(Node *), i + 1);
+    if (i + 1 >= cap) {
+      cap *= 2;
+      code = safe_realloc_array(code, sizeof(Node *), cap);
+    }
     code[i++] = stmt();
   }
-  code = safe_realloc_array(code, sizeof(Node *), i + 1);
   code[i] = new_node(ND_NONE);
 }
 
@@ -102,12 +105,16 @@ Array *array_literal(Type *type) {
   Array *array = malloc(sizeof(Array));
   array->id = array_cnt++;
   array->byte = get_sizeof(org_type);
-  array->val = NULL;
+  int cap = 8;
+  array->val = safe_realloc_array(NULL, sizeof(int), cap);
   array->next = arrays;
   arrays = array;
   int i = 0;
   do {
-    array->val = safe_realloc_array(array->val, sizeof(int), i + 1);
+    if (i >= cap) {
+      cap *= 2;
+      array->val = safe_realloc_array(array->val, sizeof(int), cap);
+    }
     array->val[i++] = expect_number("array_literal");
   } while (consume(","));
   array->len = i;

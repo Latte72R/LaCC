@@ -29,13 +29,16 @@ Node *block_stmt() {
   TypeTag *type_tags_prev = type_tags;
   int block_id_prev = block_id;
   block_id = block_cnt++;
-  node->body = NULL;
+  int cap = 8;
+  node->body = safe_realloc_array(NULL, sizeof(Node *), cap);
   int i = 0;
   while (!consume("}")) {
-    node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
+    if (i + 1 >= cap) {
+      cap *= 2;
+      node->body = safe_realloc_array(node->body, sizeof(Node *), cap);
+    }
     node->body[i++] = stmt();
   }
-  node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
   node->body[i] = new_node(ND_NONE);
   block_id = block_id_prev;
   locals = locals_prev;
@@ -233,7 +236,9 @@ Node *switch_stmt() {
   node->id = label_cnt++;
   node->cond = expr();
   node->cond->endline = FALSE;
-  node->cases = malloc(sizeof(int *));
+  int cap = 8;
+  node->cases = safe_realloc_array(NULL, sizeof(int), cap);
+  node->case_cap = cap;
   node->case_cnt = 0;
   node->has_default = FALSE;
   expect(")", "after condition", "switch");
@@ -261,8 +266,11 @@ Node *case_stmt() {
       error_at(token->loc, "duplicate case value [in case statement]");
     }
   }
-  current_switch->cases[current_switch->case_cnt] = node->val;
-  current_switch->cases = safe_realloc_array(current_switch->cases, sizeof(int *), ++current_switch->case_cnt);
+  if (current_switch->case_cnt >= current_switch->case_cap) {
+    current_switch->case_cap *= 2;
+    current_switch->cases = safe_realloc_array(current_switch->cases, sizeof(int), current_switch->case_cap);
+  }
+  current_switch->cases[current_switch->case_cnt++] = node->val;
   expect(":", "after case value", "case");
   node->endline = TRUE;
   return node;
