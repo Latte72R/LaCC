@@ -4,8 +4,10 @@ TEST_DIR:=./tests
 EXAMPLE_DIR:=./examples
 BUILD_DIR:=./build
 CC_FLAGS:=-std=c99 -I $(INCLUDE_DIR) -w
-# CC_FLAGS:=-std=c99 -I $(INCLUDE_DIR) -w -O0 -g -fsanitize=address,undefined -fno-omit-frame-pointer
-CC_FLAGS_2:=-std=c99 -Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option
+# CC_FLAGS:=-std=c99 -I $(INCLUDE_DIR) \
+	-Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option \
+	-O0 -g -fsanitize=address,undefined -fno-omit-frame-pointer
+CC_FLAGS_2:=-std=c99 -w
 LACC_FLAGS:=-I $(INCLUDE_DIR)
 EXTENSION:=$(SRC_DIR)/extension.c
 HEADERS:=$(wildcard $(INCLUDE_DIR)/*.h)
