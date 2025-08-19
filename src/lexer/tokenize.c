@@ -105,14 +105,7 @@ char *parse_string_literal(char *p) {
                  "unsupported escape sequence \"\\v\" in string literal. Use '\\012' for vertical tab.");
         break;
       default:
-        if (len + 2 >= cap) {
-          do {
-            cap *= 2;
-          } while (len + 2 >= cap);
-          buf = realloc(buf, cap);
-          if (!buf)
-            error("memory allocation failed");
-        }
+        buf = safe_realloc_array(buf, sizeof(char), len + 2, &cap);
         buf[len++] = *p++;
         buf[len++] = *p++;
         i++;
@@ -120,26 +113,12 @@ char *parse_string_literal(char *p) {
       }
       break;
     default:
-      if (len + 1 >= cap) {
-        do {
-          cap *= 2;
-        } while (len + 1 >= cap);
-        buf = realloc(buf, cap);
-        if (!buf)
-          error("memory allocation failed");
-      }
+      buf = safe_realloc_array(buf, sizeof(char), len + 1, &cap);
       buf[len++] = *p++;
       i++;
     }
   }
-  if (len + 1 >= cap) {
-    do {
-      cap *= 2;
-    } while (len + 1 >= cap);
-    buf = realloc(buf, cap);
-    if (!buf)
-      error("memory allocation failed");
-  }
+  buf = safe_realloc_array(buf, sizeof(char), len + 1, &cap);
   buf[len] = '\0';
   i++;
   if (token && token->kind == TK_STRING) {

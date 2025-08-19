@@ -78,24 +78,26 @@ void error_duplicate_name(Token *tok, const char *type) {
   error_at(tok->loc, "duplicated %s name: %.*s", type, tok->len, tok->str);
 }
 
-void *safe_realloc_array(void *ptr, int element_size, int new_size) {
-  void *new_ptr = realloc(ptr, element_size * new_size);
-  if (!new_ptr)
-    error("realloc failed");
-  return new_ptr;
+void *safe_realloc_array(void *ptr, int elem_size, int need, int *cap) {
+  if (need > *cap) {
+    *cap = *cap * 2;
+    void *new_ptr = realloc(ptr, elem_size * *cap);
+    if (!new_ptr)
+      error("realloc failed");
+    return new_ptr;
+  }
+  return ptr;
 }
 
 void program() {
   int i = 0;
   int cap = 16;
-  code = safe_realloc_array(NULL, sizeof(Node *), cap);
+  code = malloc(sizeof(Node *) * cap);
   while (token->kind != TK_EOF) {
-    if (i + 1 >= cap) {
-      cap *= 2;
-      code = safe_realloc_array(code, sizeof(Node *), cap);
-    }
+    code = safe_realloc_array(code, sizeof(Node *), i + 1, &cap);
     code[i++] = stmt();
   }
+  code = safe_realloc_array(NULL, sizeof(Node *), i + 1, &cap);
   code[i] = new_node(ND_NONE);
 }
 
@@ -105,16 +107,13 @@ Array *array_literal(Type *type) {
   Array *array = malloc(sizeof(Array));
   array->id = array_cnt++;
   array->byte = get_sizeof(org_type);
-  int cap = 8;
-  array->val = safe_realloc_array(NULL, sizeof(int), cap);
+  int cap = 16;
+  int i = 0;
+  array->val = malloc(sizeof(int) * cap);
   array->next = arrays;
   arrays = array;
-  int i = 0;
   do {
-    if (i >= cap) {
-      cap *= 2;
-      array->val = safe_realloc_array(array->val, sizeof(int), cap);
-    }
+    array->val = safe_realloc_array(array->val, sizeof(int), i + 1, &cap);
     array->val[i++] = expect_number("array_literal");
   } while (consume(","));
   array->len = i;
