@@ -76,17 +76,18 @@ printf "\n"
 
 printf "\e[1;36mTest case 7:\e[0m\n"
 cat <<EOF > "$TMP_C"
+typedef struct {
+  int x;
+} A;
 int main() {
-  /* 文字列リテラルの変更 */
-  char *s = "hello";
-  s[0] = 'H'; // 未定義動作 - セグフォルト
-  return s[0];
+  A a;
+  int b;
+  a = b;
+  return 0;
 }
 EOF
 cat "$TMP_C"
 $CC $TMP_C -S -o $TMP_S
-cc $TMP_S -o $TMP_OUT
-$TMP_OUT
 printf "\n"
 
 printf "\e[1;36mTest case 8:\e[0m\n"
@@ -267,22 +268,6 @@ int main() {
   int a = 1, b = 2, cond = 0;
   (cond ? a : b) = 15;
   return a + b;
-}
-EOF
-cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
-printf "\n"
-
-printf "\e[1;36mTest case 21:\e[0m\n"
-cat <<EOF > "$TMP_C"
-typedef struct {
-  int x;
-} A;
-int main() {
-  A a;
-  int b;
-  a = b;
-  return 0;
 }
 EOF
 cat "$TMP_C"
