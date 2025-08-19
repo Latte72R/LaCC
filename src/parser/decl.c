@@ -262,11 +262,12 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   }
 
   node = new_node(ND_BLOCK);
-  node->body = NULL;
+  int cap = 16;
   int i = 0;
+  node->body = malloc(sizeof(Node *) * cap);
 
   for (;;) {
-    node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
+    node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1, &cap);
     if (is_extern) {
       node->body[i++] = extern_variable_declaration(tok, type);
     } else if (current_fn) {
@@ -279,7 +280,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
     type = parse_declarator(base_type, &tok, "variable declaration");
   }
 
-  node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1);
+  node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1, &cap);
   node->body[i] = new_node(ND_NONE);
   expect(";", "after line", "variable declaration");
   node->endline = TRUE;

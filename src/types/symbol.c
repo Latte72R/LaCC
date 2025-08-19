@@ -19,6 +19,10 @@ Node *new_node(NodeKind kind) {
   node->kind = kind;
   node->endline = FALSE;
   node->val = 0;
+  node->cases = NULL;
+  node->case_cnt = 0;
+  node->case_cap = 0;
+  node->has_default = FALSE;
   return node;
 }
 

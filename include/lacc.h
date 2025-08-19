@@ -238,6 +238,7 @@ struct Node {
   int endline;
   int *cases;      // kindがND_SWITCHの場合のみ使う
   int case_cnt;    // kindがND_SWITCHの場合のみ使う
+  int case_cap;    // capacity of cases array
   int has_default; // kindがND_SWITCHの場合のみ使う
   Node *cond;      // kindがND_IF, ND_WHILE, ND_FORの場合のみ使う
   Node *then;      // kindがND_IFの場合のみ使う
@@ -270,7 +271,8 @@ Function *find_fn(Token *tok);
 
 // parse.c
 void error_duplicate_name(Token *tok, const char *type);
-void *safe_realloc_array(void *ptr, int element_size, int new_size);
+void *safe_realloc_array(void *ptr, int elem_size, int need, int *cap);
+
 void program();
 int peek(char *op);
 int consume(char *op);
