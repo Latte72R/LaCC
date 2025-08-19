@@ -80,3 +80,98 @@ void free_all_nodes() {
   free(code);
   code = NULL;
 }
+
+typedef struct TypeList TypeList;
+struct TypeList {
+  Type *type;
+  TypeList *next;
+};
+
+static TypeList *type_list = 0;
+
+void register_type(Type *type) {
+  TypeList *tl = malloc(sizeof(TypeList));
+  tl->type = type;
+  tl->next = type_list;
+  type_list = tl;
+}
+
+void free_all_types() {
+  TypeList *tl = type_list;
+  while (tl) {
+    TypeList *next = tl->next;
+    free(tl->type);
+    free(tl);
+    tl = next;
+  }
+  type_list = NULL;
+}
+
+static void free_labels(Label *label) {
+  while (label) {
+    Label *next = label->next;
+    free(label);
+    label = next;
+  }
+}
+
+void free_functions(Function *fn) {
+  while (fn) {
+    Function *next = fn->next;
+    free_labels(fn->labels);
+    free(fn);
+    fn = next;
+  }
+}
+
+void free_lvars(LVar *var) {
+  while (var) {
+    LVar *next = var->next;
+    free(var);
+    var = next;
+  }
+}
+
+void free_objects(Object *obj) {
+  while (obj) {
+    Object *next = obj->next;
+    if (obj->var)
+      free_lvars(obj->var);
+    free(obj);
+    obj = next;
+  }
+}
+
+void free_type_tags(TypeTag *tag) {
+  while (tag) {
+    TypeTag *next = tag->next;
+    free(tag);
+    tag = next;
+  }
+}
+
+void free_strings(String *str) {
+  while (str) {
+    String *next = str->next;
+    free(str);
+    str = next;
+  }
+}
+
+void free_arrays(Array *arr) {
+  while (arr) {
+    Array *next = arr->next;
+    if (arr->val)
+      free(arr->val);
+    free(arr);
+    arr = next;
+  }
+}
+
+void free_include_paths(IncludePath *path) {
+  while (path) {
+    IncludePath *next = path->next;
+    free(path);
+    path = next;
+  }
+}

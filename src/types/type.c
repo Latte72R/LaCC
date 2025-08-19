@@ -10,6 +10,7 @@ extern void *NULL;
 
 Type *new_type(TypeKind ty) {
   Type *type = malloc(sizeof(Type));
+  register_type(type);
   type->ty = ty;
   type->ptr_to = NULL;
   type->array_size = 0;
