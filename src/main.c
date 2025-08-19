@@ -90,6 +90,8 @@ int main(int argc, char **argv) {
 
   program();
 
+  free_all_tokens();
+
   generate_assembly();
 
   fclose(fp);

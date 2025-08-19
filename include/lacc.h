@@ -386,6 +386,11 @@ typedef enum { SEEK_SET, SEEK_CUR, SEEK_END } SeekWhence;
 char *read_file(char *path);
 char *read_include_file(char *name);
 
+// memory.c
+void free_all_tokens();
+void free_node(Node *node);
+void free_all_nodes();
+
 //
 // Extensions
 //
@@ -430,4 +435,5 @@ extern char *strchr();
 // stdlib.h
 extern void *malloc();
 extern void *realloc();
+extern void *calloc();
 extern void free();
