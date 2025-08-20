@@ -28,8 +28,8 @@ extern void *NULL;
 int main(int argc, char **argv) {
   init_global_variables();
   input_file = NULL;
-  char *output_file_tmp = NULL;
-  int o_called = FALSE;
+  output_file = NULL;
+  int output_file_specified = FALSE;
 
   if (argc < 2) {
     error("invalid number of arguments.");
@@ -45,18 +45,17 @@ int main(int argc, char **argv) {
     } else if (!strncmp(argv[i], "-w", 2)) {
       show_warning = FALSE;
     } else if (!strncmp(argv[i], "-o", 2) && i + 1 < argc) {
-      if (o_called) {
+      if (output_file_specified) {
         error("multiple output files specified.");
       }
-      if (output_file_tmp) {
-        free(output_file_tmp);
+      if (!output_file_specified && output_file) {
+        free(output_file);
       }
-      o_called = TRUE;
-      output_file_tmp = argv[++i];
-      if (output_file_tmp[0] == '-') {
+      output_file_specified = TRUE;
+      output_file = argv[++i];
+      if (output_file[0] == '-') {
         error("output file cannot start with '-'.");
       }
-      output_file = output_file_tmp;
     } else if (argv[i][0] == '-') {
       error("unknown option: %s", argv[i]);
     } else {
@@ -79,11 +78,11 @@ int main(int argc, char **argv) {
           break;
         }
       }
-      if (!o_called) {
-        output_file_tmp = malloc(length - start + 1);
-        strncpy(output_file_tmp, input_file + start, length - start);
-        output_file_tmp[length - start - 1] = 's';
-        output_file_tmp[length - start] = '\0';
+      if (!output_file_specified) {
+        output_file = malloc(length - start + 1);
+        strncpy(output_file, input_file + start, length - start);
+        output_file[length - start - 1] = 's';
+        output_file[length - start] = '\0';
       }
     }
   }
@@ -94,9 +93,6 @@ int main(int argc, char **argv) {
     error("no source file specified.");
   }
 
-  if (!output_file) {
-    output_file = output_file_tmp;
-  }
   fp = fopen(output_file, "w");
   if (!fp) {
     error("failed to open output file: %s", output_file);
@@ -127,8 +123,8 @@ int main(int argc, char **argv) {
   free_all_types();
 
   fclose(fp);
-  if (!o_called)
-    free(output_file_tmp);
+  if (!output_file_specified)
+    free(output_file);
 
   if (show_warning) {
     if (warning_cnt == 1) {
