@@ -12,7 +12,7 @@ extern Object *unions;
 extern Object *enums;
 extern TypeTag *type_tags;
 extern String *strings;
-extern String *filenames;
+extern FileName *filenames;
 extern Array *arrays;
 extern IncludePath *include_paths;
 extern Node **code;
@@ -198,7 +198,12 @@ void free_all_strings() {
 }
 
 void free_all_filenames() {
-  free_strings_list(filenames);
+  while (filenames) {
+    FileName *next = filenames->next;
+    // free(filenames->name);
+    free(filenames);
+    filenames = next;
+  }
   filenames = NULL;
 }
 

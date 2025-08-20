@@ -6,7 +6,7 @@ extern int warning_cnt;
 extern char *user_input;
 extern Token *token;
 extern Token *token_head;
-extern String *filenames;
+extern FileName *filenames;
 extern char *input_file;
 extern char *output_file;
 extern IncludePath *include_paths;
@@ -65,12 +65,13 @@ int main(int argc, char **argv) {
       if (input_file) {
         error("multiple source files specified: %s and %s", input_file, argv[i]);
       }
-      input_file = argv[i];
+      input_file = malloc(sizeof(char) * (strlen(argv[i]) + 1));
+      strncpy(input_file, argv[i], strlen(argv[i]) + 1);
       int length = strlen(input_file);
-      filenames = malloc(sizeof(String));
-      filenames->text = input_file;
-      filenames->len = length;
-      filenames->next = NULL;
+      FileName *filename = malloc(sizeof(FileName));
+      filename->name = input_file;
+      filename->next = filenames;
+      filenames = filename;
       if (strncmp(input_file + length - 2, ".c", 2)) {
         error("source file must have a .c extension.");
       }

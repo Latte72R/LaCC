@@ -78,7 +78,6 @@ char *parse_string_literal(char *p) {
   p++;
   char *q = p;
   int len = 0;
-  int i = 0;
   int cap = 16;
   char *buf = malloc(sizeof(char) * cap);
   if (!buf)
@@ -108,30 +107,27 @@ char *parse_string_literal(char *p) {
         buf = safe_realloc_array(buf, sizeof(char), len + 2, &cap);
         buf[len++] = *p++;
         buf[len++] = *p++;
-        i++;
         break;
       }
       break;
     default:
       buf = safe_realloc_array(buf, sizeof(char), len + 1, &cap);
       buf[len++] = *p++;
-      i++;
     }
   }
   buf = safe_realloc_array(buf, sizeof(char), len + 1, &cap);
   buf[len] = '\0';
-  i++;
   if (token && token->kind == TK_STRING) {
     token->str = realloc(token->str, token->len + len + 1);
+    register_char_ptr(token->str);
     if (!token->str)
       error("memory allocation failed");
     memcpy(token->str + token->len, buf, len);
     token->len += len;
-    free(buf);
   } else {
     new_token(TK_STRING, q, buf, len);
-    free(buf);
   }
+  free(buf);
   p++;
   return p; // Return the position after the closing quote
 }

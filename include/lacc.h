@@ -59,6 +59,12 @@ struct String {
   int id;
 };
 
+typedef struct FileName FileName;
+struct FileName {
+  FileName *next;
+  char *name;
+};
+
 typedef struct Array Array;
 struct Array {
   Array *next;

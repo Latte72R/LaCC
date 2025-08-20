@@ -4,7 +4,7 @@
 extern char *user_input;
 extern Token *token;
 extern Token *token_head;
-extern String *filenames;
+extern FileName *filenames;
 extern char *input_file;
 
 extern const int TRUE;
@@ -76,8 +76,8 @@ char *handle_include_directive(char *p) {
   name[p - q] = '\0';
   p++; // 閉じる引用符の次へ進める
   int already_included = FALSE;
-  for (String *s = filenames; s; s = s->next) {
-    if (!strncmp(s->text, name, strlen(name))) {
+  for (FileName *s = filenames; s; s = s->next) {
+    if (!strcmp(s->name, name)) {
       // 同じファイルを二重に取り込まない
       already_included = TRUE;
       break;
@@ -90,10 +90,10 @@ char *handle_include_directive(char *p) {
   char *input_file_prev = input_file;
   input_file = name; // 現在処理中のファイル名を更新
   // filenames に現在のファイルを追加
-  filenames = malloc(sizeof(String));
-  filenames->text = input_file;
-  filenames->len = strlen(input_file);
-  filenames->next = NULL;
+  FileName *filename = malloc(sizeof(FileName));
+  filename->name = input_file;
+  filename->next = filenames;
+  filenames = filename;
   char *user_input_prev = user_input;
   char *new_input = read_include_file(name); // ファイル内容を取得
   if (!new_input) {
@@ -105,7 +105,6 @@ char *handle_include_directive(char *p) {
   // トークナイズ後は元の入力に戻す
   user_input = user_input_prev;
   input_file = input_file_prev;
-  free(name);      // ファイル名のメモリを解放
   free(new_input); // 読み込んだ内容のメモリを解放
   return p;
 }
