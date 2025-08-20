@@ -106,11 +106,12 @@ int main(int argc, char **argv) {
   if (!user_input) {
     error("failed to read source file: %s", input_file);
   }
-  register_char_ptr(user_input);
 
   tokenize();
   new_token(TK_EOF, NULL, NULL, 0);
   token = token_head;
+
+  free(user_input);
 
   program();
 
