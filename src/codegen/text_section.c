@@ -606,14 +606,7 @@ void gen(Node *node) {
 
 void gen_text_section() {
   write_file("  .text\n");
-  int i = 0;
-  while (code[i] && code[i]->kind != ND_NONE) {
+  for (int i = 0; code[i]->kind != ND_NONE; i++)
     gen(code[i]);
-    free_node(code[i]);
-    i++;
-  }
-  if (code[i])
-    free_node(code[i]);
-  free(code);
-  code = NULL;
+  free_all_nodes();
 }

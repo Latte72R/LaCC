@@ -15,6 +15,7 @@ extern String *strings;
 extern String *filenames;
 extern Array *arrays;
 extern IncludePath *include_paths;
+extern Node **code;
 
 void free_all_tokens() {
   Token *cur = token_head;
@@ -37,6 +38,11 @@ void free_node(Node *node) {
     return;
   }
 
+  // Compound assignments and post-increment expressions reuse the left
+  // operand within the right-hand subtree. Freeing both sides would therefore
+  // traverse shared nodes twice and lead to double free. Only descend into the
+  // right-hand side for such nodes; the left-hand side will be freed as part of
+  // that subtree.
   switch (node->kind) {
   case ND_ASSIGN:
   case ND_POSTINC:
@@ -76,6 +82,20 @@ void free_node(Node *node) {
   if (node->cases)
     free(node->cases);
   free(node);
+}
+
+void free_all_nodes() {
+  if (!code)
+    return;
+  int i = 0;
+  while (code[i] && code[i]->kind != ND_NONE) {
+    free_node(code[i]);
+    i++;
+  }
+  if (code[i])
+    free_node(code[i]);
+  free(code);
+  code = NULL;
 }
 
 static TypeList *type_list = 0;
