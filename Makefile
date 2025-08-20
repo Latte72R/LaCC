@@ -3,11 +3,12 @@ INCLUDE_DIR:=./include
 TEST_DIR:=./tests
 EXAMPLE_DIR:=./examples
 BUILD_DIR:=./build
-CC_FLAGS:=-std=c99 -I $(INCLUDE_DIR) -w
-# CC_FLAGS:=-std=c99 -I $(INCLUDE_DIR) \
-	-Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option \
-	-O0 -g -fsanitize=address,undefined -fno-omit-frame-pointer
+CC_FLAGS_1:=-std=c99 -I $(INCLUDE_DIR) -w
 CC_FLAGS_2:=-std=c99 -w
+CC_FLAGS_3:=-std=c99 -I $(INCLUDE_DIR) \
+	-Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option \
+	-O0 -g -fsanitize=address -fno-omit-frame-pointer
+CC_FLAGS:=$(CC_FLAGS_1)
 LACC_FLAGS:=-I $(INCLUDE_DIR)
 EXTENSION:=$(SRC_DIR)/extension.c
 HEADERS:=$(wildcard $(INCLUDE_DIR)/*.h)
@@ -15,6 +16,7 @@ SRCS:=$(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/**/*.c)
 SRCS:=$(filter-out $(EXTENSION),$(SRCS))
 OBJ_S:=$(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.s,$(SRCS))
 CC:=cc
+NO_PRINT_DIR:=--no-print-directory
 BOOSTSTRAP:=$(BUILD_DIR)/bootstrap
 SELFHOST:=$(BUILD_DIR)/lacc
 UNIT_TEST:=$(TEST_DIR)/unittest.c
@@ -32,7 +34,7 @@ $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 	@echo "Build directory created at '$@'."
 
-bootstrap: $(BOOSTSTRAP)
+bootstrap: $(BOOSTSTRAP) ## Build the bootstrap compiler
 
 selfhost: $(SELFHOST) ## Build the self-hosted compiler
 
@@ -118,6 +120,12 @@ $(STAGE3_DIR)/%.s: $(SRC_DIR)/%.c $(SELFHOST) | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	@$(SELFHOST) $(LACC_FLAGS) $< -o $@
 
+sanitize: CC_FLAGS=$(CC_FLAGS_3) ## Compile sources with sanitizer checks
+sanitize: clean bootstrap selfhost clean
+	@echo "Sanitizer checks passed. (ASan)"
+
+.NOTPARALLEL: sanitize
+
 # コンパイラ本体のみ比較（SRCS 全部）
 asmcmp: $(SELFHOST) $(patsubst $(SRC_DIR)/%.c,$(STAGE3_DIR)/%.s,$(SRCS)) ## Compare stage2 vs stage3 assembly for compiler sources
 	@set -eu; \
@@ -146,7 +154,7 @@ clean: ## Clean up generated files
 	@rm -rf $(BUILD_DIR)
 	@echo "Cleaned up generated files."
 
-.PHONY: help run unittest warntest errortest asmcmp clean \
+.PHONY: help run unittest warntest errortest santest asmcmp clean \
         bootstrap selfhost .run-cc .run-bootstrap .run-selfhost \
         .unittest-cc .unittest-bootstrap .unittest-selfhost \
 		.warntest-cc .warntest-bootstrap .warntest-selfhost \
