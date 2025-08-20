@@ -2,7 +2,6 @@
 
 extern Token *token_head;
 extern Token *token;
-extern Node **code;
 extern void *NULL;
 extern Function *functions;
 extern LVar *locals;
@@ -77,20 +76,6 @@ void free_node(Node *node) {
   if (node->cases)
     free(node->cases);
   free(node);
-}
-
-void free_all_nodes() {
-  if (!code)
-    return;
-  int i = 0;
-  while (code[i] && code[i]->kind != ND_NONE) {
-    free_node(code[i]);
-    i++;
-  }
-  if (code[i])
-    free_node(code[i]);
-  free(code);
-  code = NULL;
 }
 
 static TypeList *type_list = 0;

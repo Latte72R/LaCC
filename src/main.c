@@ -48,14 +48,17 @@ int main(int argc, char **argv) {
       if (output_file_specified) {
         error("multiple output files specified.");
       }
-      if (!output_file_specified && output_file) {
+      if (output_file) {
         free(output_file);
       }
       output_file_specified = TRUE;
-      output_file = argv[++i];
-      if (output_file[0] == '-') {
+      char *out = argv[++i];
+      if (out[0] == '-') {
         error("output file cannot start with '-'.");
       }
+      int out_len = strlen(out);
+      output_file = malloc(out_len + 1);
+      strncpy(output_file, out, out_len + 1);
     } else if (argv[i][0] == '-') {
       error("unknown option: %s", argv[i]);
     } else {
@@ -109,8 +112,6 @@ int main(int argc, char **argv) {
   free_all_tokens();
 
   generate_assembly();
-
-  free_all_nodes();
   free_all_functions();
   free_all_lvars();
   free_all_objects();
@@ -123,8 +124,7 @@ int main(int argc, char **argv) {
   free_all_types();
 
   fclose(fp);
-  if (!output_file_specified)
-    free(output_file);
+  free(output_file);
 
   if (show_warning) {
     if (warning_cnt == 1) {

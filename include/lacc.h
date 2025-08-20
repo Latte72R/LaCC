@@ -395,7 +395,6 @@ char *read_include_file(char *name);
 // memory.c
 void free_all_tokens();
 void free_node(Node *node);
-void free_all_nodes();
 void free_all_functions();
 void free_all_lvars();
 void free_all_objects();
