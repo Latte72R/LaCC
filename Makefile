@@ -7,7 +7,7 @@ CC_FLAGS_1:=-std=c99 -I $(INCLUDE_DIR) -w
 CC_FLAGS_2:=-std=c99 -w
 CC_FLAGS_3:=-std=c99 -I $(INCLUDE_DIR) \
 	-Wno-incompatible-library-redeclaration -Wno-builtin-declaration-mismatch -Wno-unknown-warning-option \
-	-O0 -g -fsanitize=address -fno-omit-frame-pointer
+	-O0 -g -fsanitize=address,undefined -fno-omit-frame-pointer
 CC_FLAGS:=$(CC_FLAGS_1)
 LACC_FLAGS:=-I $(INCLUDE_DIR)
 EXTENSION:=$(SRC_DIR)/extension.c
