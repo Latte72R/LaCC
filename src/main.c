@@ -110,6 +110,8 @@ int main(int argc, char **argv) {
   new_token(TK_EOF, NULL, NULL, 0);
   token = token_head;
 
+  free(user_input);
+
   program();
 
   free_all_tokens();
@@ -127,7 +129,6 @@ int main(int argc, char **argv) {
   free_all_filenames();
   free_all_types();
   free_all_char_ptrs();
-  free(user_input);
 
   fclose(fp);
   free(output_file);

@@ -111,6 +111,26 @@ void free_all_types() {
   type_list = NULL;
 }
 
+static ObjectList *object_list = 0;
+
+void register_object(Object *object) {
+  ObjectList *ol = malloc(sizeof(ObjectList));
+  ol->object = object;
+  ol->next = object_list;
+  object_list = ol;
+}
+
+void free_all_objects() {
+  ObjectList *ol = object_list;
+  while (ol) {
+    ObjectList *next = ol->next;
+    free(ol->object);
+    free(ol);
+    ol = next;
+  }
+  object_list = NULL;
+}
+
 static void free_labels(Label *label) {
   while (label) {
     Label *next = label->next;
@@ -125,14 +145,6 @@ static void free_functions(Function *fn) {
     free_labels(fn->labels);
     free(fn);
     fn = next;
-  }
-}
-
-static void free_objects_list(Object *obj) {
-  while (obj) {
-    Object *next = obj->next;
-    free(obj);
-    obj = next;
   }
 }
 
@@ -173,13 +185,6 @@ static void free_include_paths_list(IncludePath *path) {
 void free_all_functions() {
   free_functions(functions);
   functions = NULL;
-}
-
-void free_all_objects() {
-  free_objects_list(structs);
-  free_objects_list(unions);
-  free_objects_list(enums);
-  structs = unions = enums = NULL;
 }
 
 void free_all_type_tags() {

@@ -105,8 +105,8 @@ struct LVar {
 
 typedef struct LVarList LVarList;
 struct LVarList {
-  LVar *var;
   LVarList *next;
+  LVar *var;
 };
 
 // struct, enum, unionの型
@@ -118,6 +118,12 @@ struct Object {
   int len;        // 名前の長さ
   int size;       // 構造体のサイズ
   int is_defined; // 定義済みかどうか
+};
+
+typedef struct ObjectList ObjectList;
+struct ObjectList {
+  ObjectList *next;
+  Object *object;
 };
 
 typedef struct TypeTag TypeTag;
@@ -420,8 +426,9 @@ void register_type(Type *type);
 void free_all_types();
 void register_char_ptr(char *str);
 void free_all_char_ptrs();
-void free_all_functions();
+void register_object(Object *object);
 void free_all_objects();
+void free_all_functions();
 void free_all_type_tags();
 void free_all_strings();
 void free_all_filenames();

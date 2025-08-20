@@ -313,10 +313,11 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
     error_at(tok->loc, "duplicate object declaration: %.*s [in object declaration]", tok->len, tok->str);
   } else if (!object) {
     object = malloc(sizeof(Object));
+    register_object(object);
+    object->next = NULL;
     object->is_defined = FALSE;
     object->var = NULL;
     object->size = 0;
-    object->next = NULL;
     if (tok) {
       object->name = tok->str;
       object->len = tok->len;
@@ -404,6 +405,8 @@ Object *enum_declaration(const int should_record) {
     error_at(tok->loc, "duplicate object declaration: %.*s [in enum declaration]", tok->len, tok->str);
   } else if (!object) {
     object = malloc(sizeof(Object));
+    register_object(object);
+    object->next = NULL;
     object->is_defined = FALSE;
     object->var = NULL;
     if (tok) {

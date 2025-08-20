@@ -80,7 +80,7 @@ char *parse_string_literal(char *p) {
   int len = 0;
   int i = 0;
   int cap = 16;
-  char *buf = malloc(cap);
+  char *buf = malloc(sizeof(char) * cap);
   if (!buf)
     error("memory allocation failed");
   while (*p != '"') {
@@ -122,16 +122,15 @@ char *parse_string_literal(char *p) {
   buf[len] = '\0';
   i++;
   if (token && token->kind == TK_STRING) {
-    token->str = realloc(token->str, token->len + len);
+    token->str = realloc(token->str, token->len + len + 1);
     if (!token->str)
       error("memory allocation failed");
     memcpy(token->str + token->len, buf, len);
     token->len += len;
-    token->val += i - 1;
     free(buf);
   } else {
     new_token(TK_STRING, q, buf, len);
-    token->val = i;
+    free(buf);
   }
   p++;
   return p; // Return the position after the closing quote
