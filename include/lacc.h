@@ -83,6 +83,12 @@ struct Token {
   TypeKind ty; // Token type
 };
 
+typedef struct CharPtrList CharPtrList;
+struct CharPtrList {
+  char *str;
+  CharPtrList *next;
+};
+
 typedef struct Type Type;
 
 typedef struct LVar LVar;
@@ -95,6 +101,12 @@ struct LVar {
   Type *type;    // 変数の型
   int is_static; // staticかどうか
   int block;     // ブロックのID
+};
+
+typedef struct LVarList LVarList;
+struct LVarList {
+  LVar *var;
+  LVarList *next;
 };
 
 // struct, enum, unionの型
@@ -131,8 +143,8 @@ struct Type {
 
 typedef struct TypeList TypeList;
 struct TypeList {
-  Type *type;
   TypeList *next;
+  Type *type;
 };
 
 // Label
@@ -257,6 +269,12 @@ struct Node {
   LVar *var;       // kindがND_LVAR, ND_GVARの場合のみ使う
   Type *type;
   Label *label;
+};
+
+typedef struct NodeList NodeList;
+struct NodeList {
+  NodeList *next;
+  Node *node;
 };
 
 // symbol.c
@@ -394,18 +412,21 @@ char *read_include_file(char *name);
 
 // memory.c
 void free_all_tokens();
-void free_node(Node *node);
+void register_node(Node *node);
 void free_all_nodes();
-void free_all_functions();
+void register_lvar(LVar *var);
 void free_all_lvars();
+void register_type(Type *type);
+void free_all_types();
+void register_char_ptr(char *str);
+void free_all_char_ptrs();
+void free_all_functions();
 void free_all_objects();
 void free_all_type_tags();
 void free_all_strings();
 void free_all_filenames();
 void free_all_arrays();
 void free_all_include_paths();
-void free_all_types();
-void register_type(Type *type);
 
 //
 // Extensions

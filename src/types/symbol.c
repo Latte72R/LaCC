@@ -16,6 +16,7 @@ extern void *NULL;
 
 Node *new_node(NodeKind kind) {
   Node *node = malloc(sizeof(Node));
+  register_node(node);
   node->kind = kind;
   node->lhs = NULL;
   node->rhs = NULL;
@@ -66,6 +67,7 @@ Node *new_binary(NodeKind kind, Node *lhs, Node *rhs) {
 // 共通の変数作成処理
 LVar *new_lvar(Token *tok, Type *type, int is_static, int is_extern) {
   LVar *lvar = malloc(sizeof(LVar));
+  register_lvar(lvar);
   lvar->name = tok->str;
   lvar->len = tok->len;
   lvar->is_extern = is_extern;

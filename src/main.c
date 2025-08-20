@@ -115,6 +115,8 @@ int main(int argc, char **argv) {
   free_all_tokens();
 
   generate_assembly();
+
+  free_all_nodes();
   free_all_functions();
   free_all_lvars();
   free_all_objects();
@@ -123,8 +125,9 @@ int main(int argc, char **argv) {
   free_all_arrays();
   free_all_include_paths();
   free_all_filenames();
-  free(user_input);
   free_all_types();
+  free_all_char_ptrs();
+  free(user_input);
 
   fclose(fp);
   free(output_file);

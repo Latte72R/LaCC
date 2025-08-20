@@ -21,8 +21,7 @@ void free_all_tokens() {
   Token *cur = token_head;
   while (cur) {
     Token *next = cur->next;
-    if (cur->loc)
-      free(cur->loc);
+    free(cur->loc);
     free(cur);
     cur = next;
   }
@@ -30,72 +29,66 @@ void free_all_tokens() {
   token = NULL;
 }
 
-void free_node(Node *node) {
-  if (!node)
-    return;
-  if (node->kind == ND_NONE) {
-    free(node);
-    return;
-  }
+static NodeList *node_list = 0;
 
-  // Compound assignments and post-increment expressions reuse the left
-  // operand within the right-hand subtree. Freeing both sides would therefore
-  // traverse shared nodes twice and lead to double free. Only descend into the
-  // right-hand side for such nodes; the left-hand side will be freed as part of
-  // that subtree.
-  switch (node->kind) {
-  case ND_ASSIGN:
-  case ND_POSTINC:
-    if (node->rhs)
-      free_node(node->rhs);
-    break;
-  default:
-    if (node->lhs)
-      free_node(node->lhs);
-    if (node->rhs)
-      free_node(node->rhs);
-    break;
-  }
-  if (node->cond)
-    free_node(node->cond);
-  if (node->then)
-    free_node(node->then);
-  if (node->els)
-    free_node(node->els);
-  if (node->init)
-    free_node(node->init);
-  if (node->step)
-    free_node(node->step);
-  if (node->body) {
-    int i = 0;
-    while (node->body[i] && node->body[i]->kind != ND_NONE) {
-      free_node(node->body[i]);
-      i++;
-    }
-    if (node->body[i])
-      free_node(node->body[i]);
-    free(node->body);
-  }
-  for (int i = 0; i < 6; i++)
-    if (node->args[i])
-      free_node(node->args[i]);
-  if (node->cases)
-    free(node->cases);
-  free(node);
+void register_node(Node *node) {
+  NodeList *nl = malloc(sizeof(NodeList));
+  nl->node = node;
+  nl->next = node_list;
+  node_list = nl;
 }
 
 void free_all_nodes() {
-  if (!code)
-    return;
-  int i = 0;
-  while (code[i] && code[i]->kind != ND_NONE) {
-    free_node(code[i]);
-    i++;
+  NodeList *nl = node_list;
+  while (nl) {
+    NodeList *next = nl->next;
+    free(nl->node->body);
+    free(nl->node->cases);
+    free(nl->node);
+    free(nl);
+    nl = next;
   }
-  if (code[i])
-    free_node(code[i]);
-  free(code);
-  code = NULL;
+  node_list = NULL;
+}
+
+static CharPtrList *char_ptr_list = 0;
+
+void register_char_ptr(char *str) {
+  CharPtrList *cl = malloc(sizeof(CharPtrList));
+  cl->str = str;
+  cl->next = char_ptr_list;
+  char_ptr_list = cl;
+}
+
+void free_all_char_ptrs() {
+  CharPtrList *cl = char_ptr_list;
+  while (cl) {
+    CharPtrList *next = cl->next;
+    free(cl->str);
+    free(cl);
+    cl = next;
+  }
+  char_ptr_list = NULL;
+}
+
+static LVarList *lvar_list = 0;
+
+void register_lvar(LVar *var) {
+  LVarList *ll = malloc(sizeof(LVarList));
+  ll->var = var;
+  ll->next = lvar_list;
+  lvar_list = ll;
+}
+
+void free_all_lvars() {
+  LVarList *ll = lvar_list;
+  while (ll) {
+    LVarList *next = ll->next;
+    free(ll->var);
+    free(ll);
+    ll = next;
+  }
+  lvar_list = NULL;
 }
 
 static TypeList *type_list = 0;
@@ -135,19 +128,9 @@ static void free_functions(Function *fn) {
   }
 }
 
-static void free_lvars(LVar *var) {
-  while (var) {
-    LVar *next = var->next;
-    free(var);
-    var = next;
-  }
-}
-
 static void free_objects_list(Object *obj) {
   while (obj) {
     Object *next = obj->next;
-    if (obj->var)
-      free_lvars(obj->var);
     free(obj);
     obj = next;
   }
@@ -190,13 +173,6 @@ static void free_include_paths_list(IncludePath *path) {
 void free_all_functions() {
   free_functions(functions);
   functions = NULL;
-}
-
-void free_all_lvars() {
-  free_lvars(locals);
-  free_lvars(globals);
-  free_lvars(statics);
-  locals = globals = statics = NULL;
 }
 
 void free_all_objects() {
