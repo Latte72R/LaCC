@@ -118,10 +118,11 @@ char *parse_string_literal(char *p) {
   buf = safe_realloc_array(buf, sizeof(char), len + 1, &cap);
   buf[len] = '\0';
   if (token && token->kind == TK_STRING) {
+    char *old = token->str;
     token->str = realloc(token->str, token->len + len + 1);
-    register_char_ptr(token->str);
     if (!token->str)
       error("memory allocation failed");
+    update_char_ptr(old, token->str);
     memcpy(token->str + token->len, buf, len);
     token->len += len;
   } else {

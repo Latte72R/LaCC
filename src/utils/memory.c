@@ -60,6 +60,16 @@ void register_char_ptr(char *str) {
   char_ptr_list = cl;
 }
 
+void update_char_ptr(char *old_ptr, char *new_ptr) {
+  for (CharPtrList *cl = char_ptr_list; cl; cl = cl->next) {
+    if (cl->str == old_ptr) {
+      cl->str = new_ptr;
+      return;
+    }
+  }
+  register_char_ptr(new_ptr);
+}
+
 void free_all_char_ptrs() {
   CharPtrList *cl = char_ptr_list;
   while (cl) {
@@ -200,7 +210,7 @@ void free_all_strings() {
 void free_all_filenames() {
   while (filenames) {
     FileName *next = filenames->next;
-    // free(filenames->name);
+    free(filenames->name);
     free(filenames);
     filenames = next;
   }

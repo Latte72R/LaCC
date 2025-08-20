@@ -105,6 +105,7 @@ char *handle_include_directive(char *p) {
   // トークナイズ後は元の入力に戻す
   user_input = user_input_prev;
   input_file = input_file_prev;
-  free(new_input); // 読み込んだ内容のメモリを解放
+  // 後でまとめて解放するため登録
+  register_char_ptr(new_input);
   return p;
 }
