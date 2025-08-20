@@ -102,6 +102,9 @@ int main(int argc, char **argv) {
   }
 
   user_input = read_file(input_file);
+  if (!user_input) {
+    error("failed to read source file: %s", input_file);
+  }
 
   tokenize();
   new_token(TK_EOF, NULL, NULL, 0);
