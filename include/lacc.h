@@ -431,6 +431,7 @@ void free_all_lvars();
 void register_type(Type *type);
 void free_all_types();
 void register_char_ptr(char *str);
+void update_char_ptr(char *old_ptr, char *new_ptr);
 void free_all_char_ptrs();
 void register_object(Object *object);
 void free_all_objects();
