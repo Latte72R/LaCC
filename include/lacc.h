@@ -129,6 +129,12 @@ struct Type {
   int is_variadic;       // 可変長引数かどうか
 };
 
+typedef struct TypeList TypeList;
+struct TypeList {
+  Type *type;
+  TypeList *next;
+};
+
 // Label
 typedef struct Label Label;
 struct Label {
@@ -390,6 +396,16 @@ char *read_include_file(char *name);
 void free_all_tokens();
 void free_node(Node *node);
 void free_all_nodes();
+void free_all_functions();
+void free_all_lvars();
+void free_all_objects();
+void free_all_type_tags();
+void free_all_strings();
+void free_all_filenames();
+void free_all_arrays();
+void free_all_include_paths();
+void free_all_types();
+void register_type(Type *type);
 
 //
 // Extensions
