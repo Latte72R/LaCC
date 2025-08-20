@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
   init_global_variables();
   input_file = NULL;
   char *output_file_tmp = NULL;
-  int output_file_tmp_allocated = FALSE;
+  int o_called = FALSE;
 
   if (argc < 2) {
     error("invalid number of arguments.");
@@ -45,10 +45,13 @@ int main(int argc, char **argv) {
     } else if (!strncmp(argv[i], "-w", 2)) {
       show_warning = FALSE;
     } else if (!strncmp(argv[i], "-o", 2) && i + 1 < argc) {
-      if (output_file_tmp_allocated) {
-        free(output_file_tmp);
-        output_file_tmp_allocated = FALSE;
+      if (o_called) {
+        error("multiple output files specified.");
       }
+      if (output_file_tmp) {
+        free(output_file_tmp);
+      }
+      o_called = TRUE;
       output_file_tmp = argv[++i];
       if (output_file_tmp[0] == '-') {
         error("output file cannot start with '-'.");
@@ -76,11 +79,12 @@ int main(int argc, char **argv) {
           break;
         }
       }
-      output_file_tmp = malloc(length - start + 1);
-      output_file_tmp_allocated = TRUE;
-      strncpy(output_file_tmp, input_file + start, length - start);
-      output_file_tmp[length - start - 1] = 's';
-      output_file_tmp[length - start] = '\0';
+      if (!o_called) {
+        output_file_tmp = malloc(length - start + 1);
+        strncpy(output_file_tmp, input_file + start, length - start);
+        output_file_tmp[length - start - 1] = 's';
+        output_file_tmp[length - start] = '\0';
+      }
     }
   }
 
@@ -123,7 +127,7 @@ int main(int argc, char **argv) {
   free_all_types();
 
   fclose(fp);
-  if (output_file_tmp_allocated)
+  if (!o_called)
     free(output_file_tmp);
 
   if (show_warning) {
