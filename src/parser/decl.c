@@ -314,6 +314,9 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
   } else if (!object) {
     object = malloc(sizeof(Object));
     object->is_defined = FALSE;
+    object->var = NULL;
+    object->size = 0;
+    object->next = NULL;
     if (tok) {
       object->name = tok->str;
       object->len = tok->len;
