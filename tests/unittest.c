@@ -1577,6 +1577,32 @@ int test167() { return sizeof(long); }
 
 int test168() { return sizeof(long long); }
 
+int test169() { return sizeof(char *); }
+
+int test170() {
+  char c = 'a';
+  return sizeof(c + 5);
+}
+
+// short 型の算術（整数昇格で int 計算）
+int test171() {
+  short a = 30000;
+  short b = 200;
+  return a + b; /* 30200 */
+}
+
+// long 型で 64bit 超の数値を扱う（LP64 前提）
+int test172() {
+  long a = 10000000000L;         /* 1e10 */
+  return (int)(a / 1000000000L); /* 10 */
+}
+
+// long long 型のビットシフト
+int test173() {
+  long long a = 1LL << 40; /* 2^40 */
+  return (int)(a >> 32);   /* 2^(40-32)=256 */
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1756,6 +1782,10 @@ int main() {
   check(test166(), 166, 2);
   check(test167(), 167, 8);
   check(test168(), 168, 8);
+  /* 追加: short / long / long long */
+  check(test171(), 171, 30200);
+  check(test172(), 172, 10);
+  check(test173(), 173, 256);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);
