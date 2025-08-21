@@ -41,7 +41,7 @@ Type *new_type_arr(Type *ptr_to, int array_size) {
 }
 
 int consume_base_type(char *name) {
-  if (token->kind != TK_TYPE || !strcmp(token->str, name))
+  if (token->kind != TK_TYPE || strcmp(token->str, name))
     return FALSE;
   token = token->next;
   return TRUE;
@@ -81,8 +81,6 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
   } else if (token->kind != TK_TYPE) {
     return NULL;
   } else {
-    // type->ty = token->ty;
-    // token = token->next;
     if (consume_base_type("int")) {
       type->ty = TY_INT;
     } else if (consume_base_type("char")) {

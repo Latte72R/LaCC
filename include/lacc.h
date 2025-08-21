@@ -100,7 +100,6 @@ struct Token {
   char *str;      // Token string
   int len;        // Token length
   Location *loc;
-  // TypeKind ty; // Token type
 };
 
 typedef struct CharPtrList CharPtrList;
