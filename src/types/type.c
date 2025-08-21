@@ -265,6 +265,11 @@ int get_sizeof(Type *type) {
     return 4;
   case TY_CHAR:
     return 1;
+  case TY_SHORT:
+    return 2;
+  case TY_LONG:
+  case TY_LONGLONG:
+    return 8;
   case TY_PTR:
     return 8;
   case TY_ARR:
@@ -290,6 +295,11 @@ int type_size(Type *type) {
     return 4;
   case TY_CHAR:
     return 1;
+  case TY_SHORT:
+    return 2;
+  case TY_LONG:
+  case TY_LONGLONG:
+    return 8;
   case TY_PTR:
   case TY_ARR:
   case TY_ARGARR:
@@ -304,12 +314,18 @@ int type_size(Type *type) {
 }
 
 int is_ptr_or_arr(Type *type) { return type->ty == TY_PTR || type->ty == TY_ARR || type->ty == TY_ARGARR; }
-int is_number(Type *type) { return type->ty == TY_INT || type->ty == TY_CHAR; }
+int is_number(Type *type) {
+  return type->ty == TY_INT || type->ty == TY_CHAR || type->ty == TY_SHORT || type->ty == TY_LONG ||
+         type->ty == TY_LONGLONG;
+}
 
 char *type_name(Type *type) {
   switch (type->ty) {
   case TY_INT:
   case TY_CHAR:
+  case TY_SHORT:
+  case TY_LONG:
+  case TY_LONGLONG:
     return "integer";
   case TY_PTR:
     return "pointer";
