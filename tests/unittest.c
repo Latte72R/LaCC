@@ -1588,6 +1588,11 @@ int test168() {
   return sizeof(a) + a + b; /* 8 + 1 + 2 = 11 */
 }
 
+int test169() {
+  char a = 5;
+  return sizeof(a + 1);
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1767,6 +1772,7 @@ int main() {
   check(test166(), 166, 7);
   check(test167(), 167, 20);
   check(test168(), 168, 11);
+  check(test169(), 169, 4);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);
