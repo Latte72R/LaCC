@@ -352,6 +352,29 @@ void tokenize() {
       continue;
     }
 
+    if (startswith(p, "long") && !is_alnum(p[4])) {
+      char *q = p + 4;
+      while (isspace(*q))
+        q++;
+      if (startswith(q, "long") && !is_alnum(q[4])) {
+        new_token(TK_TYPE, p, p, q + 4 - p);
+        token->ty = TY_LONGLONG;
+        p = q + 4;
+        continue;
+      }
+      new_token(TK_TYPE, p, p, 4);
+      token->ty = TY_LONG;
+      p += 4;
+      continue;
+    }
+
+    if (startswith(p, "short") && !is_alnum(p[5])) {
+      new_token(TK_TYPE, p, p, 5);
+      token->ty = TY_SHORT;
+      p += 5;
+      continue;
+    }
+
     if (startswith(p, "int") && !is_alnum(p[3])) {
       new_token(TK_TYPE, p, p, 3);
       token->ty = TY_INT;

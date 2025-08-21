@@ -33,7 +33,17 @@ void gen_global_variables() {
     write_file("  .p2align 3\n");
     write_file("%.*s:\n", var->len, var->name);
     if (var->offset) {
-      write_file("  .long %d\n", var->offset);
+      int sz = get_sizeof(var->type);
+      if (sz == 1)
+        write_file("  .byte %d\n", var->offset);
+      else if (sz == 2)
+        write_file("  .word %d\n", var->offset);
+      else if (sz == 4)
+        write_file("  .long %d\n", var->offset);
+      else if (sz == 8)
+        write_file("  .quad %d\n", var->offset);
+      else
+        error("invalid type size [in gen_global_variables]");
     } else {
       write_file("  .zero %d\n", get_sizeof(var->type));
     }
@@ -47,7 +57,17 @@ void gen_static_variables() {
     write_file("  .p2align 3\n");
     write_file("%.*s.%d:\n", var->len, var->name, var->block);
     if (var->offset) {
-      write_file("  .long %d\n", var->offset);
+      int sz = get_sizeof(var->type);
+      if (sz == 1)
+        write_file("  .byte %d\n", var->offset);
+      else if (sz == 2)
+        write_file("  .word %d\n", var->offset);
+      else if (sz == 4)
+        write_file("  .long %d\n", var->offset);
+      else if (sz == 8)
+        write_file("  .quad %d\n", var->offset);
+      else
+        error("invalid type size [in gen_static_variables]");
     } else {
       write_file("  .zero %d\n", get_sizeof(var->type));
     }

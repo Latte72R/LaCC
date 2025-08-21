@@ -20,6 +20,23 @@ char *regs1(int i) {
     return NULL;
 }
 
+char *regs2(int i) {
+  if (i == 0)
+    return "di";
+  else if (i == 1)
+    return "si";
+  else if (i == 2)
+    return "dx";
+  else if (i == 3)
+    return "cx";
+  else if (i == 4)
+    return "r8w";
+  else if (i == 5)
+    return "r9w";
+  else
+    return NULL;
+}
+
 char *regs4(int i) {
   if (i == 0)
     return "edi";
