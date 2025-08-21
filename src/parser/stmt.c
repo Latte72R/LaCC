@@ -43,6 +43,12 @@ Node *block_stmt() {
   structs = structs_prev;
   unions = unions_prev;
   enums = enums_prev;
+  // typedefで追加された型タグを解放
+  while (type_tags != type_tags_prev) {
+    TypeTag *next = type_tags->next;
+    free(type_tags);
+    type_tags = next;
+  }
   type_tags = type_tags_prev;
   return node;
 }

@@ -171,10 +171,10 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
   }
   Node *node = new_node(ND_VARDEC);
   lvar = new_lvar(tok, type, is_static, FALSE);
-  Type *org_type = type;
+  LVar *static_lvar = NULL;
   if (is_static) {
     lvar->block = block_id;
-    LVar *static_lvar = new_lvar(tok, type, TRUE, FALSE);
+    static_lvar = new_lvar(tok, type, TRUE, FALSE);
     static_lvar->block = lvar->block;
     static_lvar->next = statics;
     statics = static_lvar;
@@ -195,6 +195,8 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
 
   // 要修正
   node = handle_variable_initialization(node, lvar, type, is_static);
+  if (static_lvar)
+    static_lvar->offset = lvar->offset;
   node->endline = TRUE;
   return node;
 }
