@@ -250,7 +250,7 @@ Node *new_add(Node *lhs, Node *rhs, Location *loc) {
   // それ以外は普通に演算
   else {
     node = new_binary(ND_ADD, lhs, rhs);
-    node->type = new_type(TY_INT);
+    node->type = new_type(bigger_type(lhs->type, rhs->type));
   }
   return node;
 }
@@ -259,7 +259,7 @@ Node *new_sub(Node *lhs, Node *rhs, Location *loc) {
   Node *node;
   Node *mul_node;
 
-  // lhsがloc, rhsがptrなら
+  // lhsがptr, rhsがptrなら
   if (is_ptr_or_arr(lhs->type) && is_ptr_or_arr(rhs->type)) {
     node = new_binary(ND_SUB, lhs, rhs);
     node->type = lhs->type;
@@ -270,7 +270,7 @@ Node *new_sub(Node *lhs, Node *rhs, Location *loc) {
   else if (is_number(lhs->type) && is_ptr_or_arr(rhs->type)) {
     error_at(loc, "invalid operands to binary expression [in new_sub]");
   }
-  // lhsがloc, rhsがintなら
+  // lhsがptr, rhsがintなら
   else if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
     mul_node = new_binary(ND_MUL, rhs, new_num(get_sizeof(lhs->type->ptr_to)));
     node = new_binary(ND_SUB, lhs, mul_node);
@@ -279,7 +279,7 @@ Node *new_sub(Node *lhs, Node *rhs, Location *loc) {
   // それ以外は普通に演算
   else {
     node = new_binary(ND_SUB, lhs, rhs);
-    node->type = new_type(TY_INT);
+    node->type = new_type(bigger_type(lhs->type, rhs->type));
   }
   return node;
 }
@@ -305,7 +305,7 @@ Node *add() {
 
 Type *resolve_type_mul(Type *left, Type *right, Location *loc) {
   if (is_number(left) && is_number(right)) {
-    return new_type(TY_INT);
+    return new_type(bigger_type(left, right));
   }
   error_at(loc, "invalid operands to binary expression [in resolve_type_mul]");
   return NULL;

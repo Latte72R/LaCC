@@ -180,6 +180,13 @@ void gen(Node *node) {
     case TY_CHAR:
       write_file("  movsx rax, BYTE PTR [rax]\n");
       break;
+    case TY_SHORT:
+      write_file("  movsx rax, WORD PTR [rax]\n");
+      break;
+    case TY_LONG:
+    case TY_LONGLONG:
+      write_file("  mov rax, QWORD PTR [rax]\n");
+      break;
     case TY_PTR:
     case TY_ARGARR:
       write_file("  mov rax, QWORD PTR [rax]\n");
@@ -204,6 +211,13 @@ void gen(Node *node) {
       break;
     case TY_CHAR:
       write_file("  movsx rax, BYTE PTR [rax]\n");
+      break;
+    case TY_SHORT:
+      write_file("  movsx rax, WORD PTR [rax]\n");
+      break;
+    case TY_LONG:
+    case TY_LONGLONG:
+      write_file("  mov rax, QWORD PTR [rax]\n");
       break;
     case TY_PTR:
     case TY_ARGARR:
@@ -262,6 +276,13 @@ void gen(Node *node) {
       case TY_CHAR:
         write_file("  mov BYTE PTR [rax], dil\n");
         break;
+      case TY_SHORT:
+        write_file("  mov WORD PTR [rax], di\n");
+        break;
+      case TY_LONG:
+      case TY_LONGLONG:
+        write_file("  mov rax, QWORD PTR [rax]\n");
+        break;
       case TY_PTR:
         write_file("  mov QWORD PTR [rax], rdi\n");
         break;
@@ -283,6 +304,13 @@ void gen(Node *node) {
       case TY_CHAR:
         write_file("  movsx rdi, BYTE PTR [rax]\n");
         break;
+      case TY_SHORT:
+        write_file("  movsx rdi, WORD PTR [rax]\n");
+        break;
+      case TY_LONG:
+      case TY_LONGLONG:
+        write_file("  mov rdi, QWORD PTR [rax]\n");
+        break;
       case TY_PTR:
         write_file("  mov rdi, QWORD PTR [rax]\n");
         break;
@@ -302,6 +330,13 @@ void gen(Node *node) {
       break;
     case TY_CHAR:
       write_file("  mov BYTE PTR [rax], dil\n");
+      break;
+    case TY_SHORT:
+      write_file("  mov WORD PTR [rax], di\n");
+      break;
+    case TY_LONG:
+    case TY_LONGLONG:
+      write_file("  mov rax, QWORD PTR [rax]\n");
       break;
     case TY_PTR:
       write_file("  mov QWORD PTR [rax], rdi\n");
@@ -441,6 +476,11 @@ void gen(Node *node) {
     case TY_CHAR:
       write_file("  movsx rax, al\n");
       break;
+    case TY_SHORT:
+      write_file("  movsx rax, ax\n");
+      break;
+    case TY_LONG:
+    case TY_LONGLONG:
     case TY_PTR:
     case TY_ARR:
     case TY_ARGARR:
@@ -479,6 +519,11 @@ void gen(Node *node) {
       case TY_CHAR:
         write_file("  mov BYTE PTR [rax], %s\n", regs1(i));
         break;
+      case TY_SHORT:
+        write_file("  mov WORD PTR [rax], %s\n", regs2(i));
+        break;
+      case TY_LONG:
+      case TY_LONGLONG:
       case TY_PTR:
       case TY_ARGARR:
         write_file("  mov QWORD PTR [rax], %s\n", regs8(i));
@@ -511,6 +556,13 @@ void gen(Node *node) {
         break;
       case TY_CHAR:
         write_file("  movsx %s, al\n", regs4(i));
+        break;
+      case TY_SHORT:
+        write_file("  movsx %s, ax\n", regs4(i));
+        break;
+      case TY_LONG:
+      case TY_LONGLONG:
+        write_file("  mov %s, rax\n", regs8(i));
         break;
       case TY_PTR:
       case TY_ARR:
