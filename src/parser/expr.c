@@ -637,7 +637,7 @@ int compile_time_number() {
     }
     result = member->offset;
   } else {
-    result = expect_signed_number("compile time number");
+    result = expect_signed_number();
   }
   return result;
 }

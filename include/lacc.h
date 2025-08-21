@@ -330,7 +330,7 @@ Token *expect_ident(char *stmt);
 void expect(char *op, char *err, char *st);
 int expect_number(char *stmt);
 int parse_sign();
-int expect_signed_number();
+int expect_signed_number(void);
 String *string_literal();
 Array *array_literal(Type *org_type);
 
@@ -472,34 +472,36 @@ extern void warning_at(Location *loc, char *fmt, ...);
 // Standard library functions
 //
 
+typedef long size_t;
+
 // stdio.h
-extern int printf(char *fmt, ...);
-extern int sprintf(char *fmt, ...);
-extern int snprintf();
+extern int printf(const char *fmt, ...);
+extern int sprintf(char *str, const char *fmt, ...);
+extern int snprintf(char *str, size_t size, const char *fmt, ...);
 typedef struct _IO_FILE FILE;
 extern FILE *fopen(const char *filename, const char *mode);
-extern int fprintf();
-extern int fclose();
-extern int fseek();
-extern int ftell();
-extern int fread();
+extern int fprintf(FILE *stream, const char *fmt, ...);
+extern int fclose(FILE *stream);
+extern int fseek(FILE *stream, long offset, int whence);
+extern long ftell(FILE *stream);
+extern size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream);
 
 // ctype.h
-extern int isspace();
-extern int isdigit();
+extern int isspace(int c);
+extern int isdigit(int c);
 
 // string.h
-extern int strcmp();
-extern int strncmp();
-extern int strncpy();
-extern int memcpy();
-extern int strlen();
-extern int strtol();
-extern char *strstr();
-extern char *strchr();
+extern int strcmp(const char *s1, const char *s2);
+extern int strncmp(const char *s1, const char *s2, size_t n);
+extern char *strncpy(char *dest, const char *src, size_t n);
+extern void *memcpy(void *dest, const void *src, size_t n);
+extern size_t strlen(const char *s);
+extern long strtol(const char *nptr, char **endptr, int base);
+extern char *strstr(const char *s, const char *find);
+extern char *strchr(const char *s, int c);
 
 // stdlib.h
-extern void *malloc();
-extern void *realloc();
-extern void *calloc();
-extern void free();
+extern void *malloc(size_t size);
+extern void *realloc(void *ptr, size_t size);
+extern void *calloc(size_t nmemb, size_t size);
+extern void free(void *ptr);
