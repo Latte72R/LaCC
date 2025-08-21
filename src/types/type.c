@@ -40,6 +40,14 @@ Type *new_type_arr(Type *ptr_to, int array_size) {
   return type;
 }
 
+// consume a token of TK_TYPE with the specified keyword
+static int consume_type_kw(char *kw) {
+  if (token->kind != TK_TYPE || strlen(kw) != token->len || strncmp(token->str, kw, token->len))
+    return FALSE;
+  token = token->next;
+  return TRUE;
+}
+
 Type *parse_base_type_internal(const int should_consume, const int should_record) {
   Token *tok = token;
   Type *type = new_type(TY_NONE);
@@ -72,19 +80,23 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
     }
     token = token->next;
   } else if (token->kind == TK_TYPE) {
-    if (consume("int"))
+    if (consume_type_kw("int"))
       type->ty = TY_INT;
-    else if (consume("char"))
+    else if (consume_type_kw("char"))
       type->ty = TY_CHAR;
-    else if (consume("short"))
+    else if (consume_type_kw("short"))
       type->ty = TY_SHORT;
-    else if (consume("long")) {
-      if (consume("long"))
+    else if (consume_type_kw("long")) {
+      if (consume_type_kw("long"))
         type->ty = TY_LONGLONG;
       else
         type->ty = TY_LONG;
+    } else if (consume_type_kw("void")) {
+      type->ty = TY_VOID;
+    } else {
+      return NULL;
     }
-    token = token->next;
+    consume_type_kw("int");
   } else {
     return NULL;
   }
