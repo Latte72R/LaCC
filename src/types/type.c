@@ -40,6 +40,13 @@ Type *new_type_arr(Type *ptr_to, int array_size) {
   return type;
 }
 
+int consume_base_type(char *name) {
+  if (token->kind != TK_TYPE || strcmp(token->str, name))
+    return FALSE;
+  token = token->next;
+  return TRUE;
+}
+
 Type *parse_base_type_internal(const int should_consume, const int should_record) {
   Token *tok = token;
   Type *type = new_type(TY_NONE);
@@ -74,8 +81,23 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
   } else if (token->kind != TK_TYPE) {
     return NULL;
   } else {
-    type->ty = token->ty;
-    token = token->next;
+    if (consume_base_type("int")) {
+      type->ty = TY_INT;
+    } else if (consume_base_type("char")) {
+      type->ty = TY_CHAR;
+    } else if (consume_base_type("short")) {
+      type->ty = TY_SHORT;
+    } else if (consume_base_type("long")) {
+      if (consume_base_type("long")) {
+        type->ty = TY_LONGLONG;
+      } else {
+        type->ty = TY_LONG;
+      }
+    } else if (consume_base_type("void")) {
+      type->ty = TY_VOID;
+    } else {
+      error_at(token->loc, "unknown type: %.*s [in parse_base_type]", token->len, token->str);
+    }
   }
 
   // 後続のconst
@@ -265,6 +287,11 @@ int get_sizeof(Type *type) {
     return 4;
   case TY_CHAR:
     return 1;
+  case TY_SHORT:
+    return 2;
+  case TY_LONG:
+  case TY_LONGLONG:
+    return 8;
   case TY_PTR:
     return 8;
   case TY_ARR:
@@ -290,6 +317,11 @@ int type_size(Type *type) {
     return 4;
   case TY_CHAR:
     return 1;
+  case TY_SHORT:
+    return 2;
+  case TY_LONG:
+  case TY_LONGLONG:
+    return 8;
   case TY_PTR:
   case TY_ARR:
   case TY_ARGARR:
@@ -304,13 +336,23 @@ int type_size(Type *type) {
 }
 
 int is_ptr_or_arr(Type *type) { return type->ty == TY_PTR || type->ty == TY_ARR || type->ty == TY_ARGARR; }
-int is_number(Type *type) { return type->ty == TY_INT || type->ty == TY_CHAR; }
+int is_number(Type *type) {
+  return type->ty == TY_INT || type->ty == TY_CHAR || type->ty == TY_SHORT || type->ty == TY_LONG ||
+         type->ty == TY_LONGLONG;
+}
 
 char *type_name(Type *type) {
   switch (type->ty) {
   case TY_INT:
+    return "int";
   case TY_CHAR:
-    return "integer";
+    return "char";
+  case TY_SHORT:
+    return "short";
+  case TY_LONG:
+    return "long";
+  case TY_LONGLONG:
+    return "long long";
   case TY_PTR:
     return "pointer";
   case TY_ARR:

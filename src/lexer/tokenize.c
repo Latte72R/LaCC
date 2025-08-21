@@ -352,23 +352,32 @@ void tokenize() {
       continue;
     }
 
+    if (startswith(p, "long") && !is_alnum(p[4])) {
+      new_token(TK_TYPE, p, p, 4);
+      p += 4;
+      continue;
+    }
+
+    if (startswith(p, "short") && !is_alnum(p[5])) {
+      new_token(TK_TYPE, p, p, 5);
+      p += 5;
+      continue;
+    }
+
     if (startswith(p, "int") && !is_alnum(p[3])) {
       new_token(TK_TYPE, p, p, 3);
-      token->ty = TY_INT;
       p += 3;
       continue;
     }
 
     if (startswith(p, "char") && !is_alnum(p[4])) {
       new_token(TK_TYPE, p, p, 4);
-      token->ty = TY_CHAR;
       p += 4;
       continue;
     }
 
     if (startswith(p, "void") && !is_alnum(p[4])) {
       new_token(TK_TYPE, p, p, 4);
-      token->ty = TY_VOID;
       p += 4;
       continue;
     }
