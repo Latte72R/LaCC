@@ -33,7 +33,24 @@ void gen_global_variables() {
     write_file("  .p2align 3\n");
     write_file("%.*s:\n", var->len, var->name);
     if (var->offset) {
-      write_file("  .long %d\n", var->offset);
+      switch (var->type->ty) {
+      case TY_CHAR:
+        write_file("  .byte %d\n", var->offset);
+        break;
+      case TY_SHORT:
+        write_file("  .word %d\n", var->offset);
+        break;
+      case TY_INT:
+        write_file("  .long %d\n", var->offset);
+        break;
+      case TY_LONG:
+      case TY_LLONG:
+      case TY_PTR:
+        write_file("  .quad %d\n", var->offset);
+        break;
+      default:
+        error("invalid type [in gen_global_variables]");
+      }
     } else {
       write_file("  .zero %d\n", get_sizeof(var->type));
     }
@@ -47,7 +64,24 @@ void gen_static_variables() {
     write_file("  .p2align 3\n");
     write_file("%.*s.%d:\n", var->len, var->name, var->block);
     if (var->offset) {
-      write_file("  .long %d\n", var->offset);
+      switch (var->type->ty) {
+      case TY_CHAR:
+        write_file("  .byte %d\n", var->offset);
+        break;
+      case TY_SHORT:
+        write_file("  .word %d\n", var->offset);
+        break;
+      case TY_INT:
+        write_file("  .long %d\n", var->offset);
+        break;
+      case TY_LONG:
+      case TY_LLONG:
+      case TY_PTR:
+        write_file("  .quad %d\n", var->offset);
+        break;
+      default:
+        error("invalid type [in gen_static_variables]");
+      }
     } else {
       write_file("  .zero %d\n", get_sizeof(var->type));
     }
@@ -65,11 +99,23 @@ void gen_array_literals() {
         } else {
           write_file("  .byte %d\n", arr->val[i]);
         }
+      } else if (arr->byte == 2) {
+        if (i >= arr->init) {
+          write_file("  .word 0\n");
+        } else {
+          write_file("  .word %d\n", arr->val[i]);
+        }
       } else if (arr->byte == 4) {
         if (i >= arr->init) {
           write_file("  .long 0\n");
         } else {
           write_file("  .long %d\n", arr->val[i]);
+        }
+      } else if (arr->byte == 8) {
+        if (i >= arr->init) {
+          write_file("  .quad 0\n");
+        } else {
+          write_file("  .quad %d\n", arr->val[i]);
         }
       } else {
         error("invalid array type [in gen_array_literals]");

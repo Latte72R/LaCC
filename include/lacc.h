@@ -75,7 +75,21 @@ struct Array {
   int id;
 };
 
-typedef enum { TY_NONE, TY_INT, TY_CHAR, TY_PTR, TY_ARR, TY_ARGARR, TY_VOID, TY_STRUCT, TY_UNION, TY_FUNC } TypeKind;
+typedef enum {
+  TY_NONE,
+  TY_INT,
+  TY_CHAR,
+  TY_SHORT,
+  TY_LONG,
+  TY_LLONG,
+  TY_PTR,
+  TY_ARR,
+  TY_ARGARR,
+  TY_VOID,
+  TY_STRUCT,
+  TY_UNION,
+  TY_FUNC
+} TypeKind;
 
 // Token type
 typedef struct Token Token;
@@ -404,6 +418,7 @@ int compile_time_number();
 //
 
 char *regs1(int i);
+char *regs2(int i);
 char *regs4(int i);
 char *regs8(int i);
 void gen_rodata_section();
