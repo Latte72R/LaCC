@@ -111,6 +111,7 @@ int main(int argc, char **argv) {
   new_token(TK_EOF, NULL, NULL, 0);
   token = token_head;
 
+
   free(user_input);
 
   program();

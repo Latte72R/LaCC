@@ -42,6 +42,9 @@ void free_all_nodes() {
   NodeList *nl = node_list;
   while (nl) {
     NodeList *next = nl->next;
+    if (nl->node->kind == ND_GOTO) {
+      free(nl->node->label);
+    }
     free(nl->node->body);
     free(nl->node->cases);
     free(nl->node);

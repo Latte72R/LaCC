@@ -60,13 +60,13 @@ void gen_array_literals() {
     write_file(".L.arr%d:\n", arr->id);
     for (int i = 0; i < arr->len; i++) {
       if (arr->byte == 1) {
-        if (i > arr->init) {
+        if (i >= arr->init) {
           write_file("  .byte 0\n");
         } else {
           write_file("  .byte %d\n", arr->val[i]);
         }
       } else if (arr->byte == 4) {
-        if (i > arr->init) {
+        if (i >= arr->init) {
           write_file("  .long 0\n");
         } else {
           write_file("  .long %d\n", arr->val[i]);
