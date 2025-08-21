@@ -1571,6 +1571,12 @@ int test165() {
   return a || b ? 5 : 9; /* (0||1)=真 -> 5 */
 }
 
+int test166() { return sizeof(short); }
+
+int test167() { return sizeof(long); }
+
+int test168() { return sizeof(long long); }
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1747,6 +1753,9 @@ int main() {
   check(test163(), 163, 45);
   check(test164(), 164, 2);
   check(test165(), 165, 5);
+  check(test166(), 166, 2);
+  check(test167(), 167, 8);
+  check(test168(), 168, 8);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);
