@@ -96,7 +96,6 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
     } else {
       return NULL;
     }
-    consume_type_kw("int");
   } else {
     return NULL;
   }
