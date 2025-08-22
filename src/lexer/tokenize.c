@@ -352,6 +352,12 @@ void tokenize() {
       continue;
     }
 
+    if (startswith(p, "unsigned") && !is_alnum(p[8])) {
+      new_token(TK_TYPE, p, p, 8);
+      p += 8;
+      continue;
+    }
+
     if (startswith(p, "long") && !is_alnum(p[4])) {
       new_token(TK_TYPE, p, p, 4);
       p += 4;

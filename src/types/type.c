@@ -16,6 +16,7 @@ Type *new_type(TypeKind ty) {
   type->array_size = 0;
   type->object = NULL;
   type->is_const = FALSE;
+  type->is_unsigned = FALSE;
   type->return_type = NULL;
   for (int i = 0; i < 6; i++) {
     type->param_types[i] = NULL;
@@ -81,7 +82,24 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
   } else if (token->kind != TK_TYPE) {
     return NULL;
   } else {
-    if (consume_base_type("int")) {
+    if (consume_base_type("unsigned")) {
+      type->is_unsigned = TRUE;
+      if (consume_base_type("long")) {
+        if (consume_base_type("long")) {
+          type->ty = TY_LONGLONG;
+        } else {
+          type->ty = TY_LONG;
+        }
+      } else if (consume_base_type("short")) {
+        type->ty = TY_SHORT;
+      } else if (consume_base_type("char")) {
+        type->ty = TY_CHAR;
+      } else if (consume_base_type("int")) {
+        type->ty = TY_INT;
+      } else {
+        type->ty = TY_INT;
+      }
+    } else if (consume_base_type("int")) {
       type->ty = TY_INT;
     } else if (consume_base_type("char")) {
       type->ty = TY_CHAR;
@@ -341,7 +359,55 @@ int is_number(Type *type) {
          type->ty == TY_LONGLONG;
 }
 
+static int type_rank(Type *type) {
+  switch (type->ty) {
+  case TY_CHAR:
+    return 1;
+  case TY_SHORT:
+    return 2;
+  case TY_INT:
+    return 3;
+  case TY_LONG:
+    return 4;
+  case TY_LONGLONG:
+    return 5;
+  default:
+    return 0;
+  }
+}
+
+Type *max_type(Type *lhs, Type *rhs) {
+  int size_l = type_size(lhs);
+  int size_r = type_size(rhs);
+  TypeKind ty;
+  if (size_l > size_r)
+    ty = lhs->ty;
+  else if (size_r > size_l)
+    ty = rhs->ty;
+  else
+    ty = type_rank(lhs) >= type_rank(rhs) ? lhs->ty : rhs->ty;
+  Type *t = new_type(ty);
+  t->is_unsigned = lhs->is_unsigned || rhs->is_unsigned;
+  return t;
+}
+
 char *type_name(Type *type) {
+  if (type->is_unsigned) {
+    switch (type->ty) {
+    case TY_INT:
+      return "unsigned int";
+    case TY_CHAR:
+      return "unsigned char";
+    case TY_SHORT:
+      return "unsigned short";
+    case TY_LONG:
+      return "unsigned long";
+    case TY_LONGLONG:
+      return "unsigned long long";
+    default:
+      break;
+    }
+  }
   switch (type->ty) {
   case TY_INT:
     return "int";
@@ -374,7 +440,7 @@ int is_type_assignable(Type *lhs, Type *rhs) {
   // void* と他のポインタ型の比較も許容
   if (is_ptr_or_arr(lhs) && is_ptr_or_arr(rhs)) {
     return TRUE; // ポインタ型同士は常に代入可能
-  } else if (lhs->ty == rhs->ty) {
+  } else if (lhs->ty == rhs->ty && lhs->is_unsigned == rhs->is_unsigned) {
     if (lhs->ty == TY_STRUCT || lhs->ty == TY_UNION) {
       return lhs->object == rhs->object;
     }
@@ -396,7 +462,7 @@ int is_type_compatible(Type *lhs, Type *rhs) {
       return TRUE;
     }
     return is_type_compatible(lhs->ptr_to, rhs->ptr_to);
-  } else if (lhs->ty == rhs->ty) {
+  } else if (lhs->ty == rhs->ty && lhs->is_unsigned == rhs->is_unsigned) {
     if (lhs->ty == TY_STRUCT || lhs->ty == TY_UNION) {
       return lhs->object == rhs->object;
     }
@@ -412,7 +478,7 @@ int is_type_identical(Type *lhs, Type *rhs) {
   // const 修飾子の有無を無視して型の同一性を確認
   if (is_ptr_or_arr(lhs) && is_ptr_or_arr(rhs)) {
     return is_type_identical(lhs->ptr_to, rhs->ptr_to);
-  } else if (lhs->ty == rhs->ty) {
+  } else if (lhs->ty == rhs->ty && lhs->is_unsigned == rhs->is_unsigned) {
     if (lhs->ty == TY_STRUCT || lhs->ty == TY_UNION) {
       return lhs->object == rhs->object;
     }

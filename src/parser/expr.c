@@ -134,7 +134,7 @@ Node *bit_or() {
   for (;;) {
     if (consume("|")) {
       node = new_binary(ND_BITOR, node, bit_xor());
-      node->type = node->lhs->type;
+      node->type = max_type(node->lhs->type, node->rhs->type);
     } else {
       break;
     }
@@ -147,7 +147,7 @@ Node *bit_xor() {
   for (;;) {
     if (consume("^")) {
       node = new_binary(ND_BITXOR, node, bit_and());
-      node->type = node->lhs->type;
+      node->type = max_type(node->lhs->type, node->rhs->type);
     } else {
       break;
     }
@@ -160,7 +160,7 @@ Node *bit_and() {
   for (;;) {
     if (consume("&")) {
       node = new_binary(ND_BITAND, node, equality());
-      node->type = node->lhs->type;
+      node->type = max_type(node->lhs->type, node->rhs->type);
     } else {
       break;
     }
@@ -250,7 +250,7 @@ Node *new_add(Node *lhs, Node *rhs, Location *loc) {
   // それ以外は普通に演算
   else {
     node = new_binary(ND_ADD, lhs, rhs);
-    node->type = new_type(TY_INT);
+    node->type = max_type(lhs->type, rhs->type);
   }
   return node;
 }
@@ -279,7 +279,7 @@ Node *new_sub(Node *lhs, Node *rhs, Location *loc) {
   // それ以外は普通に演算
   else {
     node = new_binary(ND_SUB, lhs, rhs);
-    node->type = new_type(TY_INT);
+    node->type = max_type(lhs->type, rhs->type);
   }
   return node;
 }
@@ -305,7 +305,7 @@ Node *add() {
 
 Type *resolve_type_mul(Type *left, Type *right, Location *loc) {
   if (is_number(left) && is_number(right)) {
-    return new_type(TY_INT);
+    return max_type(left, right);
   }
   error_at(loc, "invalid operands to binary expression [in resolve_type_mul]");
   return NULL;
