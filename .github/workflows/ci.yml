@@ -47,38 +47,3 @@ jobs:
         run: |
           set -euxo pipefail
           make sanitize
-
-  ubuntu-clang:
-    name: "Tests (Ubuntu 24.04 with Clang)"
-    runs-on: ubuntu-24.04
-    env:
-      CC: clang
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install deps
-        run: |
-          sudo apt update
-          sudo apt install -y clang
-
-      - name: Show versions
-        run: |
-          $CC --version
-          make --version
-
-      - name: Run unittest
-        run: |
-          set -euxo pipefail
-          make unittest
-
-      - name: Run asmcmp
-        run: |
-          set -euxo pipefail
-          make asmcmp
-
-      - name: Run sanitize
-        run: |
-          set -euxo pipefail
-          make sanitize
