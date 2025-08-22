@@ -10,7 +10,7 @@ LaCC is a minimalist C compiler that implements only the core language features 
 
 ### 1. Data Types
 
-- **Primitive**: `int`, `char`, `void`  
+- **Primitive**: `int`, `char`, `void`, `unsigned`, `long`, `long long`, `short` 
 - **Derived**: pointer types (`T*`), arrays (`T[]`)  
 - **Composite**: structures (`struct`), unions (`union`), enumerations (`enum`)  
 
@@ -95,8 +95,7 @@ Both global and local (stack) variable declarations are supported.
 
 LaCC does **not** support the following:
 
-- Extended primitive types: `unsigned`, `long`, `float`, `double`, etc.  
-- Type qualifiers & storage-class specifiers: `register`, `auto`, etc.  
+- Floating-point types: `float` and `double`
 - No initializer lists for structs (e.g.,  `struct AB p = {.a = 1, .b = 2};`)  
 - Inline assembly  
 - Preprocessor directives: `#define`, `#ifdef`, etc.  
