@@ -159,6 +159,7 @@ struct Type {
   int array_size;
   Object *object;
   int is_const;          // constかどうか
+  int is_unsigned;       // unsignedかどうか
   Type *return_type;     // 戻り値の型
   Type *param_types[6];  // 引数の型の配列
   Token *param_names[6]; // 引数名のトークン
@@ -347,6 +348,7 @@ int is_ptr_or_arr(Type *type);
 int is_number(Type *type);
 int get_sizeof(Type *type);
 int type_size(Type *type);
+Type *max_type(Type *lhs, Type *rhs);
 Type *new_type(TypeKind ty);
 Type *new_type_ptr(Type *ptr_to);
 Type *new_type_arr(Type *ptr_to, int array_size);

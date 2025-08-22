@@ -1593,6 +1593,18 @@ int test169() {
   return sizeof(a + 1);
 }
 
+int test170() {
+  unsigned int a = 1;
+  unsigned int b = -1;
+  return a < b;
+}
+
+int test171() {
+  long long a = 1;
+  char b = 2;
+  return sizeof(a | b);
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1773,6 +1785,8 @@ int main() {
   check(test167(), 167, 20);
   check(test168(), 168, 11);
   check(test169(), 169, 4);
+  check(test170(), 170, 1);
+  check(test171(), 171, 8);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

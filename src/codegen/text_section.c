@@ -10,6 +10,44 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
+// 64bitへゼロ拡張
+void zext_rax_to_64(Type *t) {
+  switch (get_sizeof(t)) {
+  case 1: write_file("  movzx rax, al\n"); break;
+  case 2: write_file("  movzx rax, ax\n"); break;
+  case 4: write_file("  mov eax, eax\n"); break; // 上位32bit=0
+  case 8: break; // no-op
+  }
+}
+
+void zext_rdi_to_64(Type *t) {
+  switch (get_sizeof(t)) {
+  case 1: write_file("  movzx rdi, dil\n"); break;
+  case 2: write_file("  movzx rdi, di\n"); break;
+  case 4: write_file("  mov edi, edi\n"); break;
+  case 8: break; // no-op
+  }
+}
+
+// 64bitへ符号拡張
+void sext_rax_to_64(Type *t) {
+  switch (get_sizeof(t)) {
+  case 1: write_file("  movsx rax, al\n"); break;
+  case 2: write_file("  movsx rax, ax\n"); break;
+  case 4: write_file("  cdqe\n"); break; // EAX→RAX sign-extend
+  case 8: break; // no-op
+  }
+}
+
+void sext_rdi_to_64(Type *t) {
+  switch (get_sizeof(t)) {
+  case 1: write_file("  movsx rdi, dil\n"); break;
+  case 2: write_file("  movsx rdi, di\n"); break;
+  case 4: write_file("  movsxd rdi, edi\n"); break;
+  case 8: break; // no-op
+  }
+}
+
 void gen_lval(Node *node) {
   switch (node->kind) {
   case ND_LVAR:
@@ -93,33 +131,66 @@ void gen_expression(Node *node) {
     write_file("  imul rax, rdi\n");
     break;
   case ND_DIV:
-    write_file("  cqo\n");
-    write_file("  idiv rdi\n");
+    if (node->type->is_unsigned) {
+      zext_rax_to_64(node->lhs->type);
+      zext_rdi_to_64(node->rhs->type);
+      write_file("  xor rdx, rdx\n");
+      write_file("  div rdi\n");
+    } else {
+      sext_rax_to_64(node->lhs->type);
+      sext_rdi_to_64(node->rhs->type);
+      write_file("  cqo\n");
+      write_file("  idiv rdi\n");
+    }
     break;
   case ND_MOD:
-    write_file("  cqo\n");
-    write_file("  idiv rdi\n");
-    write_file("  mov rax, rdx\n");
+    if (node->type->is_unsigned) {
+      zext_rax_to_64(node->lhs->type);
+      zext_rdi_to_64(node->rhs->type);
+      write_file("  xor rdx, rdx\n");
+      write_file("  div rdi\n");
+      write_file("  mov rax, rdx\n");
+    } else {
+      sext_rax_to_64(node->lhs->type);
+      sext_rdi_to_64(node->rhs->type);
+      write_file("  cqo\n");
+      write_file("  idiv rdi\n");
+      write_file("  mov rax, rdx\n");
+    }
     break;
   case ND_EQ:
     write_file("  cmp rax, rdi\n");
     write_file("  sete al\n");
-    write_file("  movsx rax, al\n");
+    write_file("  movzx rax, al\n");
     break;
   case ND_NE:
     write_file("  cmp rax, rdi\n");
     write_file("  setne al\n");
-    write_file("  movsx rax, al\n");
+    write_file("  movzx rax, al\n");
     break;
   case ND_LT:
+    if (node->lhs->type->is_unsigned)
+      zext_rax_to_64(node->lhs->type);
+    if (node->rhs->type->is_unsigned)
+      zext_rdi_to_64(node->rhs->type);
     write_file("  cmp rax, rdi\n");
-    write_file("  setl al\n");
-    write_file("  movsx rax, al\n");
+    if (node->lhs->type->is_unsigned || node->rhs->type->is_unsigned)
+      write_file("  setb al\n");
+    else
+      write_file("  setl al\n");
+    write_file("  movzx rax, al\n");
     break;
   case ND_LE:
+    if (node->lhs->type->is_unsigned)
+      zext_rax_to_64(node->lhs->type);
+    if (node->rhs->type->is_unsigned)
+      zext_rdi_to_64(node->rhs->type);
     write_file("  cmp rax, rdi\n");
-    write_file("  setle al\n");
-    write_file("  movsx rax, al\n");
+    if (node->lhs->type->is_unsigned || node->rhs->type->is_unsigned)
+      write_file("  setbe al\n");
+    else
+      write_file("  setle al\n");
+    write_file("  movzx rax, al\n");
     break;
   case ND_BITAND:
     write_file("  and rax, rdi\n");
@@ -138,7 +209,10 @@ void gen_expression(Node *node) {
   case ND_SHR:
     // シフト量は CL レジスタで指定する
     write_file("  mov rcx, rdi\n");
-    write_file("  sar rax, cl\n");
+    if (node->type->is_unsigned)
+      write_file("  shr rax, cl\n");
+    else
+      write_file("  sar rax, cl\n");
     break;
   default:
     error("invalid node kind");
@@ -175,13 +249,22 @@ void gen(Node *node) {
     write_file("  pop rax\n");
     switch (node->type->ty) {
     case TY_INT:
-      write_file("  movsxd rax, DWORD PTR [rax]\n");
+      if (node->type->is_unsigned)
+        write_file("  mov eax, DWORD PTR [rax]\n");
+      else
+        write_file("  movsxd rax, DWORD PTR [rax]\n");
       break;
     case TY_CHAR:
-      write_file("  movsx rax, BYTE PTR [rax]\n");
+      if (node->type->is_unsigned)
+        write_file("  movzx rax, BYTE PTR [rax]\n");
+      else
+        write_file("  movsx rax, BYTE PTR [rax]\n");
       break;
     case TY_SHORT:
-      write_file("  movsx rax, WORD PTR [rax]\n");
+      if (node->type->is_unsigned)
+        write_file("  movzx rax, WORD PTR [rax]\n");
+      else
+        write_file("  movsx rax, WORD PTR [rax]\n");
       break;
     case TY_LONG:
     case TY_LONGLONG:
@@ -205,13 +288,22 @@ void gen(Node *node) {
     write_file("  pop rax\n");
     switch (node->type->ty) {
     case TY_INT:
-      write_file("  movsxd rax, DWORD PTR [rax]\n");
+      if (node->type->is_unsigned)
+        write_file("  mov eax, DWORD PTR [rax]\n");
+      else
+        write_file("  movsxd rax, DWORD PTR [rax]\n");
       break;
     case TY_CHAR:
-      write_file("  movsx rax, BYTE PTR [rax]\n");
+      if (node->type->is_unsigned)
+        write_file("  movzx rax, BYTE PTR [rax]\n");
+      else
+        write_file("  movsx rax, BYTE PTR [rax]\n");
       break;
     case TY_SHORT:
-      write_file("  movsx rax, WORD PTR [rax]\n");
+      if (node->type->is_unsigned)
+        write_file("  movzx rax, WORD PTR [rax]\n");
+      else
+        write_file("  movsx rax, WORD PTR [rax]\n");
       break;
     case TY_LONG:
     case TY_LONGLONG:
@@ -461,13 +553,22 @@ void gen(Node *node) {
     write_file("  pop rax\n");
     switch (node->lhs->type->ty) {
     case TY_INT:
-      write_file("  movsxd rax, eax\n");
+      if (node->lhs->type->is_unsigned)
+        write_file("  mov eax, eax\n");
+      else
+        write_file("  movsxd rax, eax\n");
       break;
     case TY_CHAR:
-      write_file("  movsx rax, al\n");
+      if (node->lhs->type->is_unsigned)
+        write_file("  movzx rax, al\n");
+      else
+        write_file("  movsx rax, al\n");
       break;
     case TY_SHORT:
-      write_file("  movsx rax, ax\n");
+      if (node->lhs->type->is_unsigned)
+        write_file("  movzx rax, ax\n");
+      else
+        write_file("  movsx rax, ax\n");
       break;
     case TY_PTR:
     case TY_ARR:
