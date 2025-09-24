@@ -10,41 +10,74 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
+char *regs1[] = {"dil", "sil", "dl", "cl", "r8b", "r9b"};
+char *regs2[] = {"di", "si", "dx", "cx", "r8w", "r9w"};
+char *regs4[] = {"edi", "esi", "edx", "ecx", "r8d", "r9d"};
+char *regs8[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+
 // 64bitへゼロ拡張
 void zext_rax_to_64(Type *t) {
   switch (get_sizeof(t)) {
-  case 1: write_file("  movzx rax, al\n"); break;
-  case 2: write_file("  movzx rax, ax\n"); break;
-  case 4: write_file("  mov eax, eax\n"); break; // 上位32bit=0
-  case 8: break; // no-op
+  case 1:
+    write_file("  movzx rax, al\n");
+    break;
+  case 2:
+    write_file("  movzx rax, ax\n");
+    break;
+  case 4:
+    write_file("  mov eax, eax\n");
+    break; // 上位32bit=0
+  case 8:
+    break; // no-op
   }
 }
 
 void zext_rdi_to_64(Type *t) {
   switch (get_sizeof(t)) {
-  case 1: write_file("  movzx rdi, dil\n"); break;
-  case 2: write_file("  movzx rdi, di\n"); break;
-  case 4: write_file("  mov edi, edi\n"); break;
-  case 8: break; // no-op
+  case 1:
+    write_file("  movzx rdi, dil\n");
+    break;
+  case 2:
+    write_file("  movzx rdi, di\n");
+    break;
+  case 4:
+    write_file("  mov edi, edi\n");
+    break;
+  case 8:
+    break; // no-op
   }
 }
 
 // 64bitへ符号拡張
 void sext_rax_to_64(Type *t) {
   switch (get_sizeof(t)) {
-  case 1: write_file("  movsx rax, al\n"); break;
-  case 2: write_file("  movsx rax, ax\n"); break;
-  case 4: write_file("  cdqe\n"); break; // EAX→RAX sign-extend
-  case 8: break; // no-op
+  case 1:
+    write_file("  movsx rax, al\n");
+    break;
+  case 2:
+    write_file("  movsx rax, ax\n");
+    break;
+  case 4:
+    write_file("  cdqe\n");
+    break; // EAX→RAX sign-extend
+  case 8:
+    break; // no-op
   }
 }
 
 void sext_rdi_to_64(Type *t) {
   switch (get_sizeof(t)) {
-  case 1: write_file("  movsx rdi, dil\n"); break;
-  case 2: write_file("  movsx rdi, di\n"); break;
-  case 4: write_file("  movsxd rdi, edi\n"); break;
-  case 8: break; // no-op
+  case 1:
+    write_file("  movsx rdi, dil\n");
+    break;
+  case 2:
+    write_file("  movsx rdi, di\n");
+    break;
+  case 4:
+    write_file("  movsxd rdi, edi\n");
+    break;
+  case 8:
+    break; // no-op
   }
 }
 
@@ -606,19 +639,19 @@ void gen(Node *node) {
       write_file("  pop rax\n");
       switch (node->args[i]->type->ty) {
       case TY_INT:
-        write_file("  mov DWORD PTR [rax], %s\n", regs4(i));
+        write_file("  mov DWORD PTR [rax], %s\n", regs4[i]);
         break;
       case TY_CHAR:
-        write_file("  mov BYTE PTR [rax], %s\n", regs1(i));
+        write_file("  mov BYTE PTR [rax], %s\n", regs1[i]);
         break;
       case TY_SHORT:
-        write_file("  mov WORD PTR [rax], %s\n", regs2(i));
+        write_file("  mov WORD PTR [rax], %s\n", regs2[i]);
         break;
       case TY_LONG:
       case TY_LONGLONG:
       case TY_PTR:
       case TY_ARGARR:
-        write_file("  mov QWORD PTR [rax], %s\n", regs8(i));
+        write_file("  mov QWORD PTR [rax], %s\n", regs8[i]);
         break;
       default:
         error("invalid type [in ND_FUNCDEF]");
@@ -644,20 +677,20 @@ void gen(Node *node) {
       write_file("  pop rax\n");
       switch (node->args[i]->type->ty) {
       case TY_INT:
-        write_file("  mov %s, eax\n", regs4(i));
+        write_file("  mov %s, eax\n", regs4[i]);
         break;
       case TY_CHAR:
-        write_file("  movsx %s, al\n", regs4(i));
+        write_file("  movsx %s, al\n", regs4[i]);
         break;
       case TY_SHORT:
-        write_file("  movsx %s, ax\n", regs4(i));
+        write_file("  movsx %s, ax\n", regs4[i]);
         break;
       case TY_LONG:
       case TY_LONGLONG:
       case TY_PTR:
       case TY_ARR:
       case TY_ARGARR:
-        write_file("  mov %s, rax\n", regs8(i));
+        write_file("  mov %s, rax\n", regs8[i]);
         break;
       default:
         error("invalid type [in ND_FUNCALL]");
