@@ -117,11 +117,11 @@ void gen_array_literals() {
 void gen_rodata_section() {
   write_file("  .section .rodata\n");
   gen_string_literal();
-  gen_array_literals();
 }
 
 void gen_data_section() {
   write_file("  .data\n");
   gen_global_variables();
   gen_static_variables();
+  gen_array_literals();
 }
