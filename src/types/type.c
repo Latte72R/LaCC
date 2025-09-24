@@ -260,13 +260,17 @@ Type *parse_array_dimensions(Type *base_type) {
     arr = new_type_arr(base_type, 0);
   } else {
     arr = new_type_arr(base_type, expect_number("array dimension"));
+    expect("]", "after array dimension", "array dimension");
   }
-  expect("]", "after array dimension", "array dimension");
   type = arr;
   while (consume("[")) {
-    type->ptr_to = new_type_arr(base_type, expect_number("array dimension"));
+    if (consume("]")) {
+      type->ptr_to = new_type_arr(base_type, 0);
+    } else {
+      type->ptr_to = new_type_arr(base_type, expect_number("array dimension"));
+      expect("]", "after array dimension", "array dimension");
+    }
     type = type->ptr_to;
-    expect("]", "after array dimension", "array dimension");
   }
   return arr;
 }

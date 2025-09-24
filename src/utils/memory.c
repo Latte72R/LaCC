@@ -194,6 +194,8 @@ static void free_arrays_list(Array *arr) {
     Array *next = arr->next;
     if (arr->val)
       free(arr->val);
+    if (arr->str)
+      free(arr->str);
     free(arr);
     arr = next;
   }

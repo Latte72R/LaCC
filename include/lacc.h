@@ -69,9 +69,11 @@ typedef struct Array Array;
 struct Array {
   Array *next;
   int *val;
+  String **str;
   int byte;
   int len;  // 配列の要素数
   int init; // 初期化されている数
+  int elem_count; // 最上位次元で指定された要素数
   int id;
 };
 
@@ -120,6 +122,7 @@ struct LVar {
   Type *type;    // 変数の型
   int is_static; // staticかどうか
   int block;     // ブロックのID
+  Array *init_array; // 静的記憶域期間の配列初期化データ
 };
 
 typedef struct LVarList LVarList;
@@ -367,7 +370,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern);
 Object *struct_and_union_declaration(const int is_struct, const int is_union, const int should_record);
 Object *enum_declaration(const int should_record);
 Node *typedef_stmt();
-Node *handle_array_initialization(Node *node, Type *type);
+Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int set_offset);
 Node *handle_scalar_initialization(Node *node, Type *type, Location *loc);
 Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int set_offset);
 

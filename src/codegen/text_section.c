@@ -61,6 +61,7 @@ void gen_lval(Node *node) {
     write_file("  push rax\n");
     break;
   case ND_GVAR:
+  case ND_GLBDEC:
     write_file("  lea rax, %.*s[rip]\n", node->var->len, node->var->name);
     write_file("  push rax\n");
     break;
