@@ -154,7 +154,7 @@ clean: ## Clean up generated files
 	@rm -rf $(BUILD_DIR)
 	@echo "Cleaned up generated files."
 
-.PHONY: help run unittest warntest errortest santest asmcmp clean \
+.PHONY: help run unittest warntest errortest sanitize asmcmp clean \
         bootstrap selfhost .run-cc .run-bootstrap .run-selfhost \
         .unittest-cc .unittest-bootstrap .unittest-selfhost \
 		.warntest-cc .warntest-bootstrap .warntest-selfhost \
