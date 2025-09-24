@@ -71,8 +71,8 @@ struct Array {
   int *val;
   String **str;
   int byte;
-  int len;  // 配列の要素数
-  int init; // 初期化されている数
+  int len;        // 配列の要素数
+  int init;       // 初期化されている数
   int elem_count; // 最上位次元で指定された要素数
   int id;
 };
@@ -114,14 +114,14 @@ typedef struct Type Type;
 
 typedef struct LVar LVar;
 struct LVar {
-  LVar *next;    // 次の変数かNULL
-  char *name;    // 変数の名前
-  int len;       // 名前の長さ
-  int offset;    // RBPからのオフセット
-  int is_extern; // externかどうか
-  Type *type;    // 変数の型
-  int is_static; // staticかどうか
-  int block;     // ブロックのID
+  LVar *next;        // 次の変数かNULL
+  char *name;        // 変数の名前
+  int len;           // 名前の長さ
+  int offset;        // RBPからのオフセット
+  int is_extern;     // externかどうか
+  Type *type;        // 変数の型
+  int is_static;     // staticかどうか
+  int block;         // ブロックのID
   Array *init_array; // 静的記憶域期間の配列初期化データ
 };
 
@@ -421,10 +421,6 @@ int compile_time_number();
 // Code generation
 //
 
-char *regs1(int i);
-char *regs2(int i);
-char *regs4(int i);
-char *regs8(int i);
 void gen_rodata_section();
 void gen_data_section();
 void gen_text_section();
