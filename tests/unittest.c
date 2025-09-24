@@ -1605,6 +1605,16 @@ int test171() {
   return sizeof(a | b);
 }
 
+char test172_arr[][4] = {"abc", "def"};
+int test172() {
+  return test172_arr[0][2] + test172_arr[1][1];
+}
+
+char *test173_arr[] = {"abc", "def"};
+int test173() {
+  return test173_arr[0][0] + test173_arr[1][2];
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1787,6 +1797,8 @@ int main() {
   check(test169(), 169, 4);
   check(test170(), 170, 1);
   check(test171(), 171, 8);
+  check(test172(), 172, 200);
+  check(test173(), 173, 199);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

@@ -105,24 +105,107 @@ void program() {
   code[i] = new_node(ND_NONE);
 }
 
+static Type *array_base_type(Type *type) {
+  while (type && type->ty == TY_ARR)
+    type = type->ptr_to;
+  return type;
+}
+
+static void append_array_value(Array *array, int value, String *str, int *idx, int *cap) {
+  array->val = safe_realloc_array(array->val, sizeof(int), *idx + 1, cap);
+  array->str = safe_realloc_array(array->str, sizeof(String *), *idx + 1, cap);
+  array->val[*idx] = value;
+  array->str[*idx] = str;
+  (*idx)++;
+}
+
+static int parse_array_initializer_value(Array *array, Type *type, int *idx, int *cap) {
+  if (type->ty == TY_ARR) {
+    if (peek("{")) {
+      consume("{");
+      int provided = 0;
+      while (!peek("}")) {
+        parse_array_initializer_value(array, type->ptr_to, idx, cap);
+        provided++;
+        if (!consume(","))
+          break;
+        if (peek("}"))
+          break;
+      }
+      expect("}", "after array initializer", "array_literal");
+      if (type->array_size == 0)
+        type->array_size = provided;
+      else if (provided > type->array_size)
+        warning_at(consumed_loc, "excess elements in array initializer [in variable declaration]");
+      return 1;
+    }
+    if (type->ptr_to->ty == TY_CHAR && token->kind == TK_STRING) {
+      Token *tok = token;
+      consumed_loc = tok->loc;
+      token = token->next;
+      int declared = type->array_size;
+      int copy_len = tok->len;
+      if (declared == 0) {
+        declared = copy_len;
+        type->array_size = declared;
+      } else if (copy_len > declared) {
+        warning_at(tok->loc, "initializer-string for char array is too long [in variable declaration]");
+        copy_len = declared;
+      }
+      for (int i = 0; i < declared; i++) {
+        int value = 0;
+        if (i < copy_len)
+          value = (unsigned char)tok->str[i];
+        append_array_value(array, value, NULL, idx, cap);
+      }
+      return 1;
+    }
+    parse_array_initializer_value(array, type->ptr_to, idx, cap);
+    if (type->array_size == 0)
+      type->array_size = 1;
+    return 1;
+  }
+
+  if (type->ty == TY_PTR && token->kind == TK_STRING) {
+    Token *tok = token;
+    consumed_loc = tok->loc;
+    String *str = string_literal();
+    append_array_value(array, 0, str, idx, cap);
+    return 1;
+  }
+
+  Token *tok = token;
+  int value = expect_number("array_literal");
+  consumed_loc = tok->loc;
+  append_array_value(array, value, NULL, idx, cap);
+  return 1;
+}
+
 Array *array_literal(Type *type) {
   Type *org_type = type->ptr_to;
   expect("{", "before array initializer", "array_literal");
   Array *array = malloc(sizeof(Array));
   array->id = array_cnt++;
-  array->byte = get_sizeof(org_type);
+  Type *base = array_base_type(org_type);
+  array->byte = get_sizeof(base);
   int cap = 16;
-  int i = 0;
+  int idx = 0;
   array->val = malloc(sizeof(int) * cap);
+  array->str = calloc(cap, sizeof(String *));
   array->next = arrays;
+  array->elem_count = 0;
   arrays = array;
-  do {
-    array->val = safe_realloc_array(array->val, sizeof(int), i + 1, &cap);
-    array->val[i++] = expect_number("array_literal");
-  } while (consume(","));
-  array->len = i;
-  array->init = i;
+  while (!peek("}")) {
+    parse_array_initializer_value(array, org_type, &idx, &cap);
+    array->elem_count++;
+    if (!consume(","))
+      break;
+    if (peek("}"))
+      break;
+  }
   expect("}", "after array initializer", "array_literal");
+  array->len = idx;
+  array->init = idx;
   return array;
 }
 

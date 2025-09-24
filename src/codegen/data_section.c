@@ -11,6 +11,34 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
+static void write_array_data(Array *arr) {
+  for (int i = 0; i < arr->len; i++) {
+    if (arr->byte == 1) {
+      if (i >= arr->init) {
+        write_file("  .byte 0\n");
+      } else {
+        write_file("  .byte %d\n", arr->val[i]);
+      }
+    } else if (arr->byte == 4) {
+      if (i >= arr->init) {
+        write_file("  .long 0\n");
+      } else {
+        write_file("  .long %d\n", arr->val[i]);
+      }
+    } else if (arr->byte == 8) {
+      if (i >= arr->init) {
+        write_file("  .quad 0\n");
+      } else if (arr->str && arr->str[i]) {
+        write_file("  .quad .L.str%d\n", arr->str[i]->id);
+      } else {
+        write_file("  .quad %d\n", arr->val[i]);
+      }
+    } else {
+      error("invalid array type [in write_array_data]");
+    }
+  }
+}
+
 // 文字列リテラルの生成
 void gen_string_literal() {
   for (String *str = strings; str; str = str->next) {
@@ -32,7 +60,9 @@ void gen_global_variables() {
     }
     write_file("  .p2align 3\n");
     write_file("%.*s:\n", var->len, var->name);
-    if (var->offset) {
+    if (var->init_array) {
+      write_array_data(var->init_array);
+    } else if (var->offset) {
       int sz = get_sizeof(var->type);
       if (sz == 1)
         write_file("  .byte %d\n", var->offset);
@@ -56,7 +86,9 @@ void gen_static_variables() {
     write_file("  .local %.*s.%d\n", var->len, var->name, var->block);
     write_file("  .p2align 3\n");
     write_file("%.*s.%d:\n", var->len, var->name, var->block);
-    if (var->offset) {
+    if (var->init_array) {
+      write_array_data(var->init_array);
+    } else if (var->offset) {
       int sz = get_sizeof(var->type);
       if (sz == 1)
         write_file("  .byte %d\n", var->offset);
@@ -78,23 +110,7 @@ void gen_static_variables() {
 void gen_array_literals() {
   for (Array *arr = arrays; arr; arr = arr->next) {
     write_file(".L.arr%d:\n", arr->id);
-    for (int i = 0; i < arr->len; i++) {
-      if (arr->byte == 1) {
-        if (i >= arr->init) {
-          write_file("  .byte 0\n");
-        } else {
-          write_file("  .byte %d\n", arr->val[i]);
-        }
-      } else if (arr->byte == 4) {
-        if (i >= arr->init) {
-          write_file("  .long 0\n");
-        } else {
-          write_file("  .long %d\n", arr->val[i]);
-        }
-      } else {
-        error("invalid array type [in gen_array_literals]");
-      }
-    }
+    write_array_data(arr);
   }
 }
 

@@ -19,31 +19,46 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
-Node *handle_array_initialization(Node *node, Type *type) {
-  if (type->ty != TY_ARR) {
-    error_at(token->loc, "array initializer is only allowed for array type [in variable declaration]");
-  }
+Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int set_offset) {
   Array *array = array_literal(type);
-  Node *arr_node = new_node(ND_ARRAY);
-  arr_node->type = type;
-  arr_node->id = array->id;
   if (type->ty == TY_ARR) {
     if (type->array_size == 0) {
-      // サイズ指定なしの文字列
-      type->array_size = array->len;
-    } else if (type->array_size < array->len) {
+      type->array_size = array->elem_count;
+    } else if (type->array_size < array->elem_count) {
       warning_at(consumed_loc, "excess elements in array initializer [in variable declaration]");
     }
-    array->len = type->array_size;
+    array->len = get_sizeof(type) / array->byte;
+    if (set_offset) {
+      if (lvar)
+        lvar->init_array = array;
+      node->type = type;
+      return node;
+    }
+    Node *arr_node = new_node(ND_ARRAY);
+    arr_node->type = type;
+    arr_node->id = array->id;
     node = new_binary(ND_ASSIGN, node, arr_node);
     node->type = type;
     node->val = TRUE;
-  } else if (type->ty == TY_PTR) {
+    return node;
+  }
+
+  Node *arr_node = new_node(ND_ARRAY);
+  arr_node->type = type;
+  arr_node->id = array->id;
+  if (type->ty == TY_PTR) {
+    if (set_offset) {
+      if (lvar)
+        lvar->init_array = array;
+      node->type = type;
+      return node;
+    }
     node = assign_sub(node, arr_node, consumed_loc, FALSE);
     node->type = type;
-  } else {
-    error_at(consumed_loc, "array initializer is only allowed for array or pointer type [in variable declaration]");
+    return node;
   }
+
+  error_at(consumed_loc, "array initializer is only allowed for array or pointer type [in variable declaration]");
   return node;
 }
 
@@ -90,12 +105,12 @@ Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int set
     return node;
   }
   Location *loc = consumed_loc;
-  if (set_offset) {
+  if (set_offset && !peek("{") && token->kind != TK_STRING) {
     lvar->offset = expect_signed_number();
     return node;
   }
   if (peek("{")) {
-    node = handle_array_initialization(node, type);
+    node = handle_array_initialization(node, lvar, type, set_offset);
   } else if (token->kind == TK_STRING) {
     node = handle_string_initialization(node, type, loc);
   } else {

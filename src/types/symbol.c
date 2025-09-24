@@ -73,6 +73,7 @@ LVar *new_lvar(Token *tok, Type *type, int is_static, int is_extern) {
   lvar->is_extern = is_extern;
   lvar->is_static = is_static;
   lvar->type = type;
+  lvar->init_array = NULL;
   return lvar;
 }
 
