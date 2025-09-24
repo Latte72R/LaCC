@@ -97,10 +97,10 @@ char *handle_include_directive(char *p) {
   filenames = filename;
   char *user_input_prev = user_input;
   char *new_input = read_include_file(name); // ファイル内容を取得
-  user_input_list->next = malloc(sizeof(CharPtrList));
-  user_input_list = user_input_list->next;
-  user_input_list->str = user_input;
-  user_input_list->next = NULL;
+  CharPtrList *user_input_list_prev = user_input_list;
+  user_input_list = malloc(sizeof(CharPtrList));
+  user_input_list->str = new_input;
+  user_input_list->next = user_input_list_prev;
   if (!new_input) {
     error_at(new_location(q - 1), "Cannot open include file: %s", name);
   }
