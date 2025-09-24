@@ -4,6 +4,7 @@
 int show_warning = 1;
 int warning_cnt = 0;
 char *user_input = 0;
+CharPtrList *user_input_list = 0;
 Token *token = 0;
 Token *token_head = 0;
 Node **code = 0;
@@ -40,6 +41,7 @@ const int FALSE = 0;
 void init_global_variables() {
   // グローバル変数の初期化
   current_switch = NULL;
+  user_input_list = NULL;
 
   // 各リストの初期化
   functions = NULL;

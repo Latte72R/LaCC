@@ -1,0 +1,4 @@
+# .clang-format
+BasedOnStyle: LLVM
+ColumnLimit: 120
+ReflowComments: false

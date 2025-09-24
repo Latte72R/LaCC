@@ -2,6 +2,7 @@
 #include "lacc.h"
 
 extern char *user_input;
+extern CharPtrList *user_input_list;
 extern Token *token;
 extern Token *token_head;
 extern FileName *filenames;
@@ -96,6 +97,10 @@ char *handle_include_directive(char *p) {
   filenames = filename;
   char *user_input_prev = user_input;
   char *new_input = read_include_file(name); // ファイル内容を取得
+  user_input_list->next = malloc(sizeof(CharPtrList));
+  user_input_list = user_input_list->next;
+  user_input_list->str = user_input;
+  user_input_list->next = NULL;
   if (!new_input) {
     error_at(new_location(q - 1), "Cannot open include file: %s", name);
   }
@@ -105,6 +110,5 @@ char *handle_include_directive(char *p) {
   // トークナイズ後は元の入力に戻す
   user_input = user_input_prev;
   input_file = input_file_prev;
-  free(new_input);
   return p;
 }

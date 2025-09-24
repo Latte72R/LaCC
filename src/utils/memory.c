@@ -1,5 +1,6 @@
 #include "lacc.h"
 
+extern CharPtrList *user_input_list;
 extern Token *token_head;
 extern Token *token;
 extern void *NULL;
@@ -16,6 +17,17 @@ extern FileName *filenames;
 extern Array *arrays;
 extern IncludePath *include_paths;
 extern Node **code;
+
+void free_user_input_list() {
+  CharPtrList *cl = user_input_list;
+  while (cl) {
+    CharPtrList *next = cl->next;
+    free(cl->str);
+    free(cl);
+    cl = next;
+  }
+  user_input_list = NULL;
+}
 
 void free_all_tokens() {
   Token *cur = token_head;

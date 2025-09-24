@@ -4,6 +4,7 @@
 extern int show_warning;
 extern int warning_cnt;
 extern char *user_input;
+extern CharPtrList *user_input_list;
 extern Token *token;
 extern Token *token_head;
 extern FileName *filenames;
@@ -106,15 +107,17 @@ int main(int argc, char **argv) {
   if (!user_input) {
     error("failed to read source file: %s", input_file);
   }
+  user_input_list = malloc(sizeof(CharPtrList));
+  user_input_list->str = user_input;
+  user_input_list->next = NULL;
 
   tokenize();
   new_token(TK_EOF, NULL, NULL, 0);
   token = token_head;
 
-
-  free(user_input);
-
   program();
+
+  free_user_input_list();
 
   free_all_tokens();
 

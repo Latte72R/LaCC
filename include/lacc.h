@@ -439,6 +439,7 @@ char *read_file(char *path);
 char *read_include_file(char *name);
 
 // memory.c
+void free_user_input_list();
 void free_all_tokens();
 void register_node(Node *node);
 void free_all_nodes();
