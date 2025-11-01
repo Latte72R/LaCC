@@ -50,6 +50,9 @@ Both global and local (stack) variable declarations are supported.
   LaCC can process `#include` statements with double quotes like `#include "lacc.h"`, 
   but it does not support the standard library headers like `<stdio.h>` in the traditional sense.
 
+- **Preprocessor macros**  
+  Object-like and function-like `#define` directives (including `#` stringizing and `##` token pasting) are expanded during tokenization.
+
 - **Initializer lists for arrays** (with limitations)  
   1. **Array initialization with a list of values:**  
      `int arr[3] = {3, 6, 2};`
@@ -98,7 +101,7 @@ LaCC does **not** support the following:
 - Floating-point types: `float` and `double`
 - No initializer lists for structs (e.g.,  `struct AB p = {.a = 1, .b = 2};`)  
 - Inline assembly  
-- Preprocessor directives: `#define`, `#ifdef`, etc.  
+- Preprocessor conditionals such as `#ifdef`, `#ifndef`, and `#if`  
 - Variadic functions (macros such as `va_list`, `va_start`, and `va_arg` are not supported)  
 - The comma operator
 - Nested functions (functions defined within other functions) 

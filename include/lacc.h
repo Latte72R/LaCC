@@ -27,7 +27,6 @@ typedef enum {
   TK_TYPE,     // 型
   TK_NUM,      // 整数トークン
   TK_RETURN,   // return
-  TK_SIZEOF,   // sizeof
   TK_CONST,    // const
   TK_STATIC,   // static
   TK_EXTERN,   // extern
@@ -63,6 +62,18 @@ typedef struct FileName FileName;
 struct FileName {
   FileName *next;
   char *name;
+};
+
+typedef struct Macro Macro;
+struct Macro {
+  Macro *next;
+  char *name;
+  char *body;
+  char *file;
+  char **params;
+  int param_count;
+  int is_function;
+  int is_expanding;
 };
 
 typedef struct Array Array;
@@ -204,12 +215,14 @@ int startswith(char *p, char *q);
 int is_alnum(char c);
 void new_token(TokenKind kind, char *loc, char *str, int len);
 Location *new_location(char *loc);
-char *handle_include_directive(char *p);
+
+// preprocessor.c からエクスポートする関数
+int parse_define_directive(char **p);
+int parse_include_directive(char **p);
+Macro *find_macro(char *name, int len);
+void expand_macro(Macro *macro, char **args, int arg_count);
 
 // token_parser.c からエクスポートする関数
-char *parse_number_literal(char *p);
-char *parse_string_literal(char *p);
-char *parse_char_literal(char *p);
 void tokenize();
 
 //
@@ -440,6 +453,7 @@ char *read_include_file(char *name);
 // memory.c
 void free_user_input_list();
 void free_all_tokens();
+void free_all_macros();
 void register_node(Node *node);
 void free_all_nodes();
 void register_lvar(LVar *var);

@@ -17,6 +17,7 @@ extern FileName *filenames;
 extern Array *arrays;
 extern IncludePath *include_paths;
 extern Node **code;
+extern Macro *macros;
 
 void free_user_input_list() {
   CharPtrList *cl = user_input_list;
@@ -242,4 +243,23 @@ void free_all_arrays() {
 void free_all_include_paths() {
   free_include_paths_list(include_paths);
   include_paths = NULL;
+}
+
+void free_all_macros() {
+  Macro *macro = macros;
+  while (macro) {
+    Macro *next = macro->next;
+    if (macro->name)
+      free(macro->name);
+    if (macro->body)
+      free(macro->body);
+    if (macro->params) {
+      for (int i = 0; i < macro->param_count; i++)
+        free(macro->params[i]);
+      free(macro->params);
+    }
+    free(macro);
+    macro = next;
+  }
+  macros = NULL;
 }

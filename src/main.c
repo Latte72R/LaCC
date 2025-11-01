@@ -120,6 +120,7 @@ int main(int argc, char **argv) {
   free_user_input_list();
 
   free_all_tokens();
+  free_all_macros();
 
   generate_assembly();
 
