@@ -64,6 +64,15 @@ struct FileName {
   char *name;
 };
 
+typedef struct Macro Macro;
+struct Macro {
+  Macro *next;
+  char *name;
+  char *body;
+  char *file;
+  int is_expanding;
+};
+
 typedef struct Array Array;
 struct Array {
   Array *next;
@@ -207,6 +216,8 @@ Location *new_location(char *loc);
 // preprocessor.c からエクスポートする関数
 int parse_define_directive(char **p);
 int parse_include_directive(char **p);
+Macro *find_macro(char *name, int len);
+void expand_macro(Macro *macro);
 
 // token_parser.c からエクスポートする関数
 int parse_number_literal(char **p);
@@ -443,6 +454,7 @@ char *read_include_file(char *name);
 // memory.c
 void free_user_input_list();
 void free_all_tokens();
+void free_all_macros();
 void register_node(Node *node);
 void free_all_nodes();
 void register_lvar(LVar *var);

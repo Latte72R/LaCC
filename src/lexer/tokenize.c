@@ -9,44 +9,50 @@ extern const int FALSE;
 extern void *NULL;
 
 int skip_characters(char **p) {
-  // Skip whitespace characters.
-  if (isspace(**p)) {
-    (*p)++;
+  char *cur = *p;
+
+  if (isspace(*cur)) {
+    cur++;
+    *p = cur;
     return 1;
   }
 
-  // 行コメントをスキップ
-  if (startswith(*p, "//")) {
-    *p += 2;
-    while (**p != '\n' && **p != '\0')
-      (*p)++;
+  if (startswith(cur, "//")) {
+    cur += 2;
+    while (*cur != '\n' && *cur != '\0')
+      cur++;
+    *p = cur;
     return 1;
   }
 
-  // ブロックコメントをスキップ
-  if (startswith(*p, "/*")) {
-    char *q = strstr(*p + 2, "*/");
+  if (startswith(cur, "/*")) {
+    char *q = strstr(cur + 2, "*/");
     if (!q)
-      error_at(new_location(*p), "unclosed block comment [in tokenize]");
-    *p = q + 2;
+      error_at(new_location(cur), "unclosed block comment [in tokenize]");
+    cur = q + 2;
+    *p = cur;
     return 1;
   }
 
+  *p = cur;
   return 0;
 }
 
 int parse_char_literal(char **p) {
-  if (**p != '\'') {
+  char *cur = *p;
+
+  if (*cur != '\'') {
     return 0;
   }
-  char *q = *p;
+
+  char *start = cur;
   int len;
   char val;
-  (*p)++;
+  cur++;
 
-  if (**p == '\\') {
-    (*p)++;
-    switch (**p) {
+  if (*cur == '\\') {
+    cur++;
+    switch (*cur) {
     case 'a':
       val = '\a';
       break;
@@ -84,100 +90,111 @@ int parse_char_literal(char **p) {
       val = '\0';
       break;
     default:
-      error_at(new_location(*p - 1), "invalid escape sequence in character literal");
+      error_at(new_location(cur - 1), "invalid escape sequence in character literal");
     }
-    (*p)++;
+    cur++;
     len = 4;
   } else {
-    val = **p;
-    (*p)++;
+    val = *cur;
+    cur++;
     len = 3;
   }
 
-  if (**p != '\'') {
-    error_at(new_location(*p), "unclosed character literal");
+  if (*cur != '\'') {
+    error_at(new_location(cur), "unclosed character literal");
   }
-  (*p)++;
+  cur++;
 
-  new_token(TK_NUM, q, q, len);
+  new_token(TK_NUM, start, start, len);
   token->val = val;
+  *p = cur;
   return 1;
 }
 
 int parse_number_literal(char **p) {
-  if (!isdigit(**p)) {
+  char *cur = *p;
+  if (!isdigit(*cur)) {
     return 0;
   }
-  char *q;
-  if (startswith(*p, "0b")) {
-    new_token(TK_NUM, *p, *p, 0);
-    *p += 2;
-    q = *p;
-    token->val = strtol(*p, p, 2);
-    token->len = *p - q + 2;
-  } else if (startswith(*p, "0x")) {
-    *p += 2;
-    q = *p;
-    new_token(TK_NUM, *p, *p, 0);
-    token->val = strtol(*p, p, 16);
-    token->len = *p - q + 2;
-  } else if (startswith(*p, "0")) {
-    new_token(TK_NUM, *p, *p, 0);
-    *p += 1;
-    q = *p;
-    token->val = strtol(*p, p, 8);
-    token->len = *p - q + 2;
+  char *digits;
+  char *end;
+
+  if (startswith(cur, "0b")) {
+    new_token(TK_NUM, cur, cur, 0);
+    cur += 2;
+    digits = cur;
+    token->val = strtol(cur, &end, 2);
+    cur = end;
+    token->len = cur - digits + 2;
+  } else if (startswith(cur, "0x")) {
+    cur += 2;
+    digits = cur;
+    new_token(TK_NUM, digits, digits, 0);
+    token->val = strtol(cur, &end, 16);
+    cur = end;
+    token->len = cur - digits + 2;
+  } else if (startswith(cur, "0")) {
+    new_token(TK_NUM, cur, cur, 0);
+    cur += 1;
+    digits = cur;
+    token->val = strtol(cur, &end, 8);
+    cur = end;
+    token->len = cur - digits + 2;
   } else {
-    new_token(TK_NUM, *p, *p, 0);
-    q = *p;
-    token->val = strtol(*p, p, 10);
-    token->len = *p - q;
+    new_token(TK_NUM, cur, cur, 0);
+    digits = cur;
+    token->val = strtol(cur, &end, 10);
+    cur = end;
+    token->len = cur - digits;
   }
+  *p = cur;
   return 1;
 }
 
 int parse_string_literal(char **p) {
-  if (**p != '"') {
+  char *cur = *p;
+
+  if (*cur != '"') {
     return 0;
   }
-  (*p)++;
-  char *q = *p;
+  cur++;
+  char *literal_start = cur;
   int len = 0;
   int cap = 16;
   char *buf = malloc(sizeof(char) * cap);
   if (!buf)
     error("memory allocation failed");
-  while (**p != '"') {
-    switch (**p) {
+  while (*cur != '"') {
+    switch (*cur) {
     case '\0':
     case '\n':
-      error_at(new_location(*p), "unclosed string literal [in tokenize]");
+      error_at(new_location(cur), "unclosed string literal [in tokenize]");
       break;
     case '\\':
-      switch (*(*p + 1)) {
+      switch (*(cur + 1)) {
       case '\n':
-        *p += 2; // 行継続をスキップ
+        cur += 2;
         break;
       case 'a':
-        error_at(new_location(*p), "unsupported escape sequence \"\\a\" in string literal. Use '\\007' for alert.");
+        error_at(new_location(cur), "unsupported escape sequence \"\\a\" in string literal. Use '\\007' for alert.");
         break;
       case 'e':
-        error_at(new_location(*p), "unsupported escape sequence \"\\e\" in string literal. Use '\\033' for escape.");
+        error_at(new_location(cur), "unsupported escape sequence \"\\e\" in string literal. Use '\\033' for escape.");
         break;
       case 'v':
-        error_at(new_location(*p),
+        error_at(new_location(cur),
                  "unsupported escape sequence \"\\v\" in string literal. Use '\\012' for vertical tab.");
         break;
       default:
         buf = safe_realloc_array(buf, sizeof(char), len + 2, &cap);
-        buf[len++] = *(*p)++;
-        buf[len++] = *(*p)++;
+        buf[len++] = *cur++;
+        buf[len++] = *cur++;
         break;
       }
       break;
     default:
       buf = safe_realloc_array(buf, sizeof(char), len + 1, &cap);
-      buf[len++] = *(*p)++;
+      buf[len++] = *cur++;
     }
   }
   buf = safe_realloc_array(buf, sizeof(char), len + 1, &cap);
@@ -191,236 +208,290 @@ int parse_string_literal(char **p) {
     memcpy(token->str + token->len, buf, len);
     token->len += len;
   } else {
-    new_token(TK_STRING, q, buf, len);
+    new_token(TK_STRING, literal_start, buf, len);
   }
   free(buf);
-  (*p)++;
+  cur++;
+  *p = cur;
   return 1;
 }
 
 int parse_punctuator(char **p) {
-  // Multi-letter punctuator
-  if (startswith(*p, "...")) {
-    new_token(TK_RESERVED, *p, *p, 3);
-    *p += 3;
+  char *cur = *p;
+
+  if (startswith(cur, "...")) {
+    new_token(TK_RESERVED, cur, cur, 3);
+    cur += 3;
+    *p = cur;
     return 1;
   }
 
-  // Multi-letter punctuator
-  if (startswith(*p, "==") || startswith(*p, "!=") || startswith(*p, "<=") || startswith(*p, ">=") ||
-      startswith(*p, "&&") || startswith(*p, "||") || startswith(*p, "++") || startswith(*p, "--") ||
-      startswith(*p, "+=") || startswith(*p, "-=") || startswith(*p, "*=") || startswith(*p, "/=") ||
-      startswith(*p, "%=") || startswith(*p, "->") || startswith(*p, "<<") || startswith(*p, ">>")) {
-    new_token(TK_RESERVED, *p, *p, 2);
-    *p += 2;
+  if (startswith(cur, "==") || startswith(cur, "!=") || startswith(cur, "<=") || startswith(cur, ">=") ||
+      startswith(cur, "&&") || startswith(cur, "||") || startswith(cur, "++") || startswith(cur, "--") ||
+      startswith(cur, "+=") || startswith(cur, "-=") || startswith(cur, "*=") || startswith(cur, "/=") ||
+      startswith(cur, "%=") || startswith(cur, "->") || startswith(cur, "<<") || startswith(cur, ">>")) {
+    new_token(TK_RESERVED, cur, cur, 2);
+    cur += 2;
+    *p = cur;
     return 1;
   }
 
-  // Single-letter punctuator
-  if (strchr("+-*/()<>={}[];&|^~,%!.:?", **p)) {
-    new_token(TK_RESERVED, *p, *p, 1);
-    (*p)++;
+  if (*cur && strchr("+-*/()<>={}[];&|^~,%!.:?", *cur)) {
+    new_token(TK_RESERVED, cur, cur, 1);
+    cur++;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "sizeof") && !is_alnum((*p)[6])) {
-    new_token(TK_RESERVED, *p, *p, 6);
-    *p += 6;
+  if (startswith(cur, "sizeof") && !is_alnum(cur[6])) {
+    new_token(TK_RESERVED, cur, cur, 6);
+    cur += 6;
+    *p = cur;
     return 1;
   }
 
-  return 0; // Not a punctuator
+  *p = cur;
+  return 0;
 }
 
 int parse_control_structure(char **p) {
+  char *cur = *p;
 
-  if (startswith(*p, "if") && !is_alnum((*p)[2])) {
-    new_token(TK_IF, *p, *p, 2);
-    *p += 2;
+  if (startswith(cur, "if") && !is_alnum(cur[2])) {
+    new_token(TK_IF, cur, cur, 2);
+    cur += 2;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "else") && !is_alnum((*p)[4])) {
-    new_token(TK_ELSE, *p, *p, 4);
-    *p += 4;
+  if (startswith(cur, "else") && !is_alnum(cur[4])) {
+    new_token(TK_ELSE, cur, cur, 4);
+    cur += 4;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "switch") && !is_alnum((*p)[6])) {
-    new_token(TK_SWITCH, *p, *p, 6);
-    *p += 6;
+  if (startswith(cur, "switch") && !is_alnum(cur[6])) {
+    new_token(TK_SWITCH, cur, cur, 6);
+    cur += 6;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "case") && !is_alnum((*p)[4])) {
-    new_token(TK_CASE, *p, *p, 4);
-    *p += 4;
+  if (startswith(cur, "case") && !is_alnum(cur[4])) {
+    new_token(TK_CASE, cur, cur, 4);
+    cur += 4;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "default") && !is_alnum((*p)[7])) {
-    new_token(TK_DEFAULT, *p, *p, 7);
-    *p += 7;
+  if (startswith(cur, "default") && !is_alnum(cur[7])) {
+    new_token(TK_DEFAULT, cur, cur, 7);
+    cur += 7;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "do") && !is_alnum((*p)[2])) {
-    new_token(TK_DO, *p, *p, 2);
-    *p += 2;
+  if (startswith(cur, "do") && !is_alnum(cur[2])) {
+    new_token(TK_DO, cur, cur, 2);
+    cur += 2;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "while") && !is_alnum((*p)[5])) {
-    new_token(TK_WHILE, *p, *p, 5);
-    *p += 5;
+  if (startswith(cur, "while") && !is_alnum(cur[5])) {
+    new_token(TK_WHILE, cur, cur, 5);
+    cur += 5;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "for") && !is_alnum((*p)[3])) {
-    new_token(TK_FOR, *p, *p, 3);
-    *p += 3;
+  if (startswith(cur, "for") && !is_alnum(cur[3])) {
+    new_token(TK_FOR, cur, cur, 3);
+    cur += 3;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "break") && !is_alnum((*p)[5])) {
-    new_token(TK_BREAK, *p, *p, 5);
-    *p += 5;
+  if (startswith(cur, "break") && !is_alnum(cur[5])) {
+    new_token(TK_BREAK, cur, cur, 5);
+    cur += 5;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "continue") && !is_alnum((*p)[8])) {
-    new_token(TK_CONTINUE, *p, *p, 8);
-    *p += 8;
+  if (startswith(cur, "continue") && !is_alnum(cur[8])) {
+    new_token(TK_CONTINUE, cur, cur, 8);
+    cur += 8;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "goto") && !is_alnum((*p)[4])) {
-    new_token(TK_GOTO, *p, *p, 4);
-    *p += 4;
+  if (startswith(cur, "goto") && !is_alnum(cur[4])) {
+    new_token(TK_GOTO, cur, cur, 4);
+    cur += 4;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "return") && !is_alnum((*p)[6])) {
-    new_token(TK_RETURN, *p, *p, 6);
-    *p += 6;
+  if (startswith(cur, "return") && !is_alnum(cur[6])) {
+    new_token(TK_RETURN, cur, cur, 6);
+    cur += 6;
+    *p = cur;
     return 1;
   }
 
+  *p = cur;
   return 0;
 }
 
 int parse_declaration_specifier(char **p) {
-  if (startswith(*p, "typedef") && !is_alnum((*p)[7])) {
-    new_token(TK_TYPEDEF, *p, *p, 7);
-    *p += 7;
+  char *cur = *p;
+
+  if (startswith(cur, "typedef") && !is_alnum(cur[7])) {
+    new_token(TK_TYPEDEF, cur, cur, 7);
+    cur += 7;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "const") && !is_alnum((*p)[5])) {
-    new_token(TK_CONST, *p, *p, 5);
-    *p += 5;
+  if (startswith(cur, "const") && !is_alnum(cur[5])) {
+    new_token(TK_CONST, cur, cur, 5);
+    cur += 5;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "static") && !is_alnum((*p)[6])) {
-    new_token(TK_STATIC, *p, *p, 6);
-    *p += 6;
+  if (startswith(cur, "static") && !is_alnum(cur[6])) {
+    new_token(TK_STATIC, cur, cur, 6);
+    cur += 6;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "extern") && !is_alnum((*p)[6])) {
-    new_token(TK_EXTERN, *p, *p, 6);
-    *p += 6;
+  if (startswith(cur, "extern") && !is_alnum(cur[6])) {
+    new_token(TK_EXTERN, cur, cur, 6);
+    cur += 6;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "volatile") && !is_alnum((*p)[8])) {
+  if (startswith(cur, "volatile") && !is_alnum(cur[8])) {
     // "volatile" is not supported yet
     // Because not performing any optimizations, special handling for volatile isn't necessary.
-    *p += 8;
+    cur += 8;
+    *p = cur;
     return 1;
   }
 
+  *p = cur;
   return 0;
 }
 
 int parse_composite_type(char **p) {
-  if (startswith(*p, "enum") && !is_alnum((*p)[4])) {
-    new_token(TK_ENUM, *p, *p, 4);
-    *p += 4;
+  char *cur = *p;
+
+  if (startswith(cur, "enum") && !is_alnum(cur[4])) {
+    new_token(TK_ENUM, cur, cur, 4);
+    cur += 4;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "union") && !is_alnum((*p)[5])) {
-    new_token(TK_UNION, *p, *p, 5);
-    *p += 5;
+  if (startswith(cur, "union") && !is_alnum(cur[5])) {
+    new_token(TK_UNION, cur, cur, 5);
+    cur += 5;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "struct") && !is_alnum((*p)[6])) {
-    new_token(TK_STRUCT, *p, *p, 6);
-    *p += 6;
+  if (startswith(cur, "struct") && !is_alnum(cur[6])) {
+    new_token(TK_STRUCT, cur, cur, 6);
+    cur += 6;
+    *p = cur;
     return 1;
   }
 
+  *p = cur;
   return 0;
 }
 
 int parse_basic_type(char **p) {
-  if (startswith(*p, "unsigned") && !is_alnum((*p)[8])) {
-    new_token(TK_TYPE, *p, *p, 8);
-    *p += 8;
+  char *cur = *p;
+
+  if (startswith(cur, "unsigned") && !is_alnum(cur[8])) {
+    new_token(TK_TYPE, cur, cur, 8);
+    cur += 8;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "long") && !is_alnum((*p)[4])) {
-    new_token(TK_TYPE, *p, *p, 4);
-    *p += 4;
+  if (startswith(cur, "long") && !is_alnum(cur[4])) {
+    new_token(TK_TYPE, cur, cur, 4);
+    cur += 4;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "short") && !is_alnum((*p)[5])) {
-    new_token(TK_TYPE, *p, *p, 5);
-    *p += 5;
+  if (startswith(cur, "short") && !is_alnum(cur[5])) {
+    new_token(TK_TYPE, cur, cur, 5);
+    cur += 5;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "int") && !is_alnum((*p)[3])) {
-    new_token(TK_TYPE, *p, *p, 3);
-    *p += 3;
+  if (startswith(cur, "int") && !is_alnum(cur[3])) {
+    new_token(TK_TYPE, cur, cur, 3);
+    cur += 3;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "char") && !is_alnum((*p)[4])) {
-    new_token(TK_TYPE, *p, *p, 4);
-    *p += 4;
+  if (startswith(cur, "char") && !is_alnum(cur[4])) {
+    new_token(TK_TYPE, cur, cur, 4);
+    cur += 4;
+    *p = cur;
     return 1;
   }
 
-  if (startswith(*p, "void") && !is_alnum((*p)[4])) {
-    new_token(TK_TYPE, *p, *p, 4);
-    *p += 4;
+  if (startswith(cur, "void") && !is_alnum(cur[4])) {
+    new_token(TK_TYPE, cur, cur, 4);
+    cur += 4;
+    *p = cur;
     return 1;
   }
+
+  *p = cur;
   return 0;
 }
 
 int parse_identifier(char **p) {
-  if (('a' <= **p && **p <= 'z') || ('A' <= **p && **p <= 'Z') || **p == '_') {
-    int i = 0;
-    while (('a' <= *(*p + i) && *(*p + i) <= 'z') || ('A' <= *(*p + i) && *(*p + i) <= 'Z') ||
-           ('0' <= *(*p + i) && *(*p + i) <= '9') || *(*p + i) == '_') {
-      i++;
+  char *cur = *p;
+
+  if (('a' <= *cur && *cur <= 'z') || ('A' <= *cur && *cur <= 'Z') || *cur == '_') {
+    char *start = cur;
+    while (('a' <= *cur && *cur <= 'z') || ('A' <= *cur && *cur <= 'Z') || ('0' <= *cur && *cur <= '9') || *cur == '_') {
+      cur++;
     }
-    int j = i;
-    while (isspace(*(*p + j))) {
-      j++;
+    char *after_name = cur;
+    while (isspace(*cur)) {
+      cur++;
     }
-    new_token(TK_IDENT, *p, *p, i);
-    *p += j;
+
+    int name_len = after_name - start;
+    Macro *macro = find_macro(start, name_len);
+    if (macro) {
+      *p = cur;
+      expand_macro(macro);
+      return 1;
+    }
+
+    new_token(TK_IDENT, start, start, name_len);
+    *p = cur;
     return 1;
   }
 
+  *p = cur;
   return 0;
 }
 
@@ -435,6 +506,10 @@ void tokenize() {
     }
 
     if (parse_include_directive(&p)) {
+      continue;
+    }
+
+    if (parse_define_directive(&p)) {
       continue;
     }
 

@@ -33,6 +33,7 @@ Location *consumed_loc = 0;
 
 IncludePath *include_paths = 0;
 FILE *fp = 0;
+Macro *macros = 0;
 
 void *NULL = 0;
 const int TRUE = 1;
@@ -58,6 +59,7 @@ void init_global_variables() {
   token = NULL;
   token_head = NULL;
   include_paths = NULL;
+  macros = NULL;
 
   // fileポインタの初期化
   fp = NULL;
