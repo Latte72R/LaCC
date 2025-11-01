@@ -315,9 +315,9 @@ int get_sizeof(Type *type) {
   case TY_LONGLONG:
     return 8;
   case TY_PTR:
+  case TY_ARGARR:
     return 8;
   case TY_ARR:
-  case TY_ARGARR:
     return get_sizeof(type->ptr_to) * type->array_size;
   case TY_STRUCT:
   case TY_UNION:

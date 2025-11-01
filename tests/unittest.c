@@ -1615,6 +1615,13 @@ int test173() {
   return test173_arr[0][0] + test173_arr[1][2];
 }
 
+int sizeof_param_helper(int arr[10]) { return sizeof(arr); }
+
+int test174() {
+  int arr[10];
+  return sizeof_param_helper(arr);
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -1799,6 +1806,7 @@ int main() {
   check(test171(), 171, 8);
   check(test172(), 172, 200);
   check(test173(), 173, 199);
+  check(test174(), 174, 8);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);
