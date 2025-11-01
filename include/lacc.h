@@ -220,15 +220,16 @@ Location *new_location(char *loc);
 int parse_define_directive(char **p);
 int parse_include_directive(char **p);
 int parse_if_directive(char **p);
+int parse_ifdef_directive(char **p);
+int parse_ifndef_directive(char **p);
 int parse_elif_directive(char **p);
 int parse_else_directive(char **p);
 int parse_endif_directive(char **p);
+int parse_undef_directive(char **p);
 int preprocess_is_skipping(void);
 void preprocess_check_unterminated_ifs(void);
 Macro *find_macro(char *name, int len);
 void expand_macro(Macro *macro, char **args, int arg_count);
-// マクロ引数リストを '(' から対応する ')' まで読み取り、引数配列を返す
-// pp は '(' の位置を指している必要があり、処理後は ')' の直後を指す
 char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count);
 
 // token_parser.c からエクスポートする関数

@@ -69,6 +69,29 @@ int test10() { return 0; }
 int test10() { return 1; }
 #endif
 
+#ifdef CONST42
+int test11() { return 11; }
+#else
+int test11() { return -11; }
+#endif
+
+#ifndef NOT_DEFINED_MACRO
+int test12() { return 12; }
+#else
+int test12() { return -12; }
+#endif
+
+#define TO_REMOVE 13
+#ifdef TO_REMOVE
+#undef TO_REMOVE
+#endif
+
+#ifdef TO_REMOVE
+int test13() { return -13; }
+#else
+int test13() { return 13; }
+#endif
+
 void check(int result, int id, int expected) {
   test_cnt++;
   if (result != expected) {
@@ -91,6 +114,9 @@ int main() {
   check(test8(), 8, 1);
   check(test9(), 9, 7);
   check(test10(), 10, 1);
+  check(test11(), 11, 11);
+  check(test12(), 12, 12);
+  check(test13(), 13, 13);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d macro tests passed\033[0m\n", test_cnt);

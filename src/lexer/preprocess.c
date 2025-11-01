@@ -37,6 +37,8 @@ static IfState *if_stack = 0;
 static int skip_depth = 0;
 static int expr_expansion_depth = 0;
 
+static char *skip_trailing_spaces_and_comments(char *cur);
+
 // 既存マクロの内容（名前・本体・引数）を解放する
 static void free_macro_contents(Macro *macro) {
   if (macro->name) {
@@ -75,6 +77,21 @@ static void define_macro(char *name, char *body, char **params, int param_count,
   macro->is_function = is_function;
   macro->file = input_file;
   macro->is_expanding = FALSE;
+}
+
+// マクロ定義を削除する
+static void undefine_macro(char *name, int len) {
+  Macro **link = &macros;
+  while (*link) {
+    Macro *macro = *link;
+    if ((int)strlen(macro->name) == len && !strncmp(macro->name, name, len)) {
+      *link = macro->next;
+      free_macro_contents(macro);
+      free(macro);
+      return;
+    }
+    link = &macro->next;
+  }
 }
 
 // 識別子の先頭として有効な文字か判定する
@@ -499,6 +516,149 @@ int parse_define_directive(char **p) {
   return 1;
 }
 
+// #ifdef 行を解析して条件付きコンパイルを処理する
+int parse_ifdef_directive(char **p) {
+  if (!(startswith(*p, "#ifdef") && !is_alnum((*p)[6]))) {
+    return 0;
+  }
+
+  char *cur = *p;
+  char *name_start = cur + 6;
+  while (*name_start == ' ' || *name_start == '\t')
+    name_start++;
+
+  if (!is_ident_start_char(*name_start)) {
+    error_at(new_location(name_start), "expected identifier after #ifdef");
+  }
+
+  char *name_end = name_start;
+  while (is_ident_char(*name_end))
+    name_end++;
+  int name_len = name_end - name_start;
+
+  char *rest = skip_trailing_spaces_and_comments(name_end);
+  if (*rest && *rest != '\n') {
+    error_at(new_location(rest), "unexpected tokens after identifier in #ifdef");
+  }
+
+  int ignoring = skip_depth > 0;
+  int cond = FALSE;
+  if (!ignoring) {
+    cond = find_macro(name_start, name_len) != NULL;
+  }
+
+  IfState *state = malloc(sizeof(IfState));
+  if (!state)
+    error("memory allocation failed");
+  state->prev = if_stack;
+  state->start = cur;
+  state->branch_taken = FALSE;
+  state->currently_active = FALSE;
+  state->ignoring = ignoring;
+  state->else_seen = FALSE;
+  if_stack = state;
+
+  if (state->ignoring || !cond) {
+    skip_depth++;
+  } else {
+    state->branch_taken = TRUE;
+    state->currently_active = TRUE;
+  }
+
+  if (*rest == '\n')
+    rest++;
+  *p = rest;
+  return 1;
+}
+
+// #ifndef 行を解析して条件付きコンパイルを処理する
+int parse_ifndef_directive(char **p) {
+  if (!(startswith(*p, "#ifndef") && !is_alnum((*p)[7]))) {
+    return 0;
+  }
+
+  char *cur = *p;
+  char *name_start = cur + 7;
+  while (*name_start == ' ' || *name_start == '\t')
+    name_start++;
+
+  if (!is_ident_start_char(*name_start)) {
+    error_at(new_location(name_start), "expected identifier after #ifndef");
+  }
+
+  char *name_end = name_start;
+  while (is_ident_char(*name_end))
+    name_end++;
+  int name_len = name_end - name_start;
+
+  char *rest = skip_trailing_spaces_and_comments(name_end);
+  if (*rest && *rest != '\n') {
+    error_at(new_location(rest), "unexpected tokens after identifier in #ifndef");
+  }
+
+  int ignoring = skip_depth > 0;
+  int cond = FALSE;
+  if (!ignoring) {
+    int macro_defined = find_macro(name_start, name_len) != NULL;
+    cond = !macro_defined;
+  }
+
+  IfState *state = malloc(sizeof(IfState));
+  if (!state)
+    error("memory allocation failed");
+  state->prev = if_stack;
+  state->start = cur;
+  state->branch_taken = FALSE;
+  state->currently_active = FALSE;
+  state->ignoring = ignoring;
+  state->else_seen = FALSE;
+  if_stack = state;
+
+  if (state->ignoring || !cond) {
+    skip_depth++;
+  } else {
+    state->branch_taken = TRUE;
+    state->currently_active = TRUE;
+  }
+
+  if (*rest == '\n')
+    rest++;
+  *p = rest;
+  return 1;
+}
+
+// #undef 行を解析してマクロ定義を削除する
+int parse_undef_directive(char **p) {
+  if (!(startswith(*p, "#undef") && !is_alnum((*p)[6]))) {
+    return 0;
+  }
+
+  char *cur = *p + 6;
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+
+  if (!is_ident_start_char(*cur)) {
+    error_at(new_location(cur), "expected identifier after #undef");
+  }
+
+  char *name_start = cur;
+  while (is_ident_char(*cur))
+    cur++;
+  int name_len = cur - name_start;
+
+  char *rest = skip_trailing_spaces_and_comments(cur);
+  if (*rest && *rest != '\n') {
+    error_at(new_location(rest), "unexpected tokens after identifier in #undef");
+  }
+
+  undefine_macro(name_start, name_len);
+
+  if (*rest == '\n')
+    rest++;
+  *p = rest;
+  return 1;
+}
+
 // 条件式の前後から空白を削除して複製する
 static char *copy_trim(const char *start, const char *end) {
   while (start < end && isspace((unsigned char)*start))
@@ -513,6 +673,30 @@ static char *copy_trim(const char *start, const char *end) {
     memcpy(result, start, len);
   result[len] = '\0';
   return result;
+}
+
+// ディレクティブ行末までの空白およびコメントを読み飛ばす
+static char *skip_trailing_spaces_and_comments(char *cur) {
+  while (*cur && *cur != '\n') {
+    if (isspace((unsigned char)*cur)) {
+      cur++;
+      continue;
+    }
+    if (startswith(cur, "//")) {
+      while (*cur && *cur != '\n')
+        cur++;
+      break;
+    }
+    if (startswith(cur, "/*")) {
+      char *end = strstr(cur + 2, "*/");
+      if (!end)
+        error_at(new_location(cur), "unclosed block comment in directive");
+      cur = end + 2;
+      continue;
+    }
+    break;
+  }
+  return cur;
 }
 
 // 末尾改行を除いたマクロ本体を複製する

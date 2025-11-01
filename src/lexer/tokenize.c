@@ -469,7 +469,7 @@ static int parse_basic_type(char **p) {
   return 0;
 }
 
-int parse_identifier(char **p) {
+static int parse_identifier(char **p) {
   char *cur = *p;
 
   if (('a' <= *cur && *cur <= 'z') || ('A' <= *cur && *cur <= 'Z') || *cur == '_') {
@@ -532,6 +532,14 @@ void tokenize() {
       continue;
     }
 
+    if (parse_ifdef_directive(&p)) {
+      continue;
+    }
+
+    if (parse_ifndef_directive(&p)) {
+      continue;
+    }
+
     if (parse_elif_directive(&p)) {
       continue;
     }
@@ -560,6 +568,10 @@ void tokenize() {
     }
 
     if (parse_define_directive(&p)) {
+      continue;
+    }
+
+    if (parse_undef_directive(&p)) {
       continue;
     }
 
