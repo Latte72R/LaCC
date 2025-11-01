@@ -53,6 +53,9 @@ Both global and local (stack) variable declarations are supported.
 - **Preprocessor macros**  
   Object-like and function-like `#define` directives (including `#` stringizing and `##` token pasting) are expanded during tokenization.
 
+- **Preprocessor conditionals**  
+  Conditional compilation with `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else`, and `#endif` is supported, along with `#undef` for removing macro definitions.
+
 - **Initializer lists for arrays** (with limitations)  
   1. **Array initialization with a list of values:**  
      `int arr[3] = {3, 6, 2};`
@@ -101,7 +104,6 @@ LaCC does **not** support the following:
 - Floating-point types: `float` and `double`
 - No initializer lists for structs (e.g.,  `struct AB p = {.a = 1, .b = 2};`)  
 - Inline assembly  
-- Preprocessor conditionals such as `#ifdef`, `#ifndef`, and `#if`  
 - Variadic functions (macros such as `va_list`, `va_start`, and `va_arg` are not supported)  
 - The comma operator
 - Nested functions (functions defined within other functions) 
