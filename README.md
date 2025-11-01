@@ -51,7 +51,7 @@ Both global and local (stack) variable declarations are supported.
   but it does not support the standard library headers like `<stdio.h>` in the traditional sense.
 
 - **Preprocessor macros**  
-  Object-like and function-like `#define` directives are expanded during tokenization.
+  Object-like and function-like `#define` directives (including `#` stringizing and `##` token pasting) are expanded during tokenization.
 
 - **Initializer lists for arrays** (with limitations)  
   1. **Array initialization with a list of values:**  

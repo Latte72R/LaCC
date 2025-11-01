@@ -485,7 +485,8 @@ int parse_identifier(char **p) {
 
   if (('a' <= *cur && *cur <= 'z') || ('A' <= *cur && *cur <= 'Z') || *cur == '_') {
     char *start = cur;
-    while (('a' <= *cur && *cur <= 'z') || ('A' <= *cur && *cur <= 'Z') || ('0' <= *cur && *cur <= '9') || *cur == '_') {
+    while (('a' <= *cur && *cur <= 'z') || ('A' <= *cur && *cur <= 'Z') || ('0' <= *cur && *cur <= '9') ||
+           *cur == '_') {
       cur++;
     }
     char *after_name = cur;
@@ -607,6 +608,8 @@ int parse_identifier(char **p) {
           free(args[i]);
         free(args);
         return 1;
+      } else {
+        // 関数型マクロだが引数リストがない場合は展開しない
       }
     } else if (macro) {
       *p = cur;

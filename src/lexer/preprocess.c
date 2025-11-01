@@ -64,9 +64,73 @@ static int is_ident_start_char(char c) { return (('a' <= c && c <= 'z') || ('A' 
 
 static int is_ident_char(char c) { return is_ident_start_char(c) || ('0' <= c && c <= '9'); }
 
+static void append_text(char **buf, int *len, int *cap, const char *text, int text_len) {
+  if (*len + text_len >= *cap) {
+    while (*len + text_len >= *cap)
+      *cap *= 2;
+    *buf = realloc(*buf, *cap);
+    if (!*buf)
+      error("memory allocation failed");
+  }
+  memcpy(*buf + *len, text, text_len);
+  *len += text_len;
+}
+
+static void trim_trailing_whitespace(char *buf, int *len) {
+  while (*len > 0 && isspace((unsigned char)buf[*len - 1]))
+    (*len)--;
+}
+
+static void append_with_concat(char **buf, int *len, int *cap, const char *text, int text_len, int *pending_concat) {
+  if (*pending_concat) {
+    trim_trailing_whitespace(*buf, len);
+    while (text_len > 0 && isspace((unsigned char)*text)) {
+      text++;
+      text_len--;
+    }
+    *pending_concat = FALSE;
+  }
+  append_text(buf, len, cap, text, text_len);
+}
+
+static char *stringize_argument(char *arg) {
+  int cap = strlen(arg) * 4 + 3;
+  char *buf = malloc(cap);
+  if (!buf)
+    error("memory allocation failed");
+  int len = 0;
+  buf[len++] = '"';
+  int in_space = 1;
+  for (char *p = arg; *p; p++) {
+    char c = *p;
+    if (c == '\n' || c == '\r' || c == '\t' || c == '\f' || c == '\v')
+      c = ' ';
+    if (isspace((unsigned char)c)) {
+      if (in_space)
+        continue;
+      in_space = 1;
+      c = ' ';
+    } else {
+      in_space = 0;
+    }
+    if (len + 2 >= cap) {
+      cap *= 2;
+      buf = realloc(buf, cap);
+      if (!buf)
+        error("memory allocation failed");
+    }
+    if (c == '\\' || c == '"')
+      buf[len++] = '\\';
+    buf[len++] = c;
+  }
+  buf[len++] = '"';
+  buf[len] = '\0';
+  return buf;
+}
+
 static char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
   char *body = macro->body;
-  int cap = strlen(body) + 1;
+  int cap = strlen(body) + 32;
   int len = 0;
   char *buf = malloc(cap);
   if (!buf)
@@ -74,28 +138,17 @@ static char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
 
   int in_string = FALSE;
   int in_char = FALSE;
+  int pending_concat = FALSE;
 
   for (char *p = body; *p;) {
     char ch = *p;
 
     if (in_string) {
-      if (len + 1 >= cap) {
-        cap *= 2;
-        buf = realloc(buf, cap);
-        if (!buf)
-          error("memory allocation failed");
-      }
-      buf[len++] = ch;
+      append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
       if (ch == '\\' && *(p + 1)) {
         p++;
         ch = *p;
-        if (len + 1 >= cap) {
-          cap *= 2;
-          buf = realloc(buf, cap);
-          if (!buf)
-            error("memory allocation failed");
-        }
-        buf[len++] = ch;
+        append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
       } else if (ch == '"') {
         in_string = FALSE;
       }
@@ -104,23 +157,11 @@ static char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
     }
 
     if (in_char) {
-      if (len + 1 >= cap) {
-        cap *= 2;
-        buf = realloc(buf, cap);
-        if (!buf)
-          error("memory allocation failed");
-      }
-      buf[len++] = ch;
+      append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
       if (ch == '\\' && *(p + 1)) {
         p++;
         ch = *p;
-        if (len + 1 >= cap) {
-          cap *= 2;
-          buf = realloc(buf, cap);
-          if (!buf)
-            error("memory allocation failed");
-        }
-        buf[len++] = ch;
+        append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
       } else if (ch == '\'') {
         in_char = FALSE;
       }
@@ -130,27 +171,49 @@ static char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
 
     if (ch == '"') {
       in_string = TRUE;
-      if (len + 1 >= cap) {
-        cap *= 2;
-        buf = realloc(buf, cap);
-        if (!buf)
-          error("memory allocation failed");
-      }
-      buf[len++] = ch;
+      append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
       p++;
       continue;
     }
 
     if (ch == '\'') {
       in_char = TRUE;
-      if (len + 1 >= cap) {
-        cap *= 2;
-        buf = realloc(buf, cap);
-        if (!buf)
-          error("memory allocation failed");
-      }
-      buf[len++] = ch;
+      append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
       p++;
+      continue;
+    }
+
+    if (ch == '#' && *(p + 1) == '#') {
+      pending_concat = TRUE;
+      p += 2;
+      while (isspace((unsigned char)*p))
+        p++;
+      continue;
+    }
+
+    if (ch == '#') {
+      p++;
+      while (isspace((unsigned char)*p))
+        p++;
+      if (!is_ident_start_char(*p))
+        error("expected macro parameter after '#'");
+      char *start = p;
+      while (is_ident_char(*p))
+        p++;
+      int ident_len = p - start;
+      int arg_index = -1;
+      for (int i = 0; i < macro->param_count; i++) {
+        if ((int)strlen(macro->params[i]) == ident_len && !strncmp(macro->params[i], start, ident_len)) {
+          arg_index = i;
+          break;
+        }
+      }
+      if (arg_index < 0)
+        error("expected macro parameter after '#'");
+      char *arg = args[arg_index] ? args[arg_index] : "";
+      char *stringized = stringize_argument(arg);
+      append_with_concat(&buf, &len, &cap, stringized, strlen(stringized), &pending_concat);
+      free(stringized);
       continue;
     }
 
@@ -163,40 +226,19 @@ static char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
       int replaced = FALSE;
       for (int i = 0; i < macro->param_count; i++) {
         if ((int)strlen(macro->params[i]) == ident_len && !strncmp(macro->params[i], start, ident_len)) {
-          char *arg = args[i];
-          int arg_len = strlen(arg);
-          while (len + arg_len >= cap) {
-            cap *= 2;
-            buf = realloc(buf, cap);
-            if (!buf)
-              error("memory allocation failed");
-          }
-          memcpy(buf + len, arg, arg_len);
-          len += arg_len;
+          char *arg = args[i] ? args[i] : "";
+          append_with_concat(&buf, &len, &cap, arg, strlen(arg), &pending_concat);
           replaced = TRUE;
           break;
         }
       }
       if (!replaced) {
-        while (len + ident_len >= cap) {
-          cap *= 2;
-          buf = realloc(buf, cap);
-          if (!buf)
-            error("memory allocation failed");
-        }
-        memcpy(buf + len, start, ident_len);
-        len += ident_len;
+        append_with_concat(&buf, &len, &cap, start, ident_len, &pending_concat);
       }
       continue;
     }
 
-    if (len + 1 >= cap) {
-      cap *= 2;
-      buf = realloc(buf, cap);
-      if (!buf)
-        error("memory allocation failed");
-    }
-    buf[len++] = ch;
+    append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
     p++;
   }
 
