@@ -20,6 +20,7 @@ BOOSTSTRAP:=$(BUILD_DIR)/bootstrap
 SELFHOST:=$(BUILD_DIR)/lacc
 UNIT_TEST:=$(TEST_DIR)/unittest.c
 WARN_TEST:=$(TEST_DIR)/warntest.c
+MACRO_TEST:=$(TEST_DIR)/macrotest.c
 TMP_C:=$(BUILD_DIR)/tmp.c
 TMP_S:=$(BUILD_DIR)/tmp.s
 TMP_OUT:=$(BUILD_DIR)/tmp
@@ -40,7 +41,7 @@ selfhost: $(SELFHOST) ## Build the self-hosted compiler
 define runfile
 	@mkdir -p ${BUILD_DIR}
 	@$(1) $(LACC_FLAGS) $(2) -S -o $(TMP_S)
-    @cc -o ${BUILD_DIR}/tmp $(TMP_S)
+	@cc -o ${BUILD_DIR}/tmp $(TMP_S)
 	@${BUILD_DIR}/tmp
 endef
 
@@ -75,6 +76,10 @@ define warntest
 	@$(call runfile, $(1), $(WARN_TEST))
 endef
 
+define macrotest
+	@$(call runfile, $(1), $(MACRO_TEST))
+endef
+
 define errortest
 	@$(TEST_DIR)/errortest.sh $(BUILD_DIR) $(1) $(TMP_C) $(TMP_S) $(TMP_OUT)
 endef
@@ -82,6 +87,8 @@ endef
 unittest: .unittest-selfhost ## Run unit tests with the self-hosted compiler
 
 warntest: .warntest-selfhost ## Run warning tests with the self-hosted compiler
+
+macrotest: .macrotest-selfhost ## Run macro tests with the self-hosted compiler
 
 errortest: .errortest-selfhost ## Run error tests with the self-hosted compiler
 
@@ -104,6 +111,16 @@ errortest: .errortest-selfhost ## Run error tests with the self-hosted compiler
 
 .warntest-selfhost: $(SELFHOST) | $(BUILD_DIR)
 	@$(call warntest, $(SELFHOST))
+
+.macrotest-cc: | $(BUILD_DIR)
+	@$(CC) $(CC_FLAGS) -o $(TMP_OUT) $(MACRO_TEST)
+	@$(TMP_OUT)
+
+.macrotest-bootstrap: $(BOOSTSTRAP) | $(BUILD_DIR)
+	@$(call macrotest, $(BOOSTSTRAP))
+
+.macrotest-selfhost: $(SELFHOST) | $(BUILD_DIR)
+	@$(call macrotest, $(SELFHOST))
 
 .errortest-cc: | $(BUILD_DIR)
 	@$(call errortest, $(CC))
@@ -153,8 +170,9 @@ clean: ## Clean up generated files
 	@rm -rf $(BUILD_DIR)
 	@echo "Cleaned up generated files."
 
-.PHONY: help run unittest warntest errortest sanitize asmcmp clean \
+.PHONY: help run unittest warntest macrotest errortest sanitize asmcmp clean \
         bootstrap selfhost .run-cc .run-bootstrap .run-selfhost \
         .unittest-cc .unittest-bootstrap .unittest-selfhost \
 		.warntest-cc .warntest-bootstrap .warntest-selfhost \
+		.macrotest-cc .macrotest-bootstrap .macrotest-selfhost \
         .errortest-cc .errortest-bootstrap .errortest-selfhost
