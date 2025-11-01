@@ -27,7 +27,6 @@ typedef enum {
   TK_TYPE,     // 型
   TK_NUM,      // 整数トークン
   TK_RETURN,   // return
-  TK_SIZEOF,   // sizeof
   TK_CONST,    // const
   TK_STATIC,   // static
   TK_EXTERN,   // extern
@@ -206,14 +205,13 @@ void new_token(TokenKind kind, char *loc, char *str, int len);
 Location *new_location(char *loc);
 
 // preprocessor.c からエクスポートする関数
-int handle_define_directive(char **p);
-int handle_include_directive(char **p);
+int parse_define_directive(char **p);
+int parse_include_directive(char **p);
 
 // token_parser.c からエクスポートする関数
 int parse_number_literal(char **p);
 int parse_string_literal(char **p);
 int parse_char_literal(char **p);
-// char *parse_string_literal(char *p);
 int parse_punctuator_literal(char **p);
 void tokenize();
 

@@ -8,6 +8,33 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
+int skip_characters(char **p) {
+  // Skip whitespace characters.
+  if (isspace(**p)) {
+    (*p)++;
+    return 1;
+  }
+
+  // 行コメントをスキップ
+  if (startswith(*p, "//")) {
+    *p += 2;
+    while (**p != '\n' && **p != '\0')
+      (*p)++;
+    return 1;
+  }
+
+  // ブロックコメントをスキップ
+  if (startswith(*p, "/*")) {
+    char *q = strstr(*p + 2, "*/");
+    if (!q)
+      error_at(new_location(*p), "unclosed block comment [in tokenize]");
+    *p = q + 2;
+    return 1;
+  }
+
+  return 0;
+}
+
 int parse_char_literal(char **p) {
   if (**p != '\'') {
     return 0;
@@ -196,7 +223,205 @@ int parse_punctuator(char **p) {
     return 1;
   }
 
+  if (startswith(*p, "sizeof") && !is_alnum((*p)[6])) {
+    new_token(TK_RESERVED, *p, *p, 6);
+    *p += 6;
+    return 1;
+  }
+
   return 0; // Not a punctuator
+}
+
+int parse_control_structure(char **p) {
+
+  if (startswith(*p, "if") && !is_alnum((*p)[2])) {
+    new_token(TK_IF, *p, *p, 2);
+    *p += 2;
+    return 1;
+  }
+
+  if (startswith(*p, "else") && !is_alnum((*p)[4])) {
+    new_token(TK_ELSE, *p, *p, 4);
+    *p += 4;
+    return 1;
+  }
+
+  if (startswith(*p, "switch") && !is_alnum((*p)[6])) {
+    new_token(TK_SWITCH, *p, *p, 6);
+    *p += 6;
+    return 1;
+  }
+
+  if (startswith(*p, "case") && !is_alnum((*p)[4])) {
+    new_token(TK_CASE, *p, *p, 4);
+    *p += 4;
+    return 1;
+  }
+
+  if (startswith(*p, "default") && !is_alnum((*p)[7])) {
+    new_token(TK_DEFAULT, *p, *p, 7);
+    *p += 7;
+    return 1;
+  }
+
+  if (startswith(*p, "do") && !is_alnum((*p)[2])) {
+    new_token(TK_DO, *p, *p, 2);
+    *p += 2;
+    return 1;
+  }
+
+  if (startswith(*p, "while") && !is_alnum((*p)[5])) {
+    new_token(TK_WHILE, *p, *p, 5);
+    *p += 5;
+    return 1;
+  }
+
+  if (startswith(*p, "for") && !is_alnum((*p)[3])) {
+    new_token(TK_FOR, *p, *p, 3);
+    *p += 3;
+    return 1;
+  }
+
+  if (startswith(*p, "break") && !is_alnum((*p)[5])) {
+    new_token(TK_BREAK, *p, *p, 5);
+    *p += 5;
+    return 1;
+  }
+
+  if (startswith(*p, "continue") && !is_alnum((*p)[8])) {
+    new_token(TK_CONTINUE, *p, *p, 8);
+    *p += 8;
+    return 1;
+  }
+
+  if (startswith(*p, "goto") && !is_alnum((*p)[4])) {
+    new_token(TK_GOTO, *p, *p, 4);
+    *p += 4;
+    return 1;
+  }
+
+  if (startswith(*p, "return") && !is_alnum((*p)[6])) {
+    new_token(TK_RETURN, *p, *p, 6);
+    *p += 6;
+    return 1;
+  }
+
+  return 0;
+}
+
+int parse_declaration_specifier(char **p) {
+  if (startswith(*p, "typedef") && !is_alnum((*p)[7])) {
+    new_token(TK_TYPEDEF, *p, *p, 7);
+    *p += 7;
+    return 1;
+  }
+
+  if (startswith(*p, "const") && !is_alnum((*p)[5])) {
+    new_token(TK_CONST, *p, *p, 5);
+    *p += 5;
+    return 1;
+  }
+
+  if (startswith(*p, "static") && !is_alnum((*p)[6])) {
+    new_token(TK_STATIC, *p, *p, 6);
+    *p += 6;
+    return 1;
+  }
+
+  if (startswith(*p, "extern") && !is_alnum((*p)[6])) {
+    new_token(TK_EXTERN, *p, *p, 6);
+    *p += 6;
+    return 1;
+  }
+
+  if (startswith(*p, "volatile") && !is_alnum((*p)[8])) {
+    // "volatile" is not supported yet
+    // Because not performing any optimizations, special handling for volatile isn't necessary.
+    *p += 8;
+    return 1;
+  }
+
+  return 0;
+}
+
+int parse_composite_type(char **p) {
+  if (startswith(*p, "enum") && !is_alnum((*p)[4])) {
+    new_token(TK_ENUM, *p, *p, 4);
+    *p += 4;
+    return 1;
+  }
+
+  if (startswith(*p, "union") && !is_alnum((*p)[5])) {
+    new_token(TK_UNION, *p, *p, 5);
+    *p += 5;
+    return 1;
+  }
+
+  if (startswith(*p, "struct") && !is_alnum((*p)[6])) {
+    new_token(TK_STRUCT, *p, *p, 6);
+    *p += 6;
+    return 1;
+  }
+
+  return 0;
+}
+
+int parse_basic_type(char **p) {
+  if (startswith(*p, "unsigned") && !is_alnum((*p)[8])) {
+    new_token(TK_TYPE, *p, *p, 8);
+    *p += 8;
+    return 1;
+  }
+
+  if (startswith(*p, "long") && !is_alnum((*p)[4])) {
+    new_token(TK_TYPE, *p, *p, 4);
+    *p += 4;
+    return 1;
+  }
+
+  if (startswith(*p, "short") && !is_alnum((*p)[5])) {
+    new_token(TK_TYPE, *p, *p, 5);
+    *p += 5;
+    return 1;
+  }
+
+  if (startswith(*p, "int") && !is_alnum((*p)[3])) {
+    new_token(TK_TYPE, *p, *p, 3);
+    *p += 3;
+    return 1;
+  }
+
+  if (startswith(*p, "char") && !is_alnum((*p)[4])) {
+    new_token(TK_TYPE, *p, *p, 4);
+    *p += 4;
+    return 1;
+  }
+
+  if (startswith(*p, "void") && !is_alnum((*p)[4])) {
+    new_token(TK_TYPE, *p, *p, 4);
+    *p += 4;
+    return 1;
+  }
+  return 0;
+}
+
+int parse_identifier(char **p) {
+  if (('a' <= **p && **p <= 'z') || ('A' <= **p && **p <= 'Z') || **p == '_') {
+    int i = 0;
+    while (('a' <= *(*p + i) && *(*p + i) <= 'z') || ('A' <= *(*p + i) && *(*p + i) <= 'Z') ||
+           ('0' <= *(*p + i) && *(*p + i) <= '9') || *(*p + i) == '_') {
+      i++;
+    }
+    int j = i;
+    while (isspace(*(*p + j))) {
+      j++;
+    }
+    new_token(TK_IDENT, *p, *p, i);
+    *p += j;
+    return 1;
+  }
+
+  return 0;
 }
 
 // Tokenize `user_input` and returns new tokens.
@@ -205,39 +430,13 @@ void tokenize() {
   char *q;
 
   while (*p) {
-    // Skip whitespace characters.
-    if (isspace(*p)) {
-      p++;
+    if (skip_characters(&p)) {
       continue;
     }
 
-    // 行コメントをスキップ
-    if (startswith(p, "//")) {
-      p += 2;
-      while (*p != '\n' && *p != '\0')
-        p++;
+    if (parse_include_directive(&p)) {
       continue;
     }
-
-    // ブロックコメントをスキップ
-    if (startswith(p, "/*")) {
-      q = strstr(p + 2, "*/");
-      if (!q)
-        error_at(new_location(p), "unclosed block comment [in tokenize]");
-      p = q + 2;
-      continue;
-    }
-
-    if (handle_include_directive(&p)) {
-      continue;
-    }
-
-    /*
-    if (startswith(p, "#define") && !is_alnum(p[7])) {
-      p = handle_define_directive(p);
-      continue;
-    }
-    */
 
     if (parse_punctuator(&p)) {
       continue;
@@ -255,181 +454,23 @@ void tokenize() {
       continue;
     }
 
-    if (startswith(p, "switch") && !is_alnum(p[6])) {
-      new_token(TK_SWITCH, p, p, 6);
-      p += 6;
+    if (parse_control_structure(&p)) {
       continue;
     }
 
-    if (startswith(p, "case") && !is_alnum(p[4])) {
-      new_token(TK_CASE, p, p, 4);
-      p += 4;
+    if (parse_declaration_specifier(&p)) {
       continue;
     }
 
-    if (startswith(p, "default") && !is_alnum(p[7])) {
-      new_token(TK_DEFAULT, p, p, 7);
-      p += 7;
+    if (parse_composite_type(&p)) {
       continue;
     }
 
-    if (startswith(p, "do") && !is_alnum(p[2])) {
-      new_token(TK_DO, p, p, 2);
-      p += 2;
+    if (parse_basic_type(&p)) {
       continue;
     }
 
-    if (startswith(p, "if") && !is_alnum(p[2])) {
-      new_token(TK_IF, p, p, 2);
-      p += 2;
-      continue;
-    }
-
-    if (startswith(p, "sizeof") && !is_alnum(p[6])) {
-      new_token(TK_SIZEOF, p, p, 6);
-      p += 6;
-      continue;
-    }
-
-    if (startswith(p, "else") && !is_alnum(p[4])) {
-      new_token(TK_ELSE, p, p, 4);
-      p += 4;
-      continue;
-    }
-
-    if (startswith(p, "return") && !is_alnum(p[6])) {
-      new_token(TK_RETURN, p, p, 6);
-      p += 6;
-      continue;
-    }
-
-    if (startswith(p, "goto") && !is_alnum(p[4])) {
-      new_token(TK_GOTO, p, p, 4);
-      p += 4;
-      continue;
-    }
-
-    if (startswith(p, "extern") && !is_alnum(p[6])) {
-      new_token(TK_EXTERN, p, p, 6);
-      p += 6;
-      continue;
-    }
-
-    if (startswith(p, "enum") && !is_alnum(p[4])) {
-      new_token(TK_ENUM, p, p, 4);
-      p += 4;
-      continue;
-    }
-
-    if (startswith(p, "union") && !is_alnum(p[5])) {
-      new_token(TK_UNION, p, p, 5);
-      p += 5;
-      continue;
-    }
-
-    if (startswith(p, "struct") && !is_alnum(p[6])) {
-      new_token(TK_STRUCT, p, p, 6);
-      p += 6;
-      continue;
-    }
-
-    if (startswith(p, "typedef") && !is_alnum(p[7])) {
-      new_token(TK_TYPEDEF, p, p, 7);
-      p += 7;
-      continue;
-    }
-
-    if (startswith(p, "const") && !is_alnum(p[5])) {
-      new_token(TK_CONST, p, p, 5);
-      p += 5;
-      continue;
-    }
-
-    if (startswith(p, "volatile") && !is_alnum(p[8])) {
-      // "volatile" is not supported yet
-      // Because not performing any optimizations, special handling for volatile isn't necessary.
-      p += 8;
-      continue;
-    }
-
-    if (startswith(p, "static") && !is_alnum(p[6])) {
-      new_token(TK_STATIC, p, p, 6);
-      p += 6;
-      continue;
-    }
-
-    if (startswith(p, "while") && !is_alnum(p[5])) {
-      new_token(TK_WHILE, p, p, 5);
-      p += 5;
-      continue;
-    }
-
-    if (startswith(p, "for") && !is_alnum(p[3])) {
-      new_token(TK_FOR, p, p, 3);
-      p += 3;
-      continue;
-    }
-
-    if (startswith(p, "unsigned") && !is_alnum(p[8])) {
-      new_token(TK_TYPE, p, p, 8);
-      p += 8;
-      continue;
-    }
-
-    if (startswith(p, "long") && !is_alnum(p[4])) {
-      new_token(TK_TYPE, p, p, 4);
-      p += 4;
-      continue;
-    }
-
-    if (startswith(p, "short") && !is_alnum(p[5])) {
-      new_token(TK_TYPE, p, p, 5);
-      p += 5;
-      continue;
-    }
-
-    if (startswith(p, "int") && !is_alnum(p[3])) {
-      new_token(TK_TYPE, p, p, 3);
-      p += 3;
-      continue;
-    }
-
-    if (startswith(p, "char") && !is_alnum(p[4])) {
-      new_token(TK_TYPE, p, p, 4);
-      p += 4;
-      continue;
-    }
-
-    if (startswith(p, "void") && !is_alnum(p[4])) {
-      new_token(TK_TYPE, p, p, 4);
-      p += 4;
-      continue;
-    }
-
-    if (startswith(p, "break") && !is_alnum(p[5])) {
-      new_token(TK_BREAK, p, p, 5);
-      p += 5;
-      continue;
-    }
-
-    if (startswith(p, "continue") && !is_alnum(p[8])) {
-      new_token(TK_CONTINUE, p, p, 8);
-      p += 8;
-      continue;
-    }
-
-    if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z') || *p == '_') {
-      int i = 0;
-      while (('a' <= *(p + i) && *(p + i) <= 'z') || ('A' <= *(p + i) && *(p + i) <= 'Z') ||
-             ('0' <= *(p + i) && *(p + i) <= '9') || *(p + i) == '_') {
-        i++;
-      }
-      int j = i;
-      while (isspace(*(p + j))) {
-        j++;
-      }
-      new_token(TK_IDENT, p, p, i);
-      p += j;
+    if (parse_identifier(&p)) {
       continue;
     }
 

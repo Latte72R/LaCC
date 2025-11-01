@@ -376,8 +376,7 @@ Node *type_cast() {
 //       | primary
 Node *unary() {
   Node *node;
-  if (token->kind == TK_SIZEOF) {
-    token = token->next;
+  if (consume("sizeof")) {
     return new_num(get_sizeof(unary()->type));
   }
   if (consume("+"))
