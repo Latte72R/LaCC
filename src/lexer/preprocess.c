@@ -531,7 +531,7 @@ static char *copy_macro_body_text(Macro *macro) {
 }
 
 // 関数型マクロの引数文字列を分割して保持する
-static char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count) {
+char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count) {
   const char *p = *pp;
   if (*p != '(')
     error("expected '(' after macro name");

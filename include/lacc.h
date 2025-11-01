@@ -227,6 +227,9 @@ int preprocess_is_skipping(void);
 void preprocess_check_unterminated_ifs(void);
 Macro *find_macro(char *name, int len);
 void expand_macro(Macro *macro, char **args, int arg_count);
+// マクロ引数リストを '(' から対応する ')' まで読み取り、引数配列を返す
+// pp は '(' の位置を指している必要があり、処理後は ')' の直後を指す
+char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count);
 
 // token_parser.c からエクスポートする関数
 void tokenize();
