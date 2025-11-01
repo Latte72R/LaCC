@@ -29,31 +29,188 @@ static void free_macro_contents(Macro *macro) {
   if (macro->body) {
     free(macro->body);
   }
+  if (macro->params) {
+    for (int i = 0; i < macro->param_count; i++) {
+      free(macro->params[i]);
+    }
+    free(macro->params);
+  }
+  macro->params = NULL;
+  macro->param_count = 0;
+  macro->is_function = FALSE;
 }
 
-static void define_macro(char *name, char *body) {
+static void define_macro(char *name, char *body, char **params, int param_count, int is_function) {
   Macro *macro = find_macro(name, strlen(name));
   if (macro) {
     free_macro_contents(macro);
-    macro->name = name;
-    macro->body = body;
-    macro->file = input_file;
-    macro->is_expanding = FALSE;
-    return;
+  } else {
+    macro = malloc(sizeof(Macro));
+    if (!macro)
+      error("memory allocation failed");
+    macro->next = macros;
+    macros = macro;
   }
-
-  Macro *new_macro = malloc(sizeof(Macro));
-  if (!new_macro)
-    error("memory allocation failed");
-  new_macro->name = name;
-  new_macro->body = body;
-  new_macro->file = input_file;
-  new_macro->is_expanding = FALSE;
-  new_macro->next = macros;
-  macros = new_macro;
+  macro->name = name;
+  macro->body = body;
+  macro->params = params;
+  macro->param_count = param_count;
+  macro->is_function = is_function;
+  macro->file = input_file;
+  macro->is_expanding = FALSE;
 }
 
-void expand_macro(Macro *macro) {
+static int is_ident_start_char(char c) { return (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_'); }
+
+static int is_ident_char(char c) { return is_ident_start_char(c) || ('0' <= c && c <= '9'); }
+
+static char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
+  char *body = macro->body;
+  int cap = strlen(body) + 1;
+  int len = 0;
+  char *buf = malloc(cap);
+  if (!buf)
+    error("memory allocation failed");
+
+  int in_string = FALSE;
+  int in_char = FALSE;
+
+  for (char *p = body; *p;) {
+    char ch = *p;
+
+    if (in_string) {
+      if (len + 1 >= cap) {
+        cap *= 2;
+        buf = realloc(buf, cap);
+        if (!buf)
+          error("memory allocation failed");
+      }
+      buf[len++] = ch;
+      if (ch == '\\' && *(p + 1)) {
+        p++;
+        ch = *p;
+        if (len + 1 >= cap) {
+          cap *= 2;
+          buf = realloc(buf, cap);
+          if (!buf)
+            error("memory allocation failed");
+        }
+        buf[len++] = ch;
+      } else if (ch == '"') {
+        in_string = FALSE;
+      }
+      p++;
+      continue;
+    }
+
+    if (in_char) {
+      if (len + 1 >= cap) {
+        cap *= 2;
+        buf = realloc(buf, cap);
+        if (!buf)
+          error("memory allocation failed");
+      }
+      buf[len++] = ch;
+      if (ch == '\\' && *(p + 1)) {
+        p++;
+        ch = *p;
+        if (len + 1 >= cap) {
+          cap *= 2;
+          buf = realloc(buf, cap);
+          if (!buf)
+            error("memory allocation failed");
+        }
+        buf[len++] = ch;
+      } else if (ch == '\'') {
+        in_char = FALSE;
+      }
+      p++;
+      continue;
+    }
+
+    if (ch == '"') {
+      in_string = TRUE;
+      if (len + 1 >= cap) {
+        cap *= 2;
+        buf = realloc(buf, cap);
+        if (!buf)
+          error("memory allocation failed");
+      }
+      buf[len++] = ch;
+      p++;
+      continue;
+    }
+
+    if (ch == '\'') {
+      in_char = TRUE;
+      if (len + 1 >= cap) {
+        cap *= 2;
+        buf = realloc(buf, cap);
+        if (!buf)
+          error("memory allocation failed");
+      }
+      buf[len++] = ch;
+      p++;
+      continue;
+    }
+
+    if (is_ident_start_char(ch)) {
+      char *start = p;
+      p++;
+      while (is_ident_char(*p))
+        p++;
+      int ident_len = p - start;
+      int replaced = FALSE;
+      for (int i = 0; i < macro->param_count; i++) {
+        if ((int)strlen(macro->params[i]) == ident_len && !strncmp(macro->params[i], start, ident_len)) {
+          char *arg = args[i];
+          int arg_len = strlen(arg);
+          while (len + arg_len >= cap) {
+            cap *= 2;
+            buf = realloc(buf, cap);
+            if (!buf)
+              error("memory allocation failed");
+          }
+          memcpy(buf + len, arg, arg_len);
+          len += arg_len;
+          replaced = TRUE;
+          break;
+        }
+      }
+      if (!replaced) {
+        while (len + ident_len >= cap) {
+          cap *= 2;
+          buf = realloc(buf, cap);
+          if (!buf)
+            error("memory allocation failed");
+        }
+        memcpy(buf + len, start, ident_len);
+        len += ident_len;
+      }
+      continue;
+    }
+
+    if (len + 1 >= cap) {
+      cap *= 2;
+      buf = realloc(buf, cap);
+      if (!buf)
+        error("memory allocation failed");
+    }
+    buf[len++] = ch;
+    p++;
+  }
+
+  if (len + 1 >= cap) {
+    cap += 1;
+    buf = realloc(buf, cap);
+    if (!buf)
+      error("memory allocation failed");
+  }
+  buf[len] = '\0';
+  return buf;
+}
+
+void expand_macro(Macro *macro, char **args, int arg_count) {
   if (!macro) {
     return;
   }
@@ -66,7 +223,22 @@ void expand_macro(Macro *macro) {
   char *saved_file = input_file;
 
   macro->is_expanding = TRUE;
-  user_input = macro->body;
+  char *expanded_input = macro->body;
+
+  if (macro->is_function) {
+    if (macro->param_count != arg_count) {
+      error("macro %s expects %d arguments but %d given", macro->name, macro->param_count, arg_count);
+    }
+    expanded_input = substitute_macro_body(macro, args, arg_count);
+    CharPtrList *node = malloc(sizeof(CharPtrList));
+    if (!node)
+      error("memory allocation failed");
+    node->str = expanded_input;
+    node->next = user_input_list;
+    user_input_list = node;
+  }
+
+  user_input = expanded_input;
   if (macro->file) {
     input_file = macro->file;
   }
@@ -157,34 +329,76 @@ int parse_define_directive(char **p) {
   }
 
   char *cur = *p + 7;
-  while (*cur && isspace(*cur)) {
-    if (*cur == '\n') {
-      error_at(new_location(cur), "expected an identifier after #define");
-    }
+  while (*cur == ' ' || *cur == '\t')
     cur++;
-  }
 
-  if (!((*cur >= 'a' && *cur <= 'z') || (*cur >= 'A' && *cur <= 'Z') || *cur == '_')) {
+  if (!is_ident_start_char(*cur)) {
     error_at(new_location(cur), "expected an identifier after #define");
   }
 
   char *name_start = cur;
-  while (('a' <= *cur && *cur <= 'z') || ('A' <= *cur && *cur <= 'Z') || ('0' <= *cur && *cur <= '9') || *cur == '_') {
+  while (is_ident_char(*cur)) {
     cur++;
   }
   int name_len = cur - name_start;
   char *name = malloc(name_len + 1);
-  if (!name) {
+  if (!name)
     error("memory allocation failed");
-  }
   memcpy(name, name_start, name_len);
   name[name_len] = '\0';
 
-  while (*cur && isspace(*cur)) {
-    if (*cur == '\n') {
-      error_at(new_location(cur), "expected an identifier after #define");
-    }
+  int is_function = FALSE;
+  char **params = NULL;
+  int param_count = 0;
+  int param_cap = 0;
+
+  if (*cur == '(') {
+    is_function = TRUE;
     cur++;
+    if (*cur == ')') {
+      cur++;
+    } else {
+      while (TRUE) {
+        while (*cur == ' ' || *cur == '\t')
+          cur++;
+        if (!is_ident_start_char(*cur)) {
+          error_at(new_location(cur), "expected an identifier in macro parameter list");
+        }
+        char *param_start = cur;
+        cur++;
+        while (is_ident_char(*cur))
+          cur++;
+        int param_len = cur - param_start;
+        char *param_name = malloc(param_len + 1);
+        if (!param_name)
+          error("memory allocation failed");
+        memcpy(param_name, param_start, param_len);
+        param_name[param_len] = '\0';
+
+        if (param_count >= param_cap) {
+          param_cap = param_cap ? param_cap * 2 : 4;
+          params = realloc(params, sizeof(char *) * param_cap);
+          if (!params)
+            error("memory allocation failed");
+        }
+        params[param_count++] = param_name;
+
+        while (*cur == ' ' || *cur == '\t')
+          cur++;
+        if (*cur == ',') {
+          cur++;
+          continue;
+        }
+        if (*cur == ')') {
+          cur++;
+          break;
+        }
+        error_at(new_location(cur), "expected ',' or ')' in macro parameter list");
+      }
+    }
+  } else {
+    while (*cur == ' ' || *cur == '\t')
+      cur++;
   }
 
   char *value_start = cur;
@@ -192,22 +406,21 @@ int parse_define_directive(char **p) {
     cur++;
   }
   char *value_end = cur;
-  while (value_end > value_start && value_end[-1] != '\n' && isspace(value_end[-1])) {
+  while (value_end > value_start && value_end[-1] != '\n' && isspace((unsigned char)value_end[-1])) {
     value_end--;
   }
 
   int value_len = value_end - value_start;
   char *value = malloc(value_len + 2);
-  if (!value) {
+  if (!value)
     error("memory allocation failed");
-  }
   if (value_len > 0) {
     memcpy(value, value_start, value_len);
   }
   value[value_len] = '\n';
   value[value_len + 1] = '\0';
 
-  define_macro(name, value);
+  define_macro(name, value, params, param_count, is_function);
 
   if (*cur == '\n') {
     cur++;

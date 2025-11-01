@@ -51,7 +51,7 @@ Both global and local (stack) variable declarations are supported.
   but it does not support the standard library headers like `<stdio.h>` in the traditional sense.
 
 - **Preprocessor macros**  
-  Object-like `#define` directives are expanded during tokenization.
+  Object-like and function-like `#define` directives are expanded during tokenization.
 
 - **Initializer lists for arrays** (with limitations)  
   1. **Array initialization with a list of values:**  
@@ -102,7 +102,6 @@ LaCC does **not** support the following:
 - No initializer lists for structs (e.g.,  `struct AB p = {.a = 1, .b = 2};`)  
 - Inline assembly  
 - Preprocessor conditionals such as `#ifdef`, `#ifndef`, and `#if`  
-- Function-like macros  
 - Variadic functions (macros such as `va_list`, `va_start`, and `va_arg` are not supported)  
 - The comma operator
 - Nested functions (functions defined within other functions) 

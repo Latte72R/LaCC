@@ -8,7 +8,22 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
-int skip_characters(char **p) {
+static char *copy_trimmed_range(char *start, char *end) {
+  while (start < end && isspace((unsigned char)*start))
+    start++;
+  while (end > start && isspace((unsigned char)*(end - 1)))
+    end--;
+  int len = end - start;
+  char *result = malloc(len + 1);
+  if (!result)
+    error("memory allocation failed");
+  if (len > 0)
+    memcpy(result, start, len);
+  result[len] = '\0';
+  return result;
+}
+
+static int skip_characters(char **p) {
   char *cur = *p;
 
   if (isspace(*cur)) {
@@ -38,7 +53,7 @@ int skip_characters(char **p) {
   return 0;
 }
 
-int parse_char_literal(char **p) {
+static int parse_char_literal(char **p) {
   char *cur = *p;
 
   if (*cur != '\'') {
@@ -111,7 +126,7 @@ int parse_char_literal(char **p) {
   return 1;
 }
 
-int parse_number_literal(char **p) {
+static int parse_number_literal(char **p) {
   char *cur = *p;
   if (!isdigit(*cur)) {
     return 0;
@@ -151,7 +166,7 @@ int parse_number_literal(char **p) {
   return 1;
 }
 
-int parse_string_literal(char **p) {
+static int parse_string_literal(char **p) {
   char *cur = *p;
 
   if (*cur != '"') {
@@ -216,7 +231,7 @@ int parse_string_literal(char **p) {
   return 1;
 }
 
-int parse_punctuator(char **p) {
+static int parse_punctuator(char **p) {
   char *cur = *p;
 
   if (startswith(cur, "...")) {
@@ -254,7 +269,7 @@ int parse_punctuator(char **p) {
   return 0;
 }
 
-int parse_control_structure(char **p) {
+static int parse_control_structure(char **p) {
   char *cur = *p;
 
   if (startswith(cur, "if") && !is_alnum(cur[2])) {
@@ -345,7 +360,7 @@ int parse_control_structure(char **p) {
   return 0;
 }
 
-int parse_declaration_specifier(char **p) {
+static int parse_declaration_specifier(char **p) {
   char *cur = *p;
 
   if (startswith(cur, "typedef") && !is_alnum(cur[7])) {
@@ -388,7 +403,7 @@ int parse_declaration_specifier(char **p) {
   return 0;
 }
 
-int parse_composite_type(char **p) {
+static int parse_composite_type(char **p) {
   char *cur = *p;
 
   if (startswith(cur, "enum") && !is_alnum(cur[4])) {
@@ -416,7 +431,7 @@ int parse_composite_type(char **p) {
   return 0;
 }
 
-int parse_basic_type(char **p) {
+static int parse_basic_type(char **p) {
   char *cur = *p;
 
   if (startswith(cur, "unsigned") && !is_alnum(cur[8])) {
@@ -474,15 +489,128 @@ int parse_identifier(char **p) {
       cur++;
     }
     char *after_name = cur;
-    while (isspace(*cur)) {
+    while (isspace((unsigned char)*cur)) {
       cur++;
     }
 
     int name_len = after_name - start;
     Macro *macro = find_macro(start, name_len);
-    if (macro) {
+    if (macro && macro->is_function) {
+      if (*cur == '(') {
+        char *pos = cur + 1;
+        char *arg_start = pos;
+        int depth = 1;
+        int in_string = FALSE;
+        int in_char = FALSE;
+        char **args = NULL;
+        int arg_cap = 0;
+        int arg_cnt = 0;
+
+        while (depth > 0) {
+          char c = *pos;
+          if (c == '\0') {
+            error_at(new_location(pos), "unclosed macro invocation");
+          }
+
+          if (in_string) {
+            if (c == '\\' && *(pos + 1)) {
+              pos += 2;
+            } else {
+              if (c == '"')
+                in_string = FALSE;
+              pos++;
+            }
+            continue;
+          }
+
+          if (in_char) {
+            if (c == '\\' && *(pos + 1)) {
+              pos += 2;
+            } else {
+              if (c == '\'')
+                in_char = FALSE;
+              pos++;
+            }
+            continue;
+          }
+
+          if (c == '"') {
+            in_string = TRUE;
+            pos++;
+            continue;
+          }
+
+          if (c == '\'') {
+            in_char = TRUE;
+            pos++;
+            continue;
+          }
+
+          if (c == '(') {
+            depth++;
+            pos++;
+            continue;
+          }
+
+          if (c == ')') {
+            depth--;
+            if (depth == 0) {
+              char *arg_end = pos;
+              char *arg = copy_trimmed_range(arg_start, arg_end);
+              if (!(macro->param_count == 0 && arg_cnt == 0 && arg[0] == '\0')) {
+                if (arg_cnt >= arg_cap) {
+                  arg_cap = arg_cap ? arg_cap * 2 : 4;
+                  args = realloc(args, sizeof(char *) * arg_cap);
+                  if (!args)
+                    error("memory allocation failed");
+                }
+                args[arg_cnt++] = arg;
+              } else {
+                free(arg);
+              }
+              pos++;
+              break;
+            }
+            pos++;
+            continue;
+          }
+
+          if (c == ',' && depth == 1) {
+            char *arg_end = pos;
+            char *arg = copy_trimmed_range(arg_start, arg_end);
+            if (!(macro->param_count == 0 && arg_cnt == 0 && arg[0] == '\0')) {
+              if (arg_cnt >= arg_cap) {
+                arg_cap = arg_cap ? arg_cap * 2 : 4;
+                args = realloc(args, sizeof(char *) * arg_cap);
+                if (!args)
+                  error("memory allocation failed");
+              }
+              args[arg_cnt++] = arg;
+            } else {
+              free(arg);
+            }
+            pos++;
+            while (isspace((unsigned char)*pos))
+              pos++;
+            arg_start = pos;
+            continue;
+          }
+
+          pos++;
+        }
+
+        while (isspace((unsigned char)*pos))
+          pos++;
+        *p = pos;
+        expand_macro(macro, args, arg_cnt);
+        for (int i = 0; i < arg_cnt; i++)
+          free(args[i]);
+        free(args);
+        return 1;
+      }
+    } else if (macro) {
       *p = cur;
-      expand_macro(macro);
+      expand_macro(macro, NULL, 0);
       return 1;
     }
 

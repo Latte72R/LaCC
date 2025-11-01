@@ -70,6 +70,9 @@ struct Macro {
   char *name;
   char *body;
   char *file;
+  char **params;
+  int param_count;
+  int is_function;
   int is_expanding;
 };
 
@@ -217,13 +220,9 @@ Location *new_location(char *loc);
 int parse_define_directive(char **p);
 int parse_include_directive(char **p);
 Macro *find_macro(char *name, int len);
-void expand_macro(Macro *macro);
+void expand_macro(Macro *macro, char **args, int arg_count);
 
 // token_parser.c からエクスポートする関数
-int parse_number_literal(char **p);
-int parse_string_literal(char **p);
-int parse_char_literal(char **p);
-int parse_punctuator_literal(char **p);
 void tokenize();
 
 //

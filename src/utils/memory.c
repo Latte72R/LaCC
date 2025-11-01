@@ -253,6 +253,11 @@ void free_all_macros() {
       free(macro->name);
     if (macro->body)
       free(macro->body);
+    if (macro->params) {
+      for (int i = 0; i < macro->param_count; i++)
+        free(macro->params[i]);
+      free(macro->params);
+    }
     free(macro);
     macro = next;
   }
