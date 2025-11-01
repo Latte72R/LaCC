@@ -204,12 +204,17 @@ int startswith(char *p, char *q);
 int is_alnum(char c);
 void new_token(TokenKind kind, char *loc, char *str, int len);
 Location *new_location(char *loc);
-char *handle_include_directive(char *p);
+
+// preprocessor.c からエクスポートする関数
+int handle_define_directive(char **p);
+int handle_include_directive(char **p);
 
 // token_parser.c からエクスポートする関数
-char *parse_number_literal(char *p);
-char *parse_string_literal(char *p);
-char *parse_char_literal(char *p);
+int parse_number_literal(char **p);
+int parse_string_literal(char **p);
+int parse_char_literal(char **p);
+// char *parse_string_literal(char *p);
+int parse_punctuator_literal(char **p);
 void tokenize();
 
 //

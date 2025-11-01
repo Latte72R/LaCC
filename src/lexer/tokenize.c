@@ -8,15 +8,18 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
-char *parse_char_literal(char *p) {
-  char *q = p;
+int parse_char_literal(char **p) {
+  if (**p != '\'') {
+    return 0;
+  }
+  char *q = *p;
   int len;
   char val;
-  p++;
+  (*p)++;
 
-  if (*p == '\\') {
-    p++;
-    switch (*p) {
+  if (**p == '\\') {
+    (*p)++;
+    switch (**p) {
     case 'a':
       val = '\a';
       break;
@@ -54,65 +57,100 @@ char *parse_char_literal(char *p) {
       val = '\0';
       break;
     default:
-      error_at(new_location(p - 1), "invalid escape sequence in character literal");
+      error_at(new_location(*p - 1), "invalid escape sequence in character literal");
     }
-    p++;
+    (*p)++;
     len = 4;
   } else {
-    val = *p;
-    p++;
+    val = **p;
+    (*p)++;
     len = 3;
   }
 
-  if (*p != '\'') {
-    error_at(new_location(p), "unclosed character literal");
+  if (**p != '\'') {
+    error_at(new_location(*p), "unclosed character literal");
   }
-  p++;
+  (*p)++;
 
   new_token(TK_NUM, q, q, len);
   token->val = val;
-  return p; // Return the position after the closing quote
+  return 1;
 }
 
-char *parse_string_literal(char *p) {
-  p++;
-  char *q = p;
+int parse_number_literal(char **p) {
+  if (!isdigit(**p)) {
+    return 0;
+  }
+  char *q;
+  if (startswith(*p, "0b")) {
+    new_token(TK_NUM, *p, *p, 0);
+    *p += 2;
+    q = *p;
+    token->val = strtol(*p, p, 2);
+    token->len = *p - q + 2;
+  } else if (startswith(*p, "0x")) {
+    *p += 2;
+    q = *p;
+    new_token(TK_NUM, *p, *p, 0);
+    token->val = strtol(*p, p, 16);
+    token->len = *p - q + 2;
+  } else if (startswith(*p, "0")) {
+    new_token(TK_NUM, *p, *p, 0);
+    *p += 1;
+    q = *p;
+    token->val = strtol(*p, p, 8);
+    token->len = *p - q + 2;
+  } else {
+    new_token(TK_NUM, *p, *p, 0);
+    q = *p;
+    token->val = strtol(*p, p, 10);
+    token->len = *p - q;
+  }
+  return 1;
+}
+
+int parse_string_literal(char **p) {
+  if (**p != '"') {
+    return 0;
+  }
+  (*p)++;
+  char *q = *p;
   int len = 0;
   int cap = 16;
   char *buf = malloc(sizeof(char) * cap);
   if (!buf)
     error("memory allocation failed");
-  while (*p != '"') {
-    switch (*p) {
+  while (**p != '"') {
+    switch (**p) {
     case '\0':
     case '\n':
-      error_at(new_location(p), "unclosed string literal [in tokenize]");
+      error_at(new_location(*p), "unclosed string literal [in tokenize]");
       break;
     case '\\':
-      switch (*(p + 1)) {
+      switch (*(*p + 1)) {
       case '\n':
-        p += 2; // 行継続をスキップ
+        *p += 2; // 行継続をスキップ
         break;
       case 'a':
-        error_at(new_location(p), "unsupported escape sequence \"\\a\" in string literal. Use '\\007' for alert.");
+        error_at(new_location(*p), "unsupported escape sequence \"\\a\" in string literal. Use '\\007' for alert.");
         break;
       case 'e':
-        error_at(new_location(p), "unsupported escape sequence \"\\e\" in string literal. Use '\\033' for escape.");
+        error_at(new_location(*p), "unsupported escape sequence \"\\e\" in string literal. Use '\\033' for escape.");
         break;
       case 'v':
-        error_at(new_location(p),
+        error_at(new_location(*p),
                  "unsupported escape sequence \"\\v\" in string literal. Use '\\012' for vertical tab.");
         break;
       default:
         buf = safe_realloc_array(buf, sizeof(char), len + 2, &cap);
-        buf[len++] = *p++;
-        buf[len++] = *p++;
+        buf[len++] = *(*p)++;
+        buf[len++] = *(*p)++;
         break;
       }
       break;
     default:
       buf = safe_realloc_array(buf, sizeof(char), len + 1, &cap);
-      buf[len++] = *p++;
+      buf[len++] = *(*p)++;
     }
   }
   buf = safe_realloc_array(buf, sizeof(char), len + 1, &cap);
@@ -129,37 +167,36 @@ char *parse_string_literal(char *p) {
     new_token(TK_STRING, q, buf, len);
   }
   free(buf);
-  p++;
-  return p; // Return the position after the closing quote
+  (*p)++;
+  return 1;
 }
 
-char *parse_number_literal(char *p) {
-  char *q;
-  if (startswith(p, "0b")) {
-    new_token(TK_NUM, p, p, 0);
-    p += 2;
-    q = p;
-    token->val = strtol(p, &p, 2);
-    token->len = p - q + 2;
-  } else if (startswith(p, "0x")) {
-    p += 2;
-    q = p;
-    new_token(TK_NUM, p, p, 0);
-    token->val = strtol(p, &p, 16);
-    token->len = p - q + 2;
-  } else if (startswith(p, "0")) {
-    new_token(TK_NUM, p, p, 0);
-    p++;
-    q = p;
-    token->val = strtol(p, &p, 8);
-    token->len = p - q + 2;
-  } else {
-    new_token(TK_NUM, p, p, 0);
-    q = p;
-    token->val = strtol(p, &p, 10);
-    token->len = p - q;
+int parse_punctuator(char **p) {
+  // Multi-letter punctuator
+  if (startswith(*p, "...")) {
+    new_token(TK_RESERVED, *p, *p, 3);
+    *p += 3;
+    return 1;
   }
-  return p; // Return the position after the number
+
+  // Multi-letter punctuator
+  if (startswith(*p, "==") || startswith(*p, "!=") || startswith(*p, "<=") || startswith(*p, ">=") ||
+      startswith(*p, "&&") || startswith(*p, "||") || startswith(*p, "++") || startswith(*p, "--") ||
+      startswith(*p, "+=") || startswith(*p, "-=") || startswith(*p, "*=") || startswith(*p, "/=") ||
+      startswith(*p, "%=") || startswith(*p, "->") || startswith(*p, "<<") || startswith(*p, ">>")) {
+    new_token(TK_RESERVED, *p, *p, 2);
+    *p += 2;
+    return 1;
+  }
+
+  // Single-letter punctuator
+  if (strchr("+-*/()<>={}[];&|^~,%!.:?", **p)) {
+    new_token(TK_RESERVED, *p, *p, 1);
+    (*p)++;
+    return 1;
+  }
+
+  return 0; // Not a punctuator
 }
 
 // Tokenize `user_input` and returns new tokens.
@@ -191,49 +228,30 @@ void tokenize() {
       continue;
     }
 
-    if (startswith(p, "#include") && !is_alnum(p[8])) {
-      p = handle_include_directive(p);
+    if (handle_include_directive(&p)) {
       continue;
     }
 
-    // Multi-letter punctuator
-    if (startswith(p, "...")) {
-      new_token(TK_RESERVED, p, p, 3);
-      p += 3;
+    /*
+    if (startswith(p, "#define") && !is_alnum(p[7])) {
+      p = handle_define_directive(p);
+      continue;
+    }
+    */
+
+    if (parse_punctuator(&p)) {
       continue;
     }
 
-    // Multi-letter punctuator
-    if (startswith(p, "==") || startswith(p, "!=") || startswith(p, "<=") || startswith(p, ">=") ||
-        startswith(p, "&&") || startswith(p, "||") || startswith(p, "++") || startswith(p, "--") ||
-        startswith(p, "+=") || startswith(p, "-=") || startswith(p, "*=") || startswith(p, "/=") ||
-        startswith(p, "%=") || startswith(p, "->") || startswith(p, "<<") || startswith(p, ">>")) {
-      new_token(TK_RESERVED, p, p, 2);
-      p += 2;
+    if (parse_char_literal(&p)) {
       continue;
     }
 
-    // Single-letter punctuator
-    if (strchr("+-*/()<>={}[];&|^~,%!.:?", *p)) {
-      new_token(TK_RESERVED, p, p, 1);
-      p++;
+    if (parse_string_literal(&p)) {
       continue;
     }
 
-    // char
-    if (*p == '\'') {
-      p = parse_char_literal(p);
-      continue;
-    }
-
-    if (*p == '"') {
-      p = parse_string_literal(p);
-      continue;
-    }
-
-    // Integer literal
-    if (isdigit(*p)) {
-      p = parse_number_literal(p);
+    if (parse_number_literal(&p)) {
       continue;
     }
 
