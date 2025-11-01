@@ -219,6 +219,12 @@ Location *new_location(char *loc);
 // preprocessor.c からエクスポートする関数
 int parse_define_directive(char **p);
 int parse_include_directive(char **p);
+int parse_if_directive(char **p);
+int parse_elif_directive(char **p);
+int parse_else_directive(char **p);
+int parse_endif_directive(char **p);
+int preprocess_is_skipping(void);
+void preprocess_check_unterminated_ifs(void);
 Macro *find_macro(char *name, int len);
 void expand_macro(Macro *macro, char **args, int arg_count);
 

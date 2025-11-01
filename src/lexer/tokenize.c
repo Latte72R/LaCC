@@ -8,6 +8,8 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
+static int tokenize_depth = 0;
+
 static char *copy_trimmed_range(char *start, char *end) {
   while (start < end && isspace((unsigned char)*start))
     start++;
@@ -628,11 +630,38 @@ int parse_identifier(char **p) {
 
 // Tokenize `user_input` and returns new tokens.
 void tokenize() {
+  tokenize_depth++;
   char *p = user_input;
-  char *q;
 
   while (*p) {
     if (skip_characters(&p)) {
+      continue;
+    }
+
+    if (parse_if_directive(&p)) {
+      continue;
+    }
+
+    if (parse_elif_directive(&p)) {
+      continue;
+    }
+
+    if (parse_else_directive(&p)) {
+      continue;
+    }
+
+    if (parse_endif_directive(&p)) {
+      continue;
+    }
+
+    if (preprocess_is_skipping()) {
+      if (*p == '\n') {
+        p++;
+        continue;
+      }
+      if (!*p)
+        break;
+      p++;
       continue;
     }
 
@@ -681,5 +710,9 @@ void tokenize() {
     }
 
     error_at(new_location(p), "invalid token [in tokenize]");
+  }
+  tokenize_depth--;
+  if (!tokenize_depth) {
+    preprocess_check_unterminated_ifs();
   }
 }
