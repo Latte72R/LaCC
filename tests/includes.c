@@ -1,5 +1,3 @@
-#ifndef MEGA_HEADERS_PORTABLE_H
-#define MEGA_HEADERS_PORTABLE_H 1
 
 /*================= プリセット =================*/
 #define MEGA_ISO_EXTRA 0
@@ -31,7 +29,7 @@
 
 /*================= ISO C 拡張（スイッチ式） =================*/
 #if MEGA_ISO_EXTRA
-// #include <complex.h>
+#include <complex.h>
 #include <fenv.h>
 #include <float.h>
 #include <iso646.h>
@@ -39,8 +37,8 @@
 #include <stdalign.h>
 #include <stdatomic.h>
 #include <stdnoreturn.h>
-// #include <tgmath.h>
-// #include <threads.h>
+#include <tgmath.h>
+#include <threads.h>
 #include <uchar.h>
 #include <wchar.h>
 #include <wctype.h>
@@ -144,4 +142,7 @@
 #include <sys/queue.h> /* TAILQ/LIST */
 #endif
 
-#endif
+int main() {
+  printf("\033[1;36mAll includes succeeded.\033[0m\n");
+  return 0;
+}
