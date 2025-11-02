@@ -122,6 +122,11 @@ static long long parse_char_literal_pp(ExprParser *ctx, int *ok) {
 
 static long long parse_primary(ExprParser *ctx, int *ok) {
   skip_spaces_expr(ctx);
+  // Support wide-char literals like L'\0', u'X', U'X' in #if/#elif expressions
+  if ((ctx->p[0] == 'L' || ctx->p[0] == 'u' || ctx->p[0] == 'U') && ctx->p[1] == '\'') {
+    ctx->p++; // consume prefix and delegate to char literal parser
+    return parse_char_literal_pp(ctx, ok);
+  }
   if (startswith((char *)ctx->p, "defined") && !is_ident_char(ctx->p[7])) {
     ctx->p += 7;
     skip_spaces_expr(ctx);

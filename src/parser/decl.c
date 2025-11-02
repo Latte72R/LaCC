@@ -302,6 +302,12 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
 
   token = prev_tok;
   Type *base_type = parse_base_type_internal(TRUE, TRUE);
+  // ヘッダ由来の未対応トークンなどで基底型を解釈できない場合、
+  // 壊れた状態で進めず式文として扱って安全にエラーへ誘導する
+  if (!base_type) {
+    token = prev_tok;
+    return expression_stmt();
+  }
   prev_tok = token;
 
   Token *tok;
@@ -341,7 +347,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
     return node;
   }
 
-  if (!is_extern && type->object && !type->object->is_defined) {
+  if (type && !is_extern && type->object && !type->object->is_defined) {
     error_at(tok->loc, "variable has incomplete type [in variable declaration]");
   }
 

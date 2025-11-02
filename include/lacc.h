@@ -470,6 +470,7 @@ void init_global_variables();
 typedef enum { SEEK_SET, SEEK_CUR, SEEK_END } SeekWhence;
 char *read_file(char *path);
 char *read_include_file(char *name, const char *including_file, int is_system, char **resolved_name);
+char *read_include_next_file(char *name, const char *including_file, char **resolved_name);
 
 // memory.c
 void free_user_input_list();

@@ -209,13 +209,74 @@ static void define_builtin_function_macro(const char *name, int param_count, con
 }
 
 void preprocess_initialize_builtins(void) {
-  define_builtin_object_macro("__x86_64__", "1");
-  define_builtin_object_macro("__LP64__", "1");
+  // コンパイラ識別マクロ
   define_builtin_object_macro("__LACC__", "1");
+
+  // 標準規格識別マクロ
+  define_builtin_object_macro("__STDC__", "1");
+  define_builtin_object_macro("__STDC_VERSION__", "199901L");
+  define_builtin_object_macro("__STDC_HOSTED__", "1");
+
+  // ターゲット識別マクロ
+  define_builtin_object_macro("__linux__", "1");
+  define_builtin_object_macro("__gnu_linux__", "1");
+  define_builtin_object_macro("__ELF__", "1");
+  define_builtin_object_macro("__x86_64__", "1");
+  define_builtin_object_macro("__unix__", "1");
+
+  // 型同定マクロ（LP64）
+  define_builtin_object_macro("__LP64__", "1");
+  define_builtin_object_macro("__SIZE_TYPE__", "unsigned long");
+  define_builtin_object_macro("__PTRDIFF_TYPE__", "long int");
+  define_builtin_object_macro("__WCHAR_TYPE__", "int");
+  define_builtin_object_macro("__WINT_TYPE__", "unsigned int");
+  define_builtin_object_macro("__INTMAX_TYPE__", "long int");
+  define_builtin_object_macro("__UINTMAX_TYPE__", "long unsigned int");
+  define_builtin_object_macro("__INTPTR_TYPE__", "long int");
+  define_builtin_object_macro("__UINTPTR_TYPE__", "long unsigned int");
+
+  // ビット幅・エンディアン
+  define_builtin_object_macro("__CHAR_BIT__", "8");
+  define_builtin_object_macro("__ORDER_LITTLE_ENDIAN__", "1234");
+  define_builtin_object_macro("__ORDER_BIG_ENDIAN__", "4321");
+  define_builtin_object_macro("__ORDER_PDP_ENDIAN__", "3412");
+  define_builtin_object_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
+  define_builtin_object_macro("__FLOAT_WORD_ORDER__", "__ORDER_LITTLE_ENDIAN__");
+
+  // 整数境界 (LP64 想定)
+  define_builtin_object_macro("__SCHAR_MAX__", "127");
+  define_builtin_object_macro("__UCHAR_MAX__", "255");
+  define_builtin_object_macro("__SHRT_MAX__", "32767");
+  define_builtin_object_macro("__USHRT_MAX__", "65535");
+  define_builtin_object_macro("__INT_MAX__", "2147483647");
+  define_builtin_object_macro("__UINT_MAX__", "4294967295U");
+  define_builtin_object_macro("__LONG_MAX__", "9223372036854775807L");
+  define_builtin_object_macro("__ULONG_MAX__", "18446744073709551615UL");
+  define_builtin_object_macro("__LONG_LONG_MAX__", "9223372036854775807LL");
+  define_builtin_object_macro("__ULLONG_MAX__", "18446744073709551615ULL");
+  define_builtin_object_macro("__SIZE_MAX__", "18446744073709551615UL");
+  define_builtin_object_macro("__PTRDIFF_MAX__", "9223372036854775807L");
+  define_builtin_object_macro("__INTPTR_MAX__", "9223372036854775807L");
+  define_builtin_object_macro("__UINTPTR_MAX__", "18446744073709551615UL");
+  define_builtin_object_macro("__WCHAR_MAX__", "2147483647");
+
   define_builtin_object_macro("__THROW", "");
-  define_builtin_object_macro("__restrict", "");
-  define_builtin_object_macro("__restrict__", "");
-  define_builtin_object_macro("restrict", "");
   define_builtin_function_macro("__attribute__", 1, "");
   define_builtin_function_macro("__nonnull", 1, "");
+  define_builtin_object_macro("__restrict", "restrict");
+  define_builtin_object_macro("__restrict__", "restrict");
+  define_builtin_object_macro("restrict", "");
+  // Common glibc helper macros and qualifiers
+  define_builtin_object_macro("__wur", "");
+  define_builtin_object_macro("register", "");
+  define_builtin_object_macro("inline", "");
+  define_builtin_object_macro("__inline__", "");
+  define_builtin_object_macro("__inline", "");
+  // Prototype wrapping macros
+  // __NTH(funcdecl) -> funcdecl
+  define_builtin_function_macro("__NTH", 1, "p0");
+  // __REDIRECT(name, proto, alias) -> name proto
+  define_builtin_function_macro("__REDIRECT", 3, "p0 p1");
+  // __REDIRECT_NTH(name, proto, alias) -> name proto
+  define_builtin_function_macro("__REDIRECT_NTH", 3, "p0 p1");
 }

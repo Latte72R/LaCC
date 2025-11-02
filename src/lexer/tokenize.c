@@ -537,7 +537,7 @@ static int parse_identifier(char **p) {
 
     int name_len = after_name - start;
     Macro *macro = find_macro(start, name_len);
-    if (macro && macro->is_function) {
+    if (macro && macro->is_function && !macro->is_expanding) {
       if (*cur == '(') {
         const char *pos = cur;
         int arg_cnt = 0;
@@ -555,7 +555,7 @@ static int parse_identifier(char **p) {
       } else {
         // 関数型マクロだが直後に '(' がない場合は展開しない
       }
-    } else if (macro) {
+    } else if (macro && !macro->is_expanding) {
       *p = cur;
       expand_macro(macro, NULL, 0);
       return 1;

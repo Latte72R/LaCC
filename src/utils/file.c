@@ -105,3 +105,67 @@ char *read_include_file(char *name, const char *including_file, int is_system, c
   }
   return NULL;
 }
+
+static int path_is_prefix(const char *prefix, const char *full) {
+  int plen = (int)strlen(prefix);
+  int flen = (int)strlen(full);
+  if (plen == 0 || plen > flen)
+    return 0;
+  if (strncmp(prefix, full, plen) != 0)
+    return 0;
+  if (plen == flen)
+    return 1;
+  return full[plen] == '/';
+}
+
+static char *dirname_of(const char *path) {
+  const char *slash = strrchr(path, '/');
+  if (!slash) {
+    return duplicate_cstring("");
+  }
+  int len = (int)(slash - path);
+  if (len <= 0)
+    return duplicate_cstring("/");
+  char *dir = malloc(len + 1);
+  if (!dir)
+    error("memory allocation failed");
+  memcpy(dir, path, len);
+  dir[len] = '\0';
+  return dir;
+}
+
+// Read file for #include_next: search continue after the directory where including_file was found.
+char *read_include_next_file(char *name, const char *including_file, char **resolved_name) {
+  if (resolved_name)
+    *resolved_name = NULL;
+
+  // Absolute path: try directly
+  if (name && name[0] == '/') {
+    return try_read_path(name, resolved_name);
+  }
+
+  // Determine where the current file came from in include_paths
+  IncludePath *start = include_paths;
+  if (including_file) {
+    // Prefer matching against include path prefixes of the full including file path
+    IncludePath *best = NULL;
+    for (IncludePath *p = include_paths; p; p = p->next) {
+      if (path_is_prefix(p->path, including_file)) {
+        if (!best || (int)strlen(p->path) > (int)strlen(best->path))
+          best = p;
+      }
+    }
+    if (best)
+      start = best->next; // continue after the directory where current file was found
+  }
+
+  // Do NOT search the including file's own directory nor the CWD; only the remaining include paths.
+  for (IncludePath *p = start; p; p = p->next) {
+    char *full = join_paths(p->path, name);
+    char *src = try_read_path(full, resolved_name);
+    free(full);
+    if (src)
+      return src;
+  }
+  return NULL;
+}
