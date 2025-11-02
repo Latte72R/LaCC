@@ -423,6 +423,13 @@ static int parse_composite_type(char **p) {
 static int parse_basic_type(char **p) {
   char *cur = *p;
 
+  if (startswith(cur, "signed") && !is_alnum(cur[6])) {
+    new_token(TK_TYPE, cur, cur, 6);
+    cur += 6;
+    *p = cur;
+    return 1;
+  }
+
   if (startswith(cur, "unsigned") && !is_alnum(cur[8])) {
     new_token(TK_TYPE, cur, cur, 8);
     cur += 8;
@@ -454,6 +461,20 @@ static int parse_basic_type(char **p) {
   if (startswith(cur, "char") && !is_alnum(cur[4])) {
     new_token(TK_TYPE, cur, cur, 4);
     cur += 4;
+    *p = cur;
+    return 1;
+  }
+
+  if (startswith(cur, "float") && !is_alnum(cur[5])) {
+    new_token(TK_TYPE, cur, cur, 5);
+    cur += 5;
+    *p = cur;
+    return 1;
+  }
+
+  if (startswith(cur, "double") && !is_alnum(cur[6])) {
+    new_token(TK_TYPE, cur, cur, 6);
+    cur += 6;
     *p = cur;
     return 1;
   }

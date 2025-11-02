@@ -86,16 +86,45 @@ Node *ternary_operator() {
     Node *then_branch = expr();
     expect(":", "after then branch", "ternary operator");
     Node *else_branch = expr();
-    if (!is_type_identical(then_branch->type, else_branch->type)) {
-      warning_at(consumed_loc, "incompatible operand types ('%s' and '%s') [in ternary operator]",
-                 type_name(then_branch->type), type_name(else_branch->type));
-    }
     Node *ternary = new_node(ND_TERNARY);
     ternary->cond = node;
     ternary->then = then_branch;
     ternary->els = else_branch;
     ternary->id = label_cnt++;
-    ternary->type = then_branch->type;
+    // 型決定:
+    // 1) 数値同士: 通常の算術変換（ここでは max_type）
+    // 2) ポインタと 0（ヌル定数）: ポインタ型
+    // 3) ポインタ同士: 互換なら片側、void* が含まれれば void*、非互換なら警告して then 側
+    if (is_number(then_branch->type) && is_number(else_branch->type)) {
+      ternary->type = max_type(then_branch->type, else_branch->type);
+    } else if (is_ptr_or_arr(then_branch->type) && else_branch->kind == ND_NUM && else_branch->val == 0) {
+      ternary->type = then_branch->type;
+    } else if (is_ptr_or_arr(else_branch->type) && then_branch->kind == ND_NUM && then_branch->val == 0) {
+      ternary->type = else_branch->type;
+    } else if (is_ptr_or_arr(then_branch->type) && is_ptr_or_arr(else_branch->type)) {
+      Type *lt = then_branch->type->ptr_to;
+      Type *rt = else_branch->type->ptr_to;
+      if (lt->ty == TY_VOID || rt->ty == TY_VOID) {
+        // void* を優先
+        Type *t = new_type(TY_PTR);
+        t->ptr_to = new_type(TY_VOID);
+        ternary->type = t;
+      } else if (is_type_compatible(then_branch->type, else_branch->type)) {
+        // 互換: 片側の型を採用
+        ternary->type = then_branch->type;
+      } else {
+        warning_at(consumed_loc, "incompatible operand types ('%s' and '%s') [in ternary operator]",
+                   type_name(then_branch->type), type_name(else_branch->type));
+        ternary->type = then_branch->type;
+      }
+    } else {
+      // それ以外は従来どおり（同一型でなければ警告しつつ then 側の型に合わせる）
+      if (!is_type_identical(then_branch->type, else_branch->type)) {
+        warning_at(consumed_loc, "incompatible operand types ('%s' and '%s') [in ternary operator]",
+                   type_name(then_branch->type), type_name(else_branch->type));
+      }
+      ternary->type = then_branch->type;
+    }
     node = ternary;
   }
   return node;
@@ -366,8 +395,6 @@ Node *type_cast() {
     error_at(tok->loc, "cannot cast from struct type [in type_cast]");
   } else if (node->lhs->type->ty == TY_UNION) {
     error_at(tok->loc, "cannot cast from union type [in type_cast]");
-  } else if (type_size(node->lhs->type) > type_size(type)) {
-    warning_at(tok->loc, "cast to smaller integer type [in type_cast]");
   }
   return node;
 }
@@ -377,24 +404,29 @@ Node *type_cast() {
 Node *unary() {
   Node *node;
   if (consume("sizeof")) {
-    return new_num(get_sizeof(unary()->type));
+    int sz = get_sizeof(unary()->type);
+    Node *n = new_num(sz);
+    // C の sizeof は size_t 型（LP64想定で unsigned long）
+    n->type = new_type(TY_LONG);
+    n->type->is_unsigned = TRUE;
+    return n;
   }
   if (consume("+"))
-    return increment_decrement();
+    return type_cast();
   if (consume("-")) {
-    node = new_binary(ND_SUB, new_num(0), increment_decrement());
+    node = new_binary(ND_SUB, new_num(0), type_cast());
     node->type = node->rhs->type;
     return node;
   }
   if (consume("&")) {
     node = new_node(ND_ADDR);
-    node->lhs = unary();
+    node->lhs = type_cast();
     node->type = new_type_ptr(node->lhs->type);
     return node;
   }
   if (consume("*")) {
     Location *consumed_loc_prev = consumed_loc;
-    node = unary();
+    node = type_cast();
     node = new_deref(node);
     if (!is_ptr_or_arr(node->lhs->type)) {
       error_at(consumed_loc_prev, "invalid pointer dereference");
@@ -403,13 +435,13 @@ Node *unary() {
   }
   if (consume("!")) {
     node = new_node(ND_NOT);
-    node->lhs = unary();
+    node->lhs = type_cast();
     node->type = node->lhs->type;
     return node;
   }
   if (consume("~")) {
     node = new_node(ND_BITNOT);
-    node->lhs = unary();
+    node->lhs = type_cast();
     node->type = node->lhs->type;
     return node;
   }

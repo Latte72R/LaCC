@@ -38,7 +38,14 @@ Token *consume_ident() {
 
 // Ensure that the current token is `op`.
 void expect(char *op, char *err, char *stmt) {
-  if (strncmp(token->str, op, token->len))
+  // トークン切れや不正状態でのセグフォ回避と親切なエラーメッセージ
+  if (!token || token->kind == TK_EOF) {
+    Location *loc = consumed_loc ? consumed_loc : (token ? token->loc : NULL);
+    if (loc)
+      error_at(loc, "unexpected end of input: expected \"%s\" %s [in %s]", op, err, stmt);
+    error("unexpected end of input while expecting '%s'", op);
+  }
+  if (token->kind != TK_RESERVED || strlen(op) != token->len || strncmp(token->str, op, token->len))
     error_at(token->loc, "expected \"%s\" %s [in %s statement]", op, err, stmt);
   token = token->next;
 }

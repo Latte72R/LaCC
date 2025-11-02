@@ -203,10 +203,11 @@ void gen_expression(Node *node) {
     write_file("  movzx rax, al\n");
     break;
   case ND_LT:
-    if (node->lhs->type->is_unsigned)
+    if (node->lhs->type->is_unsigned || node->rhs->type->is_unsigned) {
+      // 非符号比較では両辺ともビット幅に応じてゼロ拡張して比較
       zext_rax_to_64(node->lhs->type);
-    if (node->rhs->type->is_unsigned)
       zext_rdi_to_64(node->rhs->type);
+    }
     write_file("  cmp rax, rdi\n");
     if (node->lhs->type->is_unsigned || node->rhs->type->is_unsigned)
       write_file("  setb al\n");
@@ -215,10 +216,10 @@ void gen_expression(Node *node) {
     write_file("  movzx rax, al\n");
     break;
   case ND_LE:
-    if (node->lhs->type->is_unsigned)
+    if (node->lhs->type->is_unsigned || node->rhs->type->is_unsigned) {
       zext_rax_to_64(node->lhs->type);
-    if (node->rhs->type->is_unsigned)
       zext_rdi_to_64(node->rhs->type);
+    }
     write_file("  cmp rax, rdi\n");
     if (node->lhs->type->is_unsigned || node->rhs->type->is_unsigned)
       write_file("  setbe al\n");
@@ -409,8 +410,37 @@ void gen(Node *node) {
       default:
         error("invalid type [in ND_ASSIGN]");
       }
-      if (!node->endline)
-        write_file("  push rdi\n");
+      if (!node->endline) {
+        // 結果の値は左辺の型で正しくトリムして積む
+        switch (node->lhs->type->ty) {
+        case TY_INT:
+          if (node->lhs->type->is_unsigned)
+            write_file("  mov eax, DWORD PTR [rax]\n");
+          else
+            write_file("  movsxd rax, DWORD PTR [rax]\n");
+          break;
+        case TY_CHAR:
+          if (node->lhs->type->is_unsigned)
+            write_file("  movzx rax, BYTE PTR [rax]\n");
+          else
+            write_file("  movsx rax, BYTE PTR [rax]\n");
+          break;
+        case TY_SHORT:
+          if (node->lhs->type->is_unsigned)
+            write_file("  movzx rax, WORD PTR [rax]\n");
+          else
+            write_file("  movsx rax, WORD PTR [rax]\n");
+          break;
+        case TY_LONG:
+        case TY_LONGLONG:
+        case TY_PTR:
+          write_file("  mov rax, QWORD PTR [rax]\n");
+          break;
+        default:
+          error("invalid type [in ND_ASSIGN: reload]");
+        }
+        write_file("  push rax\n");
+      }
       break;
     }
   case ND_POSTINC:
@@ -419,13 +449,22 @@ void gen(Node *node) {
       write_file("  pop rax\n");
       switch (node->type->ty) {
       case TY_INT:
-        write_file("  movsxd rdi, DWORD PTR [rax]\n");
+        if (node->type->is_unsigned)
+          write_file("  mov edi, DWORD PTR [rax]\n");
+        else
+          write_file("  movsxd rdi, DWORD PTR [rax]\n");
         break;
       case TY_CHAR:
-        write_file("  movsx rdi, BYTE PTR [rax]\n");
+        if (node->type->is_unsigned)
+          write_file("  movzx rdi, BYTE PTR [rax]\n");
+        else
+          write_file("  movsx rdi, BYTE PTR [rax]\n");
         break;
       case TY_SHORT:
-        write_file("  movsx rdi, WORD PTR [rax]\n");
+        if (node->type->is_unsigned)
+          write_file("  movzx rdi, WORD PTR [rax]\n");
+        else
+          write_file("  movsx rdi, WORD PTR [rax]\n");
         break;
       case TY_LONG:
       case TY_LONGLONG:
@@ -585,31 +624,32 @@ void gen(Node *node) {
   case ND_TYPECAST:
     gen(node->lhs);
     write_file("  pop rax\n");
-    switch (node->lhs->type->ty) {
+    // 目的の型 (node->type) に変換する
+    switch (node->type->ty) {
+    case TY_CHAR:
+      if (node->type->is_unsigned)
+        write_file("  movzx eax, al\n");
+      else
+        write_file("  movsx eax, al\n");
+      break;
+    case TY_SHORT:
+      if (node->type->is_unsigned)
+        write_file("  movzx eax, ax\n");
+      else
+        write_file("  movsx eax, ax\n");
+      break;
     case TY_INT:
-      if (node->lhs->type->is_unsigned)
+      if (node->type->is_unsigned)
         write_file("  mov eax, eax\n");
       else
         write_file("  movsxd rax, eax\n");
       break;
-    case TY_CHAR:
-      if (node->lhs->type->is_unsigned)
-        write_file("  movzx rax, al\n");
-      else
-        write_file("  movsx rax, al\n");
-      break;
-    case TY_SHORT:
-      if (node->lhs->type->is_unsigned)
-        write_file("  movzx rax, ax\n");
-      else
-        write_file("  movsx rax, ax\n");
-      break;
+    case TY_LONG:
+    case TY_LONGLONG:
     case TY_PTR:
     case TY_ARR:
     case TY_ARGARR:
-    case TY_LONG:
-    case TY_LONGLONG:
-      // No conversion needed for pointers or 64-bit integers
+      // 64bit へのキャストはそのまま (上位ビットは保持)
       break;
     default:
       error("invalid type [in ND_TYPECAST]");
@@ -680,10 +720,16 @@ void gen(Node *node) {
         write_file("  mov %s, eax\n", regs4[i]);
         break;
       case TY_CHAR:
-        write_file("  movsx %s, al\n", regs4[i]);
+        if (node->args[i]->type->is_unsigned)
+          write_file("  movzx %s, al\n", regs4[i]);
+        else
+          write_file("  movsx %s, al\n", regs4[i]);
         break;
       case TY_SHORT:
-        write_file("  movsx %s, ax\n", regs4[i]);
+        if (node->args[i]->type->is_unsigned)
+          write_file("  movzx %s, ax\n", regs4[i]);
+        else
+          write_file("  movsx %s, ax\n", regs4[i]);
         break;
       case TY_LONG:
       case TY_LONGLONG:

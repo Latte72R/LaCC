@@ -68,8 +68,14 @@ Node *new_binary(NodeKind kind, Node *lhs, Node *rhs) {
 LVar *new_lvar(Token *tok, Type *type, int is_static, int is_extern) {
   LVar *lvar = malloc(sizeof(LVar));
   register_lvar(lvar);
-  lvar->name = tok->str;
-  lvar->len = tok->len;
+  if (tok) {
+    lvar->name = tok->str;
+    lvar->len = tok->len;
+  } else {
+    // 名前なし（例: 無名パラメータ）の場合でも安全に扱えるよう空名にする
+    lvar->name = "";
+    lvar->len = 0;
+  }
   lvar->is_extern = is_extern;
   lvar->is_static = is_static;
   lvar->type = type;

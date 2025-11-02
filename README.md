@@ -101,11 +101,21 @@ Both global and local (stack) variable declarations are supported.
 - **Ternary conditional operator**
   LaCC supports the ternary conditional operator (`?:`) for inline conditional expressions.
 
+## Note on float/double support
+
+To keep system headers parsable, `float` and `double` are recognized only for parsing purposes.
+
+- Arithmetic, comparisons, and code generation for floating-point types are not implemented yet.
+- `sizeof(float)` is treated as 4 and `sizeof(double)` as 8 (LP64). `long double` is also simplified to 8 bytes.
+- Header typedefs like `typedef float _Float32;` and `typedef double _Float64;` parse successfully, but do not rely on using these types in expressions for now.
+
+Full floating-point semantics (dedicated `TY_FLOAT` / `TY_DOUBLE`, arithmetic, and ABI handling) may be added later. Until then, avoid expressions that require floating-point operations.
+
 ## Unsupported Constructs
 
 LaCC does **not** support the following:
 
-- Floating-point types: `float` and `double`
+ - Floating-point operations: while `float` and `double` are recognized for parsing and `sizeof`, arithmetic and codegen are not implemented
 - No initializer lists for structs (e.g.,  `struct AB p = {.a = 1, .b = 2};`)  
 - Inline assembly  
 - Variadic functions (macros such as `va_list`, `va_start`, and `va_arg` are not supported)  

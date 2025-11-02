@@ -346,6 +346,10 @@ LVar *find_object_member(Object *object, Token *tok);
 TypeTag *find_type_tag(Token *tok);
 Function *find_fn(Token *tok);
 
+// expr.c
+// 式全体を構文解析して AST を返す
+Node *expr();
+
 // parse.c
 void error_duplicate_name(Token *tok, const char *type);
 void *safe_realloc_array(void *ptr, int elem_size, int need, int *cap);
