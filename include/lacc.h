@@ -73,6 +73,7 @@ struct Macro {
   char **params;
   int param_count;
   int is_function;
+  int is_variadic;
   int is_expanding;
 };
 
@@ -231,6 +232,9 @@ int parse_elif_directive(char **p);
 int parse_else_directive(char **p);
 int parse_endif_directive(char **p);
 int parse_undef_directive(char **p);
+int parse_error_directive(char **p);
+int parse_warning_directive(char **p);
+int parse_pragma_directive(char **p);
 int preprocess_is_skipping(void);
 void preprocess_check_unterminated_ifs(void);
 void preprocess_initialize_builtins(void);

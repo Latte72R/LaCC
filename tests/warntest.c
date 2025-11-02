@@ -23,8 +23,9 @@ void test6() {
 void test14() {
   char *p = 0;
   int i = 0;
-  if (p == i)
-    printf(); // 異なる領域の比較
+  if (p == i) {
+    i++;
+  }
 }
 
 // 23. enum の異種比較
@@ -35,6 +36,9 @@ void test23() {
   enum E2 b = EC;
   int x = a == b; // 別enum同士
 }
+
+#warning This is a test warning from preprocessor. \
+The lines below will be compiled.
 
 int main() {
   test2();

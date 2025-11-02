@@ -615,6 +615,14 @@ void tokenize() {
       continue;
     }
 
+    if (parse_error_directive(&p)) {
+      continue;
+    }
+
+    if (parse_warning_directive(&p)) {
+      continue;
+    }
+
     if (parse_include_directive(&p)) {
       continue;
     }
@@ -624,6 +632,10 @@ void tokenize() {
     }
 
     if (parse_undef_directive(&p)) {
+      continue;
+    }
+
+    if (parse_pragma_directive(&p)) {
       continue;
     }
 

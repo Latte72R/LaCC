@@ -214,12 +214,23 @@ Node *equality() {
         warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(node->type),
                    type_name(rhs->type));
       }
+      // ポインタと整数の比較は警告（ただし整数が 0 のリテラルは除く）
+      if ((is_ptr_or_arr(node->type) && is_number(rhs->type) && !(rhs->kind == ND_NUM && rhs->val == 0)) ||
+          (is_number(node->type) && is_ptr_or_arr(rhs->type) && !(node->kind == ND_NUM && node->val == 0))) {
+        warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
+                   type_name(rhs->type));
+      }
       node = new_binary(ND_EQ, node, rhs);
       node->type = new_type(TY_INT);
     } else if (consume("!=")) {
       Node *rhs = relational();
       if (is_enum_type(node->type) && is_enum_type(rhs->type) && node->type->object != rhs->type->object) {
         warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(node->type),
+                   type_name(rhs->type));
+      }
+      if ((is_ptr_or_arr(node->type) && is_number(rhs->type) && !(rhs->kind == ND_NUM && rhs->val == 0)) ||
+          (is_number(node->type) && is_ptr_or_arr(rhs->type) && !(node->kind == ND_NUM && node->val == 0))) {
+        warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
                    type_name(rhs->type));
       }
       node = new_binary(ND_NE, node, rhs);
@@ -242,12 +253,22 @@ Node *relational() {
         warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(node->type),
                    type_name(rhs->type));
       }
+      if ((is_ptr_or_arr(node->type) && is_number(rhs->type) && !(rhs->kind == ND_NUM && rhs->val == 0)) ||
+          (is_number(node->type) && is_ptr_or_arr(rhs->type) && !(node->kind == ND_NUM && node->val == 0))) {
+        warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
+                   type_name(rhs->type));
+      }
       node = new_binary(ND_LT, node, rhs);
       node->type = new_type(TY_INT);
     } else if (consume("<=")) {
       Node *rhs = bit_shift();
       if (is_enum_type(node->type) && is_enum_type(rhs->type) && node->type->object != rhs->type->object) {
         warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(node->type),
+                   type_name(rhs->type));
+      }
+      if ((is_ptr_or_arr(node->type) && is_number(rhs->type) && !(rhs->kind == ND_NUM && rhs->val == 0)) ||
+          (is_number(node->type) && is_ptr_or_arr(rhs->type) && !(node->kind == ND_NUM && node->val == 0))) {
+        warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
                    type_name(rhs->type));
       }
       node = new_binary(ND_LE, node, rhs);
@@ -258,6 +279,11 @@ Node *relational() {
         warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(lhs->type),
                    type_name(node->type));
       }
+      if ((is_ptr_or_arr(node->type) && is_number(lhs->type) && !(lhs->kind == ND_NUM && lhs->val == 0)) ||
+          (is_number(node->type) && is_ptr_or_arr(lhs->type) && !(node->kind == ND_NUM && node->val == 0))) {
+        warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
+                   type_name(lhs->type));
+      }
       node = new_binary(ND_LT, lhs, node);
       node->type = new_type(TY_INT);
     } else if (consume(">=")) {
@@ -265,6 +291,11 @@ Node *relational() {
       if (is_enum_type(lhs->type) && is_enum_type(node->type) && lhs->type->object != node->type->object) {
         warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(lhs->type),
                    type_name(node->type));
+      }
+      if ((is_ptr_or_arr(node->type) && is_number(lhs->type) && !(lhs->kind == ND_NUM && lhs->val == 0)) ||
+          (is_number(node->type) && is_ptr_or_arr(lhs->type) && !(node->kind == ND_NUM && node->val == 0))) {
+        warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
+                   type_name(lhs->type));
       }
       node = new_binary(ND_LE, lhs, node);
       node->type = new_type(TY_INT);

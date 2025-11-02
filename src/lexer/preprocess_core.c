@@ -47,18 +47,44 @@ char *copy_trim_directive_expr(const char *start, const char *end) {
   if (!buf)
     error("memory allocation failed");
   int len = 0;
-  for (const char *p = start; p < end; p++) {
+  for (const char *p = start; p < end;) {
+    // Handle line splices: backslash followed by newline (or CRLF)
     if (*p == '\\' && p + 1 < end) {
       if (p[1] == '\n') {
-        p++;
-        continue;
-      }
-      if (p[1] == '\r' && p + 2 < end && p[2] == '\n') {
         p += 2;
         continue;
       }
+      if (p[1] == '\r' && p + 2 < end && p[2] == '\n') {
+        p += 3;
+        continue;
+      }
     }
-    buf[len++] = *p;
+    // Strip C and C++ style comments inside directive expressions
+    if (p + 1 < end && p[0] == '/' && p[1] == '*') {
+      p += 2;
+      const char *q = p;
+      while (q + 1 < end && !(q[0] == '*' && q[1] == '/'))
+        q++;
+      if (q + 1 >= end)
+        error("unclosed block comment in directive expression");
+      p = q + 2; // skip closing */
+      // Insert a single space to avoid token pasting across removed comment
+      buf[len++] = ' ';
+      continue;
+    }
+    if (p + 1 < end && p[0] == '/' && p[1] == '/') {
+      // Skip until end (the directive scanner already bounded by end-of-directive)
+      // but in case of stray // within multi-line (after splicing), skip to end
+      while (p < end && *p != '\n')
+        p++;
+      // Do not copy the newline; the outer scanner handles it. Insert space.
+      if (p < end && *p == '\n')
+        p++;
+      buf[len++] = ' ';
+      continue;
+    }
+    // Regular character
+    buf[len++] = *p++;
   }
   int front = 0;
   while (front < len && isspace((unsigned char)buf[front]))
@@ -130,7 +156,7 @@ static void free_macro_contents(Macro *macro) {
 }
 
 // internal, but used by sibling modules via extern
-void define_macro(char *name, char *body, char **params, int param_count, int is_function) {
+void define_macro(char *name, char *body, char **params, int param_count, int is_function, int is_variadic) {
   Macro *macro = find_macro(name, (int)strlen(name));
   if (macro) {
     free_macro_contents(macro);
@@ -146,6 +172,7 @@ void define_macro(char *name, char *body, char **params, int param_count, int is
   macro->params = params;
   macro->param_count = param_count;
   macro->is_function = is_function;
+  macro->is_variadic = is_variadic;
   macro->file = input_file;
   macro->is_expanding = FALSE;
 }
@@ -177,7 +204,7 @@ static void define_builtin_object_macro(const char *name, const char *value) {
   memcpy(body, value, len);
   body[len] = '\n';
   body[len + 1] = '\0';
-  define_macro(name_copy, body, NULL, 0, FALSE);
+  define_macro(name_copy, body, NULL, 0, FALSE, FALSE);
 }
 
 static void define_builtin_function_macro(const char *name, int param_count, const char *value) {
@@ -205,7 +232,7 @@ static void define_builtin_function_macro(const char *name, int param_count, con
       params[i] = pname;
     }
   }
-  define_macro(name_copy, body, params, param_count, TRUE);
+  define_macro(name_copy, body, params, param_count, TRUE, FALSE);
 }
 
 void preprocess_initialize_builtins(void) {
@@ -260,24 +287,20 @@ void preprocess_initialize_builtins(void) {
   define_builtin_object_macro("__UINTPTR_MAX__", "18446744073709551615UL");
   define_builtin_object_macro("__WCHAR_MAX__", "2147483647");
 
-  define_builtin_object_macro("__THROW", "");
+  // Drop C99 qualifiers for our simple type system
   define_builtin_function_macro("__attribute__", 1, "");
   define_builtin_function_macro("__nonnull", 1, "");
+  define_builtin_function_macro("__asm", 1, "asm");
+  define_builtin_function_macro("__asm__", 1, "asm");
+  define_builtin_function_macro("asm", 1, "");
+  define_builtin_object_macro("__volatile__", "");
   define_builtin_object_macro("__restrict", "restrict");
   define_builtin_object_macro("__restrict__", "restrict");
   define_builtin_object_macro("restrict", "");
+  define_builtin_object_macro("__inline", "inline");
+  define_builtin_object_macro("__inline__", "inline");
+  define_builtin_object_macro("inline", "");
   define_builtin_object_macro("__extension__", "");
-  // Common glibc helper macros and qualifiers
   define_builtin_object_macro("__wur", "");
   define_builtin_object_macro("register", "");
-  define_builtin_object_macro("inline", "");
-  define_builtin_object_macro("__inline__", "");
-  define_builtin_object_macro("__inline", "");
-  // Prototype wrapping macros
-  // __NTH(funcdecl) -> funcdecl
-  define_builtin_function_macro("__NTH", 1, "p0");
-  // __REDIRECT(name, proto, alias) -> name proto
-  define_builtin_function_macro("__REDIRECT", 3, "p0 p1");
-  // __REDIRECT_NTH(name, proto, alias) -> name proto
-  define_builtin_function_macro("__REDIRECT_NTH", 3, "p0 p1");
 }

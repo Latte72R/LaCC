@@ -5,7 +5,7 @@ extern const int FALSE;
 extern void *NULL;
 
 // table
-extern void define_macro(char *name, char *body, char **params, int param_count, int is_function);
+extern void define_macro(char *name, char *body, char **params, int param_count, int is_function, int is_variadic);
 extern void undefine_macro(char *name, int len);
 
 // helpers
@@ -43,6 +43,7 @@ int parse_define_directive(char **p) {
   name[name_len] = '\0';
 
   int is_function = FALSE;
+  int is_variadic = FALSE;
   char **params = NULL;
   int param_count = 0;
   int param_cap = 0;
@@ -56,6 +57,30 @@ int parse_define_directive(char **p) {
       while (TRUE) {
         while (*cur == ' ' || *cur == '\t')
           cur++;
+        // Variadic-only '...' or named variadic 'NAME...'
+        if (*cur == '.' && cur[1] == '.' && cur[2] == '.') {
+          // Unnamed variadic: use __VA_ARGS__ as the parameter name
+          if (param_count >= param_cap) {
+            param_cap = param_cap ? param_cap * 2 : 4;
+            params = realloc(params, sizeof(char *) * param_cap);
+            if (!params)
+              error("memory allocation failed");
+          }
+          char *param_name = malloc(strlen("__VA_ARGS__") + 1);
+          if (!param_name)
+            error("memory allocation failed");
+          memcpy(param_name, "__VA_ARGS__", strlen("__VA_ARGS__") + 1);
+          params[param_count++] = param_name;
+          is_variadic = TRUE;
+          cur += 3;
+          while (*cur == ' ' || *cur == '\t')
+            cur++;
+          if (*cur != ')')
+            error_at(new_location(cur), "expected ')' after '...' in macro parameter list");
+          cur++;
+          break;
+        }
+
         if (!is_ident_start_char(*cur)) {
           error_at(new_location(cur), "expected an identifier in macro parameter list");
         }
@@ -69,6 +94,25 @@ int parse_define_directive(char **p) {
           error("memory allocation failed");
         memcpy(param_name, param_start, param_len);
         param_name[param_len] = '\0';
+
+        // Support named variadic parameter: NAME...
+        if (*cur == '.' && cur[1] == '.' && cur[2] == '.') {
+          if (param_count >= param_cap) {
+            param_cap = param_cap ? param_cap * 2 : 4;
+            params = realloc(params, sizeof(char *) * param_cap);
+            if (!params)
+              error("memory allocation failed");
+          }
+          params[param_count++] = param_name;
+          is_variadic = TRUE;
+          cur += 3;
+          while (*cur == ' ' || *cur == '\t')
+            cur++;
+          if (*cur != ')')
+            error_at(new_location(cur), "expected ')' after variadic parameter");
+          cur++;
+          break;
+        }
 
         if (param_count >= param_cap) {
           param_cap = param_cap ? param_cap * 2 : 4;
@@ -191,7 +235,7 @@ int parse_define_directive(char **p) {
   value[value_len++] = '\n';
   value[value_len] = '\0';
 
-  define_macro(name, value, params, param_count, is_function);
+  define_macro(name, value, params, param_count, is_function, is_variadic);
 
   if (*cur == '\n') {
     cur++;

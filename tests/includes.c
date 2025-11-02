@@ -2,13 +2,13 @@
 #define MEGA_HEADERS_PORTABLE_H 1
 
 /*================= プリセット =================*/
-#define MEGA_ISO_EXTRA 1
-#define MEGA_POSIX_BASIC 1
-#define MEGA_POSIX_FS 1
-#define MEGA_POSIX_NET 1
-#define MEGA_POSIX_THREADS 1
-#define MEGA_GNU_EXTRAS 1
-#define MEGA_LINUX_UAPI 1
+#define MEGA_ISO_EXTRA 0
+#define MEGA_POSIX_BASIC 0
+#define MEGA_POSIX_FS 0
+#define MEGA_POSIX_NET 0
+#define MEGA_POSIX_THREADS 0
+#define MEGA_GNU_EXTRAS 0
+#define MEGA_LINUX_UAPI 0
 #define MEGA_BSD 0
 
 /*================= ISO C（常時） =================*/
@@ -31,7 +31,7 @@
 
 /*================= ISO C 拡張（スイッチ式） =================*/
 #if MEGA_ISO_EXTRA
-#include <complex.h>
+// #include <complex.h>
 #include <fenv.h>
 #include <float.h>
 #include <iso646.h>
@@ -39,14 +39,11 @@
 #include <stdalign.h>
 #include <stdatomic.h>
 #include <stdnoreturn.h>
-#include <tgmath.h>
-#include <threads.h>
+// #include <tgmath.h>
+// #include <threads.h>
 #include <uchar.h>
 #include <wchar.h>
 #include <wctype.h>
-/* C23 以降（対応していなければこの2つは消してOK） */
-#include <stdbit.h>
-#include <stdckdint.h>
 #endif
 
 /*================= POSIX 基本（プロセス/端末/正規表現など） =================*/

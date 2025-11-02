@@ -221,6 +221,9 @@ char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count) 
       error("memory allocation failed");
   }
 
+  int fixed_params = macro->is_variadic ? (macro->param_count - 1) : macro->param_count;
+  int vararg_mode = FALSE;
+
   while (*p) {
     char c = *p;
     if (in_string) {
@@ -275,6 +278,21 @@ char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count) 
               error("memory allocation failed");
           }
           args[arg_cnt++] = arg;
+          // If variadic and no varargs provided, ensure we still have the correct number of args
+          if (macro->is_variadic && arg_cnt < macro->param_count) {
+            // Append empty vararg
+            char *empty = malloc(1);
+            if (!empty)
+              error("memory allocation failed");
+            empty[0] = '\0';
+            if (arg_cnt >= arg_cap) {
+              arg_cap *= 2;
+              args = realloc(args, sizeof(char *) * arg_cap);
+              if (!args)
+                error("memory allocation failed");
+            }
+            args[arg_cnt++] = empty;
+          }
         } else {
           for (const char *q = arg_start; q < p; q++) {
             if (!isspace((unsigned char)*q))
@@ -290,22 +308,67 @@ char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count) 
     if (c == ',' && depth == 1) {
       if (macro->param_count == 0)
         error("macro %s takes no arguments", macro->name);
-      int len = (int)(p - arg_start);
-      char *arg = malloc(len + 1);
-      if (!arg)
-        error("memory allocation failed");
-      memcpy(arg, arg_start, len);
-      arg[len] = '\0';
-      if (arg_cnt >= arg_cap) {
-        arg_cap *= 2;
-        args = realloc(args, sizeof(char *) * arg_cap);
-        if (!args)
+      if (!macro->is_variadic) {
+        int len = (int)(p - arg_start);
+        char *arg = malloc(len + 1);
+        if (!arg)
           error("memory allocation failed");
+        memcpy(arg, arg_start, len);
+        arg[len] = '\0';
+        if (arg_cnt >= arg_cap) {
+          arg_cap *= 2;
+          args = realloc(args, sizeof(char *) * arg_cap);
+          if (!args)
+            error("memory allocation failed");
+        }
+        args[arg_cnt++] = arg;
+        p++;
+        arg_start = p;
+        continue;
+      } else {
+        if (!vararg_mode && arg_cnt < fixed_params - 1) {
+          // Still collecting fixed params (not including the last fixed)
+          int len = (int)(p - arg_start);
+          char *arg = malloc(len + 1);
+          if (!arg)
+            error("memory allocation failed");
+          memcpy(arg, arg_start, len);
+          arg[len] = '\0';
+          if (arg_cnt >= arg_cap) {
+            arg_cap *= 2;
+            args = realloc(args, sizeof(char *) * arg_cap);
+            if (!args)
+              error("memory allocation failed");
+          }
+          args[arg_cnt++] = arg;
+          p++;
+          arg_start = p;
+          continue;
+        } else if (!vararg_mode && arg_cnt == fixed_params - 1) {
+          // This comma ends the last fixed param, next is vararg
+          int len = (int)(p - arg_start);
+          char *arg = malloc(len + 1);
+          if (!arg)
+            error("memory allocation failed");
+          memcpy(arg, arg_start, len);
+          arg[len] = '\0';
+          if (arg_cnt >= arg_cap) {
+            arg_cap *= 2;
+            args = realloc(args, sizeof(char *) * arg_cap);
+            if (!args)
+              error("memory allocation failed");
+          }
+          args[arg_cnt++] = arg;
+          p++;
+          arg_start = p;
+          vararg_mode = TRUE;
+          continue;
+        } else {
+          // Already in vararg: do not split on commas
+          p++;
+          continue;
+        }
       }
-      args[arg_cnt++] = arg;
-      p++;
-      arg_start = p;
-      continue;
     }
     p++;
   }
@@ -324,7 +387,8 @@ void expand_macro(Macro *macro, char **args, int arg_count) {
   }
 
   if (macro->is_expanding) {
-    error("recursive macro expansion: %s", macro->name);
+    // Prevent infinite recursion per C macro re-expansion rules: skip if currently expanding
+    return;
   }
 
   char *saved_input = user_input;

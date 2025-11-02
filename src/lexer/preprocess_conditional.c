@@ -362,3 +362,152 @@ int parse_endif_directive(char **p) {
   *p = check;
   return 1;
 }
+
+int parse_error_directive(char **p) {
+  char *hash = *p;
+  char *cur = hash;
+  if (*cur != '#')
+    return 0;
+  cur++;
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+  if (!(startswith(cur, "error") && !is_alnum(cur[5])))
+    return 0;
+
+  // If currently skipping due to inactive branch, ignore the line (preprocess_is_skipping handles most cases)
+  // but for consistency, just consume the rest of the line.
+  char *msg_start = cur + 5;
+  // Trim leading spaces/comments in the message
+  char *scan = msg_start;
+  // Skip leading spaces
+  while (*scan == ' ' || *scan == '\t')
+    scan++;
+  // Copy message up to end of line
+  char *line_end = scan;
+  while (*line_end && *line_end != '\n')
+    line_end++;
+  // Trim leading/trailing whitespace from message
+  char *front = scan;
+  while (front < line_end && isspace((unsigned char)*front))
+    front++;
+  char *back = line_end;
+  while (back > front && isspace((unsigned char)*(back - 1)))
+    back--;
+  int mlen = (int)(back - front);
+  char *msg = malloc(mlen + 1);
+  if (!msg)
+    error("memory allocation failed");
+  if (mlen > 0)
+    memcpy(msg, front, mlen);
+  msg[mlen] = '\0';
+  if (!preprocess_is_skipping()) {
+    if (msg[0])
+      error_at(new_location(scan), "%s", msg);
+    else
+      error_at(new_location(scan), "#error");
+  }
+  free(msg);
+  if (*line_end == '\n')
+    line_end++;
+  *p = line_end;
+  return 1;
+}
+
+int parse_warning_directive(char **p) {
+  char *hash = *p;
+  char *cur = hash;
+  if (*cur != '#')
+    return 0;
+  cur++;
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+  if (!(startswith(cur, "warning") && !is_alnum(cur[7])))
+    return 0;
+
+  // Consume rest of the directive as the message, supporting line splices (\\\n)
+  char *msg_start = cur + 7;
+  char *scan = msg_start;
+  while (*scan == ' ' || *scan == '\t')
+    scan++;
+
+  // Build message buffer across backslash-newline splices until an unspliced newline
+  int cap = 64;
+  int len = 0;
+  char *buf = malloc(cap);
+  if (!buf)
+    error("memory allocation failed");
+  char *q = scan;
+  for (;;) {
+    if (!*q)
+      break;
+    if (*q == '\\') {
+      if (q[1] == '\n') {
+        q += 2; // swallow backslash-newline
+        continue;
+      }
+      if (q[1] == '\r' && q[2] == '\n') {
+        q += 3; // swallow backslash-CRLF
+        continue;
+      }
+    }
+    if (*q == '\n')
+      break;
+    if (len + 1 >= cap) {
+      cap *= 2;
+      char *nb = realloc(buf, cap);
+      if (!nb)
+        error("memory allocation failed");
+      buf = nb;
+    }
+    buf[len++] = *q++;
+  }
+  // Trim leading/trailing spaces of the built message
+  int front = 0;
+  while (front < len && isspace((unsigned char)buf[front]))
+    front++;
+  int back = len;
+  while (back > front && isspace((unsigned char)buf[back - 1]))
+    back--;
+  int mlen = back - front;
+  char *msg = malloc(mlen + 1);
+  if (!msg)
+    error("memory allocation failed");
+  if (mlen > 0)
+    memcpy(msg, buf + front, mlen);
+  msg[mlen] = '\0';
+
+  if (!preprocess_is_skipping()) {
+    if (msg[0])
+      warning_at(new_location(scan), "#warning %s", msg);
+    else
+      warning_at(new_location(scan), "#warning");
+  }
+
+  free(buf);
+  free(msg);
+  if (*q == '\n')
+    q++;
+  *p = q;
+  return 1;
+}
+
+int parse_pragma_directive(char **p) {
+  char *hash = *p;
+  char *cur = hash;
+  if (*cur != '#')
+    return 0;
+  cur++;
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+  if (!(startswith(cur, "pragma") && !is_alnum(cur[6])))
+    return 0;
+
+  // Ignore pragmas we don't understand; just consume to end of line
+  char *scan = cur + 6;
+  while (*scan && *scan != '\n')
+    scan++;
+  if (*scan == '\n')
+    scan++;
+  *p = scan;
+  return 1;
+}
