@@ -79,6 +79,33 @@ static void define_macro(char *name, char *body, char **params, int param_count,
   macro->is_expanding = FALSE;
 }
 
+static char *duplicate_cstring(const char *src) {
+  int len = strlen(src);
+  char *copy = malloc(len + 1);
+  if (!copy)
+    error("memory allocation failed");
+  memcpy(copy, src, len + 1);
+  return copy;
+}
+
+static void define_builtin_object_macro(const char *name, const char *value) {
+  char *name_copy = duplicate_cstring(name);
+  int len = strlen(value);
+  char *body = malloc(len + 2);
+  if (!body)
+    error("memory allocation failed");
+  memcpy(body, value, len);
+  body[len] = '\n';
+  body[len + 1] = '\0';
+  define_macro(name_copy, body, NULL, 0, FALSE);
+}
+
+void preprocess_initialize_builtins(void) {
+  define_builtin_object_macro("__x86_64__", "1");
+  define_builtin_object_macro("__LP64__", "1");
+  define_builtin_object_macro("__LACC__", "1");
+}
+
 // マクロ定義を削除する
 static void undefine_macro(char *name, int len) {
   Macro **link = &macros;
@@ -334,88 +361,133 @@ void expand_macro(Macro *macro, char **args, int arg_count) {
 }
 
 // #include で指定されたファイルを読み込み、トークナイズする
-void handle_include_directive(char *name, char *p) {
-  int already_included = FALSE;
+void handle_include_directive(char *name, char *p, int is_system_header) {
+  char *including_file = input_file;
+  char *raw_name = name;
+  char *resolved_path = NULL;
+  char *new_input = read_include_file(raw_name, including_file, is_system_header, &resolved_path);
+  if (!new_input) {
+    error_at(new_location(p - 1), "Cannot open include file: %s", raw_name);
+  }
+  if (!resolved_path)
+    resolved_path = duplicate_cstring(raw_name);
+  free(raw_name);
+
+  if (!resolved_path)
+    resolved_path = duplicate_cstring("");
+
   for (FileName *s = filenames; s; s = s->next) {
-    if (!strcmp(s->name, name)) {
-      // 同じファイルを二重に取り込まない
-      already_included = TRUE;
-      break;
+    if (!strcmp(s->name, resolved_path)) {
+      free(resolved_path);
+      free(new_input);
+      return;
     }
   }
 
-  if (already_included) {
-    free(name);
-    return;
-  }
-
   char *input_file_prev = input_file;
-  input_file = name; // 現在処理中のファイル名を更新
-  // filenames に現在のファイルを追加
+  input_file = resolved_path;
   FileName *filename = malloc(sizeof(FileName));
   filename->name = input_file;
   filename->next = filenames;
   filenames = filename;
+
   char *user_input_prev = user_input;
-  char *new_input = read_include_file(name); // ファイル内容を取得
   CharPtrList *user_input_list_prev = user_input_list;
   user_input_list = malloc(sizeof(CharPtrList));
+  if (!user_input_list)
+    error("memory allocation failed");
   user_input_list->str = new_input;
   user_input_list->next = user_input_list_prev;
-  if (!new_input) {
-    error_at(new_location(p - 1), "Cannot open include file: %s", name);
-  }
-  // 新しいファイルをトークナイズ
+
   user_input = new_input;
   tokenize();
-  // トークナイズ後は元の入力に戻す
+
   user_input = user_input_prev;
   input_file = input_file_prev;
 }
 
 // 文字列から #include 行を解析して処理する
 int parse_include_directive(char **p) {
-  if (!(startswith(*p, "#include") && !is_alnum((*p)[8]))) {
+  char *cur = *p;
+  if (*cur != '#') {
+    return 0;
+  }
+  cur++;
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+
+  if (!(startswith(cur, "include") && !is_alnum(cur[7]))) {
     return 0;
   }
 
-  char *q;
-  *p += 8; // "#include" の直後まで進める
-  while (isspace(**p)) {
-    (*p)++; // 空白を読み飛ばす
-  }
-  if (**p != '"') {
-    error_at(new_location(*p), "expected \" before \"include\"");
-  }
-  (*p)++; // 先頭の引用符をスキップ
-  q = *p; // ファイル名の開始位置を記録
-  while (**p != '"') {
-    if (**p == '\0') {
-      error_at(new_location(q - 1), "unclosed string literal [in tokenize]");
-    }
-    if (**p == '\\') {
-      (*p) += 2; // エスケープされた文字を飛ばす
-    } else {
-      (*p)++;
-    }
+  cur += 7;
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+
+  char close;
+  if (*cur == '"') {
+    close = '"';
+  } else if (*cur == '<') {
+    close = '>';
+  } else {
+    error_at(new_location(cur), "expected '\"' or '<' after #include");
   }
 
-  // 抽出したファイル名を確保してコピー
-  char *name = malloc(sizeof(char) * ((*p) - q + 1));
-  memcpy(name, q, (*p) - q);
-  name[(*p) - q] = '\0';
-  (*p)++; // 閉じる引用符の次へ進める
-  handle_include_directive(name, q);
+  cur++;
+  char *name_start = cur;
+  while (*cur && *cur != close) {
+    if (close == '"' && *cur == '\\') {
+      cur++;
+      if (!*cur)
+        error_at(new_location(name_start), "unclosed string literal [in tokenize]");
+      cur++;
+      continue;
+    }
+    if (*cur == '\n')
+      error_at(new_location(cur), "unexpected newline in #include directive");
+    cur++;
+  }
+
+  if (*cur != close) {
+    error_at(new_location(name_start - 1), "unterminated include filename");
+  }
+
+  int len = cur - name_start;
+  char *name = malloc(len + 1);
+  if (!name)
+    error("memory allocation failed");
+  if (len > 0)
+    memcpy(name, name_start, len);
+  name[len] = '\0';
+
+  cur++; // skip closing delimiter
+  char *rest = skip_trailing_spaces_and_comments(cur);
+  if (*rest && *rest != '\n') {
+    error_at(new_location(rest), "unexpected tokens after #include filename");
+  }
+
+  int is_system_header = (close == '>');
+  handle_include_directive(name, name_start, is_system_header);
+
+  if (*rest == '\n')
+    rest++;
+  *p = rest;
   return 1;
 }
 
 // 文字列から #define 行を解析し、マクロを登録する
 int parse_define_directive(char **p) {
-  if (!(startswith(*p, "#define") && !is_alnum((*p)[7]))) {
+  char *cur = *p;
+  if (*cur != '#')
+    return 0;
+  cur++;
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+  if (!(startswith(cur, "define") && !is_alnum(cur[6]))) {
     return 0;
   }
 
-  char *cur = *p + 7;
+  cur += 6;
   while (*cur == ' ' || *cur == '\t')
     cur++;
 
@@ -488,24 +560,43 @@ int parse_define_directive(char **p) {
       cur++;
   }
 
-  char *value_start = cur;
-  while (*cur && *cur != '\n') {
-    cur++;
-  }
-  char *value_end = cur;
-  while (value_end > value_start && value_end[-1] != '\n' && isspace((unsigned char)value_end[-1])) {
-    value_end--;
-  }
-
-  int value_len = value_end - value_start;
-  char *value = malloc(value_len + 2);
+  int value_cap = 32;
+  int value_len = 0;
+  char *value = malloc(value_cap);
   if (!value)
     error("memory allocation failed");
-  if (value_len > 0) {
-    memcpy(value, value_start, value_len);
+  while (*cur) {
+    if (*cur == '\\') {
+      if (cur[1] == '\n') {
+        cur += 2;
+        continue;
+      }
+      if (cur[1] == '\r' && cur[2] == '\n') {
+        cur += 3;
+        continue;
+      }
+    }
+    if (*cur == '\n')
+      break;
+    if (value_len + 1 >= value_cap) {
+      value_cap *= 2;
+      value = realloc(value, value_cap);
+      if (!value)
+        error("memory allocation failed");
+    }
+    value[value_len++] = *cur;
+    cur++;
   }
-  value[value_len] = '\n';
-  value[value_len + 1] = '\0';
+  while (value_len > 0 && isspace((unsigned char)value[value_len - 1]))
+    value_len--;
+  if (value_len + 2 >= value_cap) {
+    value_cap = value_len + 2;
+    value = realloc(value, value_cap);
+    if (!value)
+      error("memory allocation failed");
+  }
+  value[value_len++] = '\n';
+  value[value_len] = '\0';
 
   define_macro(name, value, params, param_count, is_function);
 
@@ -518,12 +609,18 @@ int parse_define_directive(char **p) {
 
 // #ifdef 行を解析して条件付きコンパイルを処理する
 int parse_ifdef_directive(char **p) {
-  if (!(startswith(*p, "#ifdef") && !is_alnum((*p)[6]))) {
+  char *hash = *p;
+  char *cur = hash;
+  if (*cur != '#')
+    return 0;
+  cur++;
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+  if (!(startswith(cur, "ifdef") && !is_alnum(cur[5]))) {
     return 0;
   }
 
-  char *cur = *p;
-  char *name_start = cur + 6;
+  char *name_start = cur + 5;
   while (*name_start == ' ' || *name_start == '\t')
     name_start++;
 
@@ -551,7 +648,7 @@ int parse_ifdef_directive(char **p) {
   if (!state)
     error("memory allocation failed");
   state->prev = if_stack;
-  state->start = cur;
+  state->start = hash;
   state->branch_taken = FALSE;
   state->currently_active = FALSE;
   state->ignoring = ignoring;
@@ -573,12 +670,18 @@ int parse_ifdef_directive(char **p) {
 
 // #ifndef 行を解析して条件付きコンパイルを処理する
 int parse_ifndef_directive(char **p) {
-  if (!(startswith(*p, "#ifndef") && !is_alnum((*p)[7]))) {
+  char *hash = *p;
+  char *cur = hash;
+  if (*cur != '#')
+    return 0;
+  cur++;
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+  if (!(startswith(cur, "ifndef") && !is_alnum(cur[6]))) {
     return 0;
   }
 
-  char *cur = *p;
-  char *name_start = cur + 7;
+  char *name_start = cur + 6;
   while (*name_start == ' ' || *name_start == '\t')
     name_start++;
 
@@ -607,7 +710,7 @@ int parse_ifndef_directive(char **p) {
   if (!state)
     error("memory allocation failed");
   state->prev = if_stack;
-  state->start = cur;
+  state->start = hash;
   state->branch_taken = FALSE;
   state->currently_active = FALSE;
   state->ignoring = ignoring;
@@ -629,11 +732,17 @@ int parse_ifndef_directive(char **p) {
 
 // #undef 行を解析してマクロ定義を削除する
 int parse_undef_directive(char **p) {
-  if (!(startswith(*p, "#undef") && !is_alnum((*p)[6]))) {
+  char *cur = *p;
+  if (*cur != '#')
+    return 0;
+  cur++;
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+  if (!(startswith(cur, "undef") && !is_alnum(cur[5]))) {
     return 0;
   }
 
-  char *cur = *p + 6;
+  cur += 5;
   while (*cur == ' ' || *cur == '\t')
     cur++;
 
@@ -672,6 +781,45 @@ static char *copy_trim(const char *start, const char *end) {
   if (len > 0)
     memcpy(result, start, len);
   result[len] = '\0';
+  return result;
+}
+
+// ディレクティブの式からバックスラッシュ改行を除去しつつトリムする
+static char *copy_trim_directive_expr(const char *start, const char *end) {
+  int cap = (int)(end - start) + 1;
+  if (cap < 1)
+    cap = 1;
+  char *buf = malloc(cap);
+  if (!buf)
+    error("memory allocation failed");
+  int len = 0;
+  for (const char *p = start; p < end; p++) {
+    if (*p == '\\' && p + 1 < end) {
+      if (p[1] == '\n') {
+        p++;
+        continue;
+      }
+      if (p[1] == '\r' && p + 2 < end && p[2] == '\n') {
+        p += 2;
+        continue;
+      }
+    }
+    buf[len++] = *p;
+  }
+  int front = 0;
+  while (front < len && isspace((unsigned char)buf[front]))
+    front++;
+  int back = len;
+  while (back > front && isspace((unsigned char)buf[back - 1]))
+    back--;
+  int trimmed_len = back - front;
+  char *result = malloc(trimmed_len + 1);
+  if (!result)
+    error("memory allocation failed");
+  if (trimmed_len > 0)
+    memcpy(result, buf + front, trimmed_len);
+  result[trimmed_len] = '\0';
+  free(buf);
   return result;
 }
 
@@ -906,11 +1054,14 @@ static char *expand_expression_internal(const char *expr) {
 
       if (macro->is_function) {
         const char *after_name = p;
-        if (*after_name != '(') {
+        const char *ws = after_name;
+        while (isspace((unsigned char)*ws))
+          ws++;
+        if (*ws != '(') {
           append_text(&buf, &len, &cap, start, ident_len);
           continue;
         }
-        const char *arg_ptr = after_name;
+        const char *arg_ptr = ws;
         int arg_cnt = 0;
         char **args = parse_macro_arguments(&arg_ptr, macro, &arg_cnt);
         macro->is_expanding = TRUE;
@@ -1468,7 +1619,7 @@ static long long parse_conditional(ExprParser *ctx, int *ok) {
 
 // 文字列で渡された #if 条件式を評価して真偽値を返す
 static int evaluate_if_expression(char *expr_start, char *expr_end, int *result) {
-  char *trimmed = copy_trim(expr_start, expr_end);
+  char *trimmed = copy_trim_directive_expr(expr_start, expr_end);
   if (!trimmed[0]) {
     free(trimmed);
     return FALSE;
@@ -1493,22 +1644,39 @@ static int evaluate_if_expression(char *expr_start, char *expr_end, int *result)
 
 // #if 行を解析して条件付きコンパイルの状態をプッシュする
 int parse_if_directive(char **p) {
-  if (!(startswith(*p, "#if") && !is_alnum((*p)[3]))) {
+  char *hash = *p;
+  char *cur = hash;
+  if (*cur != '#')
+    return 0;
+  cur++;
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+  if (!(startswith(cur, "if") && !is_alnum(cur[2]))) {
     return 0;
   }
 
-  char *cur = *p;
-  char *expr_start = cur + 3;
+  char *expr_start = cur + 2;
   while (*expr_start == ' ' || *expr_start == '\t')
     expr_start++;
   char *scan = expr_start;
-  while (*scan && *scan != '\n')
+  while (*scan) {
+    if (*scan == '\n') {
+      char *prev = scan - 1;
+      while (prev >= expr_start && *prev == '\r')
+        prev--;
+      if (prev >= expr_start && *prev == '\\') {
+        scan++;
+        continue;
+      }
+      break;
+    }
     scan++;
+  }
 
   int ignoring = skip_depth > 0;
   int cond = FALSE;
   if (ignoring) {
-    char *trimmed = copy_trim(expr_start, scan);
+    char *trimmed = copy_trim_directive_expr(expr_start, scan);
     if (!trimmed[0]) {
       free(trimmed);
       error_at(new_location(expr_start), "expected expression after #if");
@@ -1522,7 +1690,7 @@ int parse_if_directive(char **p) {
   if (!state)
     error("memory allocation failed");
   state->prev = if_stack;
-  state->start = cur;
+  state->start = hash;
   state->branch_taken = FALSE;
   state->currently_active = FALSE;
   state->ignoring = ignoring;
@@ -1544,31 +1712,48 @@ int parse_if_directive(char **p) {
 
 // #elif 行を解析して次の候補ブランチを判定する
 int parse_elif_directive(char **p) {
-  if (!(startswith(*p, "#elif") && !is_alnum((*p)[5]))) {
+  char *hash = *p;
+  char *cur = hash;
+  if (*cur != '#')
+    return 0;
+  cur++;
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+  if (!(startswith(cur, "elif") && !is_alnum(cur[4]))) {
     return 0;
   }
 
   if (!if_stack)
-    error_at(new_location(*p), "#elif without matching #if");
+    error_at(new_location(hash), "#elif without matching #if");
 
   IfState *state = if_stack;
   if (state->else_seen)
-    error_at(new_location(*p), "#elif after #else");
+    error_at(new_location(hash), "#elif after #else");
 
-  char *cur = *p;
-  char *expr_start = cur + 5;
+  char *expr_start = cur + 4;
   while (*expr_start == ' ' || *expr_start == '\t')
     expr_start++;
   char *scan = expr_start;
-  while (*scan && *scan != '\n')
+  while (*scan) {
+    if (*scan == '\n') {
+      char *prev = scan - 1;
+      while (prev >= expr_start && *prev == '\r')
+        prev--;
+      if (prev >= expr_start && *prev == '\\') {
+        scan++;
+        continue;
+      }
+      break;
+    }
     scan++;
+  }
 
   int should_eval = !state->ignoring && !state->branch_taken;
   int cond = FALSE;
   if (should_eval && !evaluate_if_expression(expr_start, scan, &cond)) {
     error_at(new_location(expr_start), "invalid expression in #elif directive");
   } else if (!should_eval) {
-    char *trimmed = copy_trim(expr_start, scan);
+    char *trimmed = copy_trim_directive_expr(expr_start, scan);
     if (!trimmed[0]) {
       free(trimmed);
       error_at(new_location(expr_start), "expected expression after #elif");
@@ -1585,7 +1770,7 @@ int parse_elif_directive(char **p) {
       state->branch_taken = TRUE;
       state->currently_active = TRUE;
       if (skip_depth <= 0)
-        error_at(new_location(cur), "internal error: skip depth underflow");
+        error_at(new_location(hash), "internal error: skip depth underflow");
       skip_depth--;
     }
   }
@@ -1598,27 +1783,28 @@ int parse_elif_directive(char **p) {
 
 // #else 行を解析して最後のブランチを切り替える
 int parse_else_directive(char **p) {
-  if (!(startswith(*p, "#else") && !is_alnum((*p)[5]))) {
+  char *hash = *p;
+  char *cur = hash;
+  if (*cur != '#')
+    return 0;
+  cur++;
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+  if (!(startswith(cur, "else") && !is_alnum(cur[4]))) {
     return 0;
   }
 
   if (!if_stack)
-    error_at(new_location(*p), "#else without matching #if");
+    error_at(new_location(hash), "#else without matching #if");
 
   IfState *state = if_stack;
   if (state->else_seen)
-    error_at(new_location(*p), "multiple #else directives");
+    error_at(new_location(hash), "multiple #else directives");
 
-  char *cur = *p;
-  char *rest = cur + 5;
-  while (*rest && *rest != '\n')
-    rest++;
-  char *extra = copy_trim(cur + 5, rest);
-  if (extra[0]) {
-    free(extra);
-    error_at(new_location(cur + 5), "unexpected tokens after #else");
-  }
-  free(extra);
+  char *extra_start = cur + 4;
+  char *check = skip_trailing_spaces_and_comments(extra_start);
+  if (*check && *check != '\n')
+    error_at(new_location(check), "unexpected tokens after #else");
 
   state->else_seen = TRUE;
   if (!state->ignoring) {
@@ -1630,43 +1816,55 @@ int parse_else_directive(char **p) {
       state->branch_taken = TRUE;
       state->currently_active = TRUE;
       if (skip_depth <= 0)
-        error_at(new_location(cur), "internal error: skip depth underflow");
+        error_at(new_location(hash), "internal error: skip depth underflow");
       skip_depth--;
     }
   }
 
-  if (*rest == '\n')
-    rest++;
-  *p = rest;
+  while (*check && *check != '\n')
+    check++;
+  if (*check == '\n')
+    check++;
+  *p = check;
   return 1;
 }
 
 // #endif 行を解析して条件付きコンパイルの状態をポップする
 int parse_endif_directive(char **p) {
-  if (!(startswith(*p, "#endif") && !is_alnum((*p)[6]))) {
+  char *hash = *p;
+  char *cur = hash;
+  if (*cur != '#')
+    return 0;
+  cur++;
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+  if (!(startswith(cur, "endif") && !is_alnum(cur[5]))) {
     return 0;
   }
 
   if (!if_stack)
-    error_at(new_location(*p), "#endif without matching #if");
+    error_at(new_location(hash), "#endif without matching #if");
 
   IfState *state = if_stack;
   if_stack = state->prev;
 
   if (state->ignoring || !state->currently_active) {
     if (skip_depth <= 0)
-      error_at(new_location(*p), "internal error: skip depth underflow");
+      error_at(new_location(hash), "internal error: skip depth underflow");
     skip_depth--;
   }
 
   free(state);
 
-  char *cur = *p + 6;
-  while (*cur && *cur != '\n')
-    cur++;
-  if (*cur == '\n')
-    cur++;
-  *p = cur;
+  char *extra_start = cur + 5;
+  char *check = skip_trailing_spaces_and_comments(extra_start);
+  if (*check && *check != '\n')
+    error_at(new_location(check), "unexpected tokens after #endif");
+  while (*check && *check != '\n')
+    check++;
+  if (*check == '\n')
+    check++;
+  *p = check;
   return 1;
 }
 

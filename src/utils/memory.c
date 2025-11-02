@@ -205,6 +205,8 @@ static void free_arrays_list(Array *arr) {
 static void free_include_paths_list(IncludePath *path) {
   while (path) {
     IncludePath *next = path->next;
+    if (path->path)
+      free(path->path);
     free(path);
     path = next;
   }

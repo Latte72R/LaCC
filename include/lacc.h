@@ -228,6 +228,7 @@ int parse_endif_directive(char **p);
 int parse_undef_directive(char **p);
 int preprocess_is_skipping(void);
 void preprocess_check_unterminated_ifs(void);
+void preprocess_initialize_builtins(void);
 Macro *find_macro(char *name, int len);
 void expand_macro(Macro *macro, char **args, int arg_count);
 char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count);
@@ -345,6 +346,10 @@ LVar *find_object_member(Object *object, Token *tok);
 TypeTag *find_type_tag(Token *tok);
 Function *find_fn(Token *tok);
 
+// expr.c
+// 式全体を構文解析して AST を返す
+Node *expr();
+
 // parse.c
 void error_duplicate_name(Token *tok, const char *type);
 void *safe_realloc_array(void *ptr, int elem_size, int need, int *cap);
@@ -458,7 +463,7 @@ void init_global_variables();
 // file.c
 typedef enum { SEEK_SET, SEEK_CUR, SEEK_END } SeekWhence;
 char *read_file(char *path);
-char *read_include_file(char *name);
+char *read_include_file(char *name, const char *including_file, int is_system, char **resolved_name);
 
 // memory.c
 void free_user_input_list();
@@ -522,6 +527,7 @@ extern int strlen();
 extern int strtol();
 extern char *strstr();
 extern char *strchr();
+extern char *strrchr();
 
 // stdlib.h
 extern void *malloc();

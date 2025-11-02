@@ -4,6 +4,8 @@ int strcmp();
 int failures;
 int test_cnt;
 
+# include "angle_include.h"
+
 #define CONST42 42
 int test1() { return CONST42; }
 
@@ -92,6 +94,40 @@ int test13() { return -13; }
 int test13() { return 13; }
 #endif
 
+#define TEST14_BASE 0
+int test14() { return ANGLE_MACRO(TEST14_BASE); }
+
+#define MULTILINE_COND 1
+#if MULTILINE_COND && \
+    defined(CONST42)
+int test15() { return 15; }
+#else
+int test15() { return -15; }
+#endif
+
+#define MULTI_LINE_MACRO(x) \
+  ((x) + \
+   1)
+int test16() { return MULTI_LINE_MACRO(5); }
+
+#ifdef __LACC__
+int test17() { return __LACC__; }
+#else
+int test17() { return -17; }
+#endif
+
+#ifdef __x86_64__
+int test18() { return __x86_64__; }
+#else
+int test18() { return -18; }
+#endif
+
+#ifdef __LP64__
+int test19() { return __LP64__; }
+#else
+int test19() { return -19; }
+#endif
+
 void check(int result, int id, int expected) {
   test_cnt++;
   if (result != expected) {
@@ -117,6 +153,12 @@ int main() {
   check(test11(), 11, 11);
   check(test12(), 12, 12);
   check(test13(), 13, 13);
+  check(test14(), 14, ANGLE_MAGIC);
+  check(test15(), 15, 15);
+  check(test16(), 16, 6);
+  check(test17(), 17, 1);
+  check(test18(), 18, 1);
+  check(test19(), 19, 1);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d macro tests passed\033[0m\n", test_cnt);
