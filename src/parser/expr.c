@@ -449,9 +449,26 @@ Node *type_cast() {
 Node *unary() {
   Node *node;
   if (consume("sizeof")) {
-    int sz = get_sizeof(unary()->type);
+    // sizeof は 2 形態: sizeof unary-expression | sizeof ( type-name )
+    int sz;
+    if (consume("(")) {
+      Token *tok2 = token;
+      Type *ty = consume_type(TRUE);
+      if (ty) {
+        expect(")", "after type", "sizeof");
+        sz = get_sizeof(ty);
+      } else {
+        // 型ではなかったので式として解釈
+        token = tok2;
+        Node *e = expr();
+        expect(")", "after expression", "sizeof");
+        sz = get_sizeof(e->type);
+      }
+    } else {
+      sz = get_sizeof(unary()->type);
+    }
     Node *n = new_num(sz);
-    // C の sizeof は size_t 型（LP64想定で unsigned long）
+    // C の sizeof の結果型は size_t（LP64想定で unsigned long）
     n->type = new_type(TY_LONG);
     n->type->is_unsigned = TRUE;
     return n;

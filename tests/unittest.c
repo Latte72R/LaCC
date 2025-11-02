@@ -3,8 +3,6 @@ void printf();
 void *calloc();
 int failures;
 int test_cnt = 0;
-int test15_sub;
-int test126_sub[4];
 void check_with_name(int result, const char *name, int ans) {
   test_cnt++;
   if (result != ans) {
@@ -15,7 +13,9 @@ void check_with_name(int result, const char *name, int ans) {
 
 // Split test units (order matters for helper references)
 #include "unittests/basic.inc"
+#include "unittests/enum_init.inc"
 #include "unittests/funcptrs_ternary_sizeof.inc"
+#include "unittests/include_next.inc"
 #include "unittests/literals_and_switch.inc"
 #include "unittests/loops_strings_arrays.inc"
 #include "unittests/macro.inc"
@@ -237,6 +237,13 @@ int main() {
   CHECK(unsigned_test31(), 4);
   CHECK(unsigned_test32(), 0);
   CHECK(unsigned_test33(), 8);
+
+  // include_next
+  CHECK(include_next_test1(), 301);
+
+  // enum initializer tests
+  CHECK(enum_init_test1(), 1);
+  CHECK(enum_init_test2(), 1);
 
   CHECK(macro_test1(), 42);
   CHECK(macro_test2(), 25);

@@ -93,6 +93,7 @@ int basic_test14() {
 }
 
 // sizeof(グローバル変数) のテスト
+int test15_sub;
 int basic_test15() { return sizeof(test15_sub); }
 
 // 配列要素の更新と差分

@@ -98,6 +98,7 @@ errortest: .errortest-selfhost ## Run error tests with the self-hosted compiler
 .unittest-bootstrap: $(BOOSTSTRAP) | $(BUILD_DIR)
 	@$(call unittest, $(BOOSTSTRAP))
 
+.unittest-selfhost: private LACC_FLAGS += -I $(TEST_DIR)/inc2 -I $(TEST_DIR)/inc1
 .unittest-selfhost: $(SELFHOST) | $(BUILD_DIR)
 	@$(call unittest, $(SELFHOST))
 

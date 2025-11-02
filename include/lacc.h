@@ -394,6 +394,7 @@ char *type_name(Type *type);
 int is_type_compatible(Type *lhs, Type *rhs);
 int is_type_identical(Type *lhs, Type *rhs);
 int is_type_assignable(Type *lhs, Type *rhs);
+int eval_const_expr(Node *node, int *ok);
 
 // decl.c
 Node *function_definition(Token *tok, Type *type, int is_static);

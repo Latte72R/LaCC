@@ -1,5 +1,5 @@
 // ゼロ初期化/ビット演算応用/構造体/union/typedef/関数ポインタ(前半)
-
+int test126_sub[4];
 int unions_funcptrs_test1() {
   // グローバル配列のゼロ初期化
   return test126_sub[0] + test126_sub[1] + test126_sub[2] + test126_sub[3];

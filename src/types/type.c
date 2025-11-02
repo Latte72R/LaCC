@@ -55,6 +55,13 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
   Token *tok = token;
   Type *type = new_type(TY_NONE);
 
+  // GCC 拡張: __extension__ は警告抑制用キーワード。型文脈では無視する。
+  while (token->kind == TK_IDENT && token->len == (int)strlen("__extension__") &&
+         strncmp(token->str, "__extension__", token->len) == 0) {
+    token = token->next;
+    tok = token;
+  }
+
   // const修飾子の処理
   if (token->kind == TK_CONST) {
     type->is_const = TRUE;
@@ -85,6 +92,11 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
       // C では本来 typedef だが、ヘッダ互換性のためビルトイン扱い（LP64 では int 相当）
       type->ty = TY_INT;
       type->is_unsigned = FALSE;
+      token = token->next;
+    } else if (token->len == (int)strlen("size_t") && strncmp(token->str, "size_t", token->len) == 0) {
+      // size_t をビルトイン型として扱う（LP64 では unsigned long）
+      type->ty = TY_LONG;
+      type->is_unsigned = TRUE;
       token = token->next;
     } else {
       TypeTag *type_tag = find_type_tag(token);
@@ -372,7 +384,7 @@ Type *parse_declarator(Type *base_type, Token **tok, char *stmt) {
 }
 
 // 配列サイズ解析の共通処理
-static int eval_const_expr(Node *node, int *ok) {
+int eval_const_expr(Node *node, int *ok) {
   if (!node) {
     *ok = FALSE;
     return 0;
@@ -453,6 +465,48 @@ static int eval_const_expr(Node *node, int *ok) {
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)(l ^ r);
+  }
+  case ND_EQ: {
+    int ok1 = TRUE, ok2 = TRUE;
+    long long l = eval_const_expr(node->lhs, &ok1);
+    long long r = eval_const_expr(node->rhs, &ok2);
+    *ok = ok1 && ok2;
+    return (int)(l == r);
+  }
+  case ND_NE: {
+    int ok1 = TRUE, ok2 = TRUE;
+    long long l = eval_const_expr(node->lhs, &ok1);
+    long long r = eval_const_expr(node->rhs, &ok2);
+    *ok = ok1 && ok2;
+    return (int)(l != r);
+  }
+  case ND_LT: {
+    int ok1 = TRUE, ok2 = TRUE;
+    long long l = eval_const_expr(node->lhs, &ok1);
+    long long r = eval_const_expr(node->rhs, &ok2);
+    *ok = ok1 && ok2;
+    return (int)(l < r);
+  }
+  case ND_LE: {
+    int ok1 = TRUE, ok2 = TRUE;
+    long long l = eval_const_expr(node->lhs, &ok1);
+    long long r = eval_const_expr(node->rhs, &ok2);
+    *ok = ok1 && ok2;
+    return (int)(l <= r);
+  }
+  case ND_AND: {
+    int ok1 = TRUE, ok2 = TRUE;
+    long long l = eval_const_expr(node->lhs, &ok1);
+    long long r = eval_const_expr(node->rhs, &ok2);
+    *ok = ok1 && ok2;
+    return (int)((l != 0) && (r != 0));
+  }
+  case ND_OR: {
+    int ok1 = TRUE, ok2 = TRUE;
+    long long l = eval_const_expr(node->lhs, &ok1);
+    long long r = eval_const_expr(node->rhs, &ok2);
+    *ok = ok1 && ok2;
+    return (int)((l != 0) || (r != 0));
   }
   case ND_BITNOT: {
     int ok1 = TRUE;

@@ -436,6 +436,40 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
   while (!consume("}")) {
     Type *base_type = parse_base_type_internal(TRUE, TRUE);
     Token *member_tok;
+    // 型が解釈できない場合は、安全にセミコロンまで読み飛ばして次へ（システムヘッダ拡張の簡易回避）
+    if (!base_type) {
+      while (!peek(";") && !peek("}") && token->kind != TK_EOF)
+        token = token->next;
+      if (consume(";"))
+        continue;
+      if (peek("}"))
+        break;
+    }
+    // 無名メンバ（例: 'union { ... };'）を許容（構造体・共用体型に限る）
+    if (base_type && (base_type->ty == TY_STRUCT || base_type->ty == TY_UNION) && peek(";")) {
+      LVar *member_var = new_lvar(NULL, base_type, FALSE, FALSE);
+      Type *align_type = base_type;
+      while (align_type->ty == TY_ARR || align_type->ty == TY_ARGARR)
+        align_type = align_type->ptr_to;
+      int single_size = get_sizeof(align_type);
+      if (is_struct) {
+        if (offset % single_size != 0)
+          offset += single_size - (offset % single_size);
+        if (max_size < single_size)
+          max_size = single_size;
+        member_var->offset = offset;
+        offset += get_sizeof(base_type);
+      } else {
+        int usz = get_sizeof(base_type);
+        if (max_size < usz)
+          max_size = usz;
+        member_var->offset = 0;
+      }
+      member_var->next = object->var;
+      object->var = member_var;
+      expect(";", "after object member declaration", "object declaration");
+      continue;
+    }
     for (;;) {
       Type *type = parse_declarator(base_type, &member_tok, "object member declaration");
       LVar *member_var = new_lvar(member_tok, type, FALSE, FALSE);
@@ -518,13 +552,37 @@ Object *enum_declaration(const int should_record) {
 
   int value = 0;
   expect("{", "before enum members", "enum");
-  do {
-    Token *member_tok = expect_ident("typedef");
+  for (;;) {
+    Token *member_tok = expect_ident("enum declaration");
+    int assigned = FALSE;
+    int assigned_val = 0;
+    if (consume("=")) {
+      Node *e = expr();
+      int ok = TRUE;
+      assigned_val = eval_const_expr(e, &ok);
+      if (!ok) {
+        error_at(consumed_loc, "expected a compile time constant [in enum initializer]");
+      }
+      assigned = TRUE;
+    }
     LVar *member_var = new_lvar(member_tok, new_type(TY_INT), FALSE, FALSE);
-    member_var->offset = value++;
+    if (assigned) {
+      member_var->offset = assigned_val;
+      value = assigned_val + 1;
+    } else {
+      member_var->offset = value++;
+    }
     member_var->next = object->var;
     object->var = member_var;
-  } while (consume(","));
+
+    if (consume(",")) {
+      // 許容: 末尾カンマ
+      if (peek("}"))
+        break;
+      continue;
+    }
+    break;
+  }
   expect("}", "after enum members", "enum");
 
   return object;

@@ -266,6 +266,7 @@ void preprocess_initialize_builtins(void) {
   define_builtin_object_macro("__restrict", "restrict");
   define_builtin_object_macro("__restrict__", "restrict");
   define_builtin_object_macro("restrict", "");
+  define_builtin_object_macro("__extension__", "");
   // Common glibc helper macros and qualifiers
   define_builtin_object_macro("__wur", "");
   define_builtin_object_macro("register", "");
