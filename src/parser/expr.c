@@ -138,7 +138,8 @@ Node *logical_or() {
   for (;;) {
     if (consume("||")) {
       node = new_binary(ND_OR, node, logical_and());
-      node->type = node->lhs->type;
+      // C の規格では論理演算子の結果は常に int 型
+      node->type = new_type(TY_INT);
       node->id = label_cnt++;
     } else {
       break;
@@ -152,7 +153,8 @@ Node *logical_and() {
   for (;;) {
     if (consume("&&")) {
       node = new_binary(ND_AND, node, bit_or());
-      node->type = node->lhs->type;
+      // C の規格では論理演算子の結果は常に int 型
+      node->type = new_type(TY_INT);
       node->id = label_cnt++;
     } else {
       break;
@@ -479,7 +481,8 @@ Node *unary() {
   if (consume("!")) {
     node = new_node(ND_NOT);
     node->lhs = type_cast();
-    node->type = node->lhs->type;
+    // 論理否定の結果は常に int 型
+    node->type = new_type(TY_INT);
     return node;
   }
   if (consume("~")) {

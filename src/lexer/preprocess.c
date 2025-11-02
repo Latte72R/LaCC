@@ -100,10 +100,55 @@ static void define_builtin_object_macro(const char *name, const char *value) {
   define_macro(name_copy, body, NULL, 0, FALSE);
 }
 
+// Forward declaration for function-like builtin macro definition helper
+static void define_builtin_function_macro(const char *name, int param_count, const char *value);
+
 void preprocess_initialize_builtins(void) {
   define_builtin_object_macro("__x86_64__", "1");
   define_builtin_object_macro("__LP64__", "1");
   define_builtin_object_macro("__LACC__", "1");
+  // Common GNU/glibc attribute-like macros that we ignore for C parsing
+  define_builtin_object_macro("__THROW", "");
+  // GNU C / glibc の restrict バリアントは無視
+  define_builtin_object_macro("__restrict", "");
+  define_builtin_object_macro("__restrict__", "");
+  // C99 の restrict も未対応なので前処理で無視（最適化しないため影響なし）
+  define_builtin_object_macro("restrict", "");
+  // Provide function-like builtins that swallow their arguments
+  // e.g., __nonnull((1)) and __attribute__((nothrow))
+  define_builtin_function_macro("__attribute__", 1, "");
+  define_builtin_function_macro("__nonnull", 1, "");
+}
+
+// Define a simple function-like builtin macro that discards its arguments and expands to value
+
+static void define_builtin_function_macro(const char *name, int param_count, const char *value) {
+  char *name_copy = duplicate_cstring(name);
+  int vlen = strlen(value);
+  char *body = malloc(vlen + 2);
+  if (!body)
+    error("memory allocation failed");
+  memcpy(body, value, vlen);
+  body[vlen] = '\n';
+  body[vlen + 1] = '\0';
+
+  char **params = NULL;
+  if (param_count > 0) {
+    params = malloc(sizeof(char *) * param_count);
+    if (!params)
+      error("memory allocation failed");
+    for (int i = 0; i < param_count; i++) {
+      // Parameter names are arbitrary since body is empty; use p0, p1, ...
+      char buf[8];
+      int n = snprintf(buf, sizeof(buf), "p%d", i);
+      char *pname = malloc(n + 1);
+      if (!pname)
+        error("memory allocation failed");
+      memcpy(pname, buf, n + 1);
+      params[i] = pname;
+    }
+  }
+  define_macro(name_copy, body, params, param_count, TRUE);
 }
 
 // マクロ定義を削除する
