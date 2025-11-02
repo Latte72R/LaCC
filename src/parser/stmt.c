@@ -224,6 +224,8 @@ Node *return_stmt() {
     node->rhs = expr();
     expect(";", "after line", "return");
   }
+  // 戻り値の期待型を保持しておく（コード生成での変換に利用）
+  node->type = current_fn->type->return_type;
   if (current_fn->type->return_type->ty != TY_VOID &&
       !is_type_compatible(current_fn->type->return_type, node->rhs->type)) {
     warning_at(loc, "incompatible %s to %s conversion [in return statement]", type_name(node->rhs->type),

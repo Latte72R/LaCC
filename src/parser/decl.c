@@ -18,6 +18,8 @@ extern Object *unions;
 extern Object *enums;
 extern TypeTag *type_tags;
 extern Location *consumed_loc;
+// from types/type.c
+extern Type *parse_function_suffix(Type *type, char *stmt);
 
 static int has_return_stmt(Node *n) {
   if (!n)

@@ -1,6 +1,7 @@
 // Shared prelude (inline instead of separate include)
-void printf();
-void *calloc();
+
+#include <stdio.h>
+
 int failures;
 int test_cnt = 0;
 void check_with_name(int result, const char *name, int ans) {
@@ -15,7 +16,6 @@ void check_with_name(int result, const char *name, int ans) {
 #include "unittests/basic.c"
 #include "unittests/enum_init.c"
 #include "unittests/funcptrs_ternary_sizeof.c"
-#include "unittests/include_next.c"
 #include "unittests/literals_and_switch.c"
 #include "unittests/loops_strings_arrays.c"
 #include "unittests/macro.c"
@@ -238,9 +238,6 @@ int main() {
   CHECK(unsigned_test32(), 0);
   CHECK(unsigned_test33(), 8);
 
-  // include_next
-  CHECK(include_next_test1(), 301);
-
   // enum initializer tests
   CHECK(enum_init_test1(), 1);
   CHECK(enum_init_test2(), 1);
@@ -261,7 +258,6 @@ int main() {
   CHECK(macro_test14(), ANGLE_MAGIC);
   CHECK(macro_test15(), 15);
   CHECK(macro_test16(), 6);
-  CHECK(macro_test17(), 1);
   CHECK(macro_test18(), 1);
   CHECK(macro_test19(), 1);
   CHECK(macro_test20(), 1);

@@ -94,6 +94,7 @@ struct Array {
 
 typedef enum {
   TY_NONE,
+  TY_BOOL,
   TY_INT,
   TY_CHAR,
   TY_SHORT,

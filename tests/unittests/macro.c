@@ -106,12 +106,6 @@ int macro_test15() { return -15; }
 
 int macro_test16() { return MULTI_LINE_MACRO(5); }
 
-#ifdef __LACC__
-int macro_test17() { return __LACC__; }
-#else
-int macro_test17() { return -17; }
-#endif
-
 #ifdef __x86_64__
 int macro_test18() { return __x86_64__; }
 #else

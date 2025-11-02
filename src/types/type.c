@@ -113,6 +113,7 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
   } else {
     // 任意順序の基本型指定子に対応する（例: "long unsigned int" や "unsigned long" 等）
     int seen_any = false;
+    int seen_bool = false;
     int long_count = 0;
     int seen_short = false;
     int seen_char = false;
@@ -123,6 +124,14 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
     int seen_double = false;
 
     for (;;) {
+      if (consume_base_type("_Bool")) {
+        if (seen_any) {
+          error_at(tok->loc, "invalid type specifier combination [_Bool with others] [in parse_base_type]");
+        }
+        seen_any = true;
+        seen_bool = true;
+        break; // _Bool は単独
+      }
       if (consume_base_type("unsigned")) {
         type->is_unsigned = true;
         seen_any = true;
@@ -175,7 +184,14 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
       error_at(token->loc, "unknown type: %.*s [in parse_base_type]", token->len, token->str);
     }
 
-    if (seen_void) {
+    if (seen_bool) {
+      type->ty = TY_BOOL;
+      type->is_unsigned = true; // _Bool は整数型だが 0/1 のみ。内部的には非負。
+      if (seen_signed)
+        error_at(tok->loc, "invalid type specifier combination [signed with _Bool] [in parse_base_type]");
+      if (long_count || seen_short || seen_char || seen_int || seen_float || seen_double)
+        error_at(tok->loc, "invalid type specifier combination [_Bool with others] [in parse_base_type]");
+    } else if (seen_void) {
       // void は単独扱い
       type->ty = TY_VOID;
       type->is_unsigned = false;
@@ -626,6 +642,8 @@ int get_sizeof(Type *type) {
     error_at(token->loc, "invalid application of 'sizeof' to an incomplete type [in get_sizeof]");
   }
   switch (type->ty) {
+  case TY_BOOL:
+    return 1;
   case TY_INT:
     return 4;
   case TY_CHAR:
@@ -656,6 +674,8 @@ int type_size(Type *type) {
   switch (type->ty) {
   case TY_VOID:
     return 0;
+  case TY_BOOL:
+    return 1;
   case TY_INT:
     return 4;
   case TY_CHAR:
@@ -680,8 +700,8 @@ int type_size(Type *type) {
 
 int is_ptr_or_arr(Type *type) { return type->ty == TY_PTR || type->ty == TY_ARR || type->ty == TY_ARGARR; }
 int is_number(Type *type) {
-  return type->ty == TY_INT || type->ty == TY_CHAR || type->ty == TY_SHORT || type->ty == TY_LONG ||
-         type->ty == TY_LONGLONG;
+  return type->ty == TY_BOOL || type->ty == TY_INT || type->ty == TY_CHAR || type->ty == TY_SHORT ||
+         type->ty == TY_LONG || type->ty == TY_LONGLONG;
 }
 
 int is_enum_type(Type *type) {
@@ -692,6 +712,8 @@ int is_enum_type(Type *type) {
 
 static int type_rank(Type *type) {
   switch (type->ty) {
+  case TY_BOOL:
+    return 0; // 最下位の整数昇格ランク（昇格で int へ）
   case TY_CHAR:
     return 1;
   case TY_SHORT:
@@ -725,6 +747,8 @@ Type *max_type(Type *lhs, Type *rhs) {
 char *type_name(Type *type) {
   if (type->is_unsigned) {
     switch (type->ty) {
+    case TY_BOOL:
+      return "_Bool";
     case TY_INT:
       return "unsigned int";
     case TY_CHAR:
@@ -740,6 +764,8 @@ char *type_name(Type *type) {
     }
   }
   switch (type->ty) {
+  case TY_BOOL:
+    return "_Bool";
   case TY_INT:
     return "int";
   case TY_CHAR:
