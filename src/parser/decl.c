@@ -19,6 +19,39 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
+static int has_return_stmt(Node *n) {
+  if (!n)
+    return FALSE;
+  if (n->kind == ND_RETURN)
+    return TRUE;
+
+  // 再帰的に主要フィールドを探索
+  if (has_return_stmt(n->lhs))
+    return TRUE;
+  if (has_return_stmt(n->rhs))
+    return TRUE;
+  if (has_return_stmt(n->cond))
+    return TRUE;
+  if (has_return_stmt(n->then))
+    return TRUE;
+  if (has_return_stmt(n->els))
+    return TRUE;
+  if (has_return_stmt(n->init))
+    return TRUE;
+  if (has_return_stmt(n->step))
+    return TRUE;
+
+  if (n->kind == ND_BLOCK && n->body) {
+    for (int i = 0; n->body[i]; i++) {
+      if (n->body[i]->kind == ND_NONE)
+        break;
+      if (has_return_stmt(n->body[i]))
+        return TRUE;
+    }
+  }
+  return FALSE;
+}
+
 Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int set_offset) {
   Array *array = array_literal(type);
   if (type->ty == TY_ARR) {
@@ -174,6 +207,12 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   } else {
     node->lhs = stmt();
     fn->is_defined = TRUE;
+
+    if (fn->type->return_type->ty != TY_VOID && strncmp(fn->name, "main", 4) != 0) {
+      if (!has_return_stmt(node->lhs)) {
+        error_at(tok->loc, "non-void function must return a value [in function definition]");
+      }
+    }
   }
   current_fn = prev_fn;
   return node;
@@ -269,9 +308,37 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   type = parse_declarator(base_type, &tok, "variable declaration");
 
   if (type->ty == TY_FUNC) {
-    if (current_fn)
-      error_at(token->loc, "nested function is not supported [in function definition]");
-    return function_definition(tok, type, is_static);
+    // 関数型の宣言/定義
+    // ブロック内でも関数プロトタイプ宣言は合法 (int f(void);)。
+    // 一方、関数本体を伴う定義 ( { ... } ) はネストした関数となり未対応。
+    if (peek("{")) {
+      if (current_fn)
+        error_at(token->loc, "nested function is not supported [in function definition]");
+      return function_definition(tok, type, is_static);
+    }
+
+    // ここはプロトタイプ宣言。外側の関数のローカル情報(locals/current_fn)を
+    // 破壊しないよう、関数定義用の処理は使わないで登録のみ行う。
+    Function *fn = find_fn(tok);
+    if (!fn) {
+      fn = malloc(sizeof(Function));
+      fn->next = functions;
+      functions = fn;
+      fn->name = tok->str;
+      fn->len = tok->len;
+    }
+    fn->offset = 0;
+    fn->is_static = is_static;
+    fn->type = type;
+    fn->is_defined = FALSE;
+    // パラメータ未指定(例: f();) は型チェックしない
+    fn->type_check = (type->param_count != 0) && !type->is_variadic;
+    fn->labels = NULL;
+
+    Node *node = new_node(ND_EXTERN);
+    expect(";", "after line", "function declaration");
+    node->endline = TRUE;
+    return node;
   }
 
   if (!is_extern && type->object && !type->object->is_defined) {

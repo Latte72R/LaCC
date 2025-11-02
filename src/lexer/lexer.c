@@ -24,6 +24,9 @@ Location *new_location(char *loc) {
 void new_token(TokenKind kind, char *loc, char *str, int len) {
   Token *tok = malloc(sizeof(Token));
   tok->kind = kind;
+  tok->val = 0;
+  tok->lit_rank = 0;
+  tok->lit_is_unsigned = 0;
   if (len > 0) {
     tok->str = malloc(len + 1);
     strncpy(tok->str, str, len);

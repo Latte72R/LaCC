@@ -110,8 +110,13 @@ struct Token {
   TokenKind kind; // Token kind
   Token *next;    // Next token
   int val;        // If kind is TK_NUM, its value
-  char *str;      // Token string
-  int len;        // Token length
+  // Integer literal suffix information (for TK_NUM):
+  // lit_rank: 0=int, 1=long, 2=long long
+  // lit_is_unsigned: non-zero if the literal has u/U suffix
+  int lit_rank;
+  int lit_is_unsigned;
+  char *str; // Token string
+  int len;   // Token length
   Location *loc;
 };
 
@@ -377,6 +382,7 @@ Type *consume_type(int should_record);
 int is_type(Token *tok);
 int is_ptr_or_arr(Type *type);
 int is_number(Type *type);
+int is_enum_type(Type *type);
 int get_sizeof(Type *type);
 int type_size(Type *type);
 Type *max_type(Type *lhs, Type *rhs);

@@ -698,6 +698,8 @@ void gen(Node *node) {
       }
     }
     gen(node->lhs);
+    // 末尾の自動エピローグは付けない。
+    // void 戻り値 または main の場合のみ、暗黙の 0 でエピローグを出力する。
     if (node->fn->type->return_type->ty == TY_VOID || !strncmp(node->fn->name, "main", 4)) {
       write_file("  mov rax, 0\n");
       write_file("  mov rsp, rbp\n");

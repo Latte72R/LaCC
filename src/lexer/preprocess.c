@@ -100,10 +100,55 @@ static void define_builtin_object_macro(const char *name, const char *value) {
   define_macro(name_copy, body, NULL, 0, FALSE);
 }
 
+// Forward declaration for function-like builtin macro definition helper
+static void define_builtin_function_macro(const char *name, int param_count, const char *value);
+
 void preprocess_initialize_builtins(void) {
   define_builtin_object_macro("__x86_64__", "1");
   define_builtin_object_macro("__LP64__", "1");
   define_builtin_object_macro("__LACC__", "1");
+  // Common GNU/glibc attribute-like macros that we ignore for C parsing
+  define_builtin_object_macro("__THROW", "");
+  // GNU C / glibc の restrict バリアントは無視
+  define_builtin_object_macro("__restrict", "");
+  define_builtin_object_macro("__restrict__", "");
+  // C99 の restrict も未対応なので前処理で無視（最適化しないため影響なし）
+  define_builtin_object_macro("restrict", "");
+  // Provide function-like builtins that swallow their arguments
+  // e.g., __nonnull((1)) and __attribute__((nothrow))
+  define_builtin_function_macro("__attribute__", 1, "");
+  define_builtin_function_macro("__nonnull", 1, "");
+}
+
+// Define a simple function-like builtin macro that discards its arguments and expands to value
+
+static void define_builtin_function_macro(const char *name, int param_count, const char *value) {
+  char *name_copy = duplicate_cstring(name);
+  int vlen = strlen(value);
+  char *body = malloc(vlen + 2);
+  if (!body)
+    error("memory allocation failed");
+  memcpy(body, value, vlen);
+  body[vlen] = '\n';
+  body[vlen + 1] = '\0';
+
+  char **params = NULL;
+  if (param_count > 0) {
+    params = malloc(sizeof(char *) * param_count);
+    if (!params)
+      error("memory allocation failed");
+    for (int i = 0; i < param_count; i++) {
+      // Parameter names are arbitrary since body is empty; use p0, p1, ...
+      char buf[8];
+      int n = snprintf(buf, sizeof(buf), "p%d", i);
+      char *pname = malloc(n + 1);
+      if (!pname)
+        error("memory allocation failed");
+      memcpy(pname, buf, n + 1);
+      params[i] = pname;
+    }
+  }
+  define_macro(name_copy, body, params, param_count, TRUE);
 }
 
 // マクロ定義を削除する
@@ -560,12 +605,16 @@ int parse_define_directive(char **p) {
       cur++;
   }
 
-  int value_cap = 32;
+  int value_cap = 64;
   int value_len = 0;
   char *value = malloc(value_cap);
   if (!value)
     error("memory allocation failed");
+
+  int in_string = FALSE;
+  int in_char = FALSE;
   while (*cur) {
+    // Handle line splicing first (backslash-newline)
     if (*cur == '\\') {
       if (cur[1] == '\n') {
         cur += 2;
@@ -576,8 +625,78 @@ int parse_define_directive(char **p) {
         continue;
       }
     }
-    if (*cur == '\n')
+
+    // End of directive line if not inside a block comment or string/char
+    if (!in_string && !in_char && *cur == '\n')
       break;
+
+    // Skip line comments (//...) to end of physical line
+    if (!in_string && !in_char && startswith(cur, "//")) {
+      while (*cur && *cur != '\n')
+        cur++;
+      break;
+    }
+
+    // Skip block comments and treat them as single space
+    if (!in_string && !in_char && startswith(cur, "/*")) {
+      char *end = strstr(cur + 2, "*/");
+      if (!end)
+        error_at(new_location(cur), "unclosed block comment in #define");
+      // Append a single space to separate tokens if needed
+      if (value_len + 1 >= value_cap) {
+        value_cap *= 2;
+        value = realloc(value, value_cap);
+        if (!value)
+          error("memory allocation failed");
+      }
+      value[value_len++] = ' ';
+      cur = end + 2;
+      continue;
+    }
+
+    // Handle entering/exiting string literal
+    if (!in_char && *cur == '"') {
+      in_string = !in_string;
+      if (value_len + 1 >= value_cap) {
+        value_cap *= 2;
+        value = realloc(value, value_cap);
+        if (!value)
+          error("memory allocation failed");
+      }
+      value[value_len++] = *cur++;
+      continue;
+    }
+    if (!in_string && *cur == '\'') {
+      in_char = !in_char;
+      if (value_len + 1 >= value_cap) {
+        value_cap *= 2;
+        value = realloc(value, value_cap);
+        if (!value)
+          error("memory allocation failed");
+      }
+      value[value_len++] = *cur++;
+      continue;
+    }
+
+    // Inside string/char, handle escapes and copy verbatim
+    if (in_string || in_char) {
+      if (*cur == '\\' && *(cur + 1)) {
+        // Copy escape sequence as-is
+        if (value_len + 2 >= value_cap) {
+          value_cap *= 2;
+          value = realloc(value, value_cap);
+          if (!value)
+            error("memory allocation failed");
+        }
+        value[value_len++] = *cur++;
+        value[value_len++] = *cur++;
+        continue;
+      }
+      if ((in_string && *cur == '"') || (in_char && *cur == '\'')) {
+        // Toggle state will be handled above on next iteration; just fall through
+      }
+    }
+
     if (value_len + 1 >= value_cap) {
       value_cap *= 2;
       value = realloc(value, value_cap);

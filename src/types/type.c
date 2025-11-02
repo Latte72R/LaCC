@@ -81,6 +81,11 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
       Type *void_ty = new_type(TY_VOID);
       type = new_type_ptr(void_ty);
       token = token->next;
+    } else if (token->len == (int)strlen("wchar_t") && strncmp(token->str, "wchar_t", token->len) == 0) {
+      // C では本来 typedef だが、ヘッダ互換性のためビルトイン扱い（LP64 では int 相当）
+      type->ty = TY_INT;
+      type->is_unsigned = FALSE;
+      token = token->next;
     } else {
       TypeTag *type_tag = find_type_tag(token);
       if (type_tag) {
@@ -275,16 +280,22 @@ Type *parse_function_suffix(Type *type, char *stmt) {
       if (!param) {
         error_at(consumed_loc, "expected a type [in %s]", stmt);
         break;
-      } else if (param->ty == TY_VOID) {
+      } else if (param->ty == TY_VOID && peek(")")) {
         if (i != 0)
           error_at(consumed_loc, "void type is only allowed for the first argument [in %s]", stmt);
         break;
       }
-      Token *ptok = consume_ident();
-      param = parse_array_dimensions(param);
-      // 引数の配列はポインタとして扱う
-      if (param->ty == TY_ARR)
-        param->ty = TY_ARGARR;
+      Token *ptok = NULL;
+      // Support full declarators in parameter, such as function pointers: void (*f)(void)
+      if (peek("(") || peek("*")) {
+        param = parse_declarator(param, &ptok, stmt);
+      } else {
+        ptok = consume_ident();
+        param = parse_array_dimensions(param);
+        // 引数の配列はポインタとして扱う
+        if (param->ty == TY_ARR)
+          param->ty = TY_ARGARR;
+      }
       func->param_types[i] = param;
       func->param_names[i] = ptok;
       n += 1;
@@ -617,6 +628,12 @@ int is_ptr_or_arr(Type *type) { return type->ty == TY_PTR || type->ty == TY_ARR 
 int is_number(Type *type) {
   return type->ty == TY_INT || type->ty == TY_CHAR || type->ty == TY_SHORT || type->ty == TY_LONG ||
          type->ty == TY_LONGLONG;
+}
+
+int is_enum_type(Type *type) {
+  // このコンパイラでは enum は内部的に TY_INT だが、enum 由来の型は object に対応する enum オブジェクトが入る。
+  // よって TY_INT かつ object != NULL を enum とみなす。
+  return type && type->ty == TY_INT && type->object != NULL;
 }
 
 static int type_rank(Type *type) {

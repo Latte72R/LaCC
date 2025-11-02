@@ -4,7 +4,7 @@ int strcmp();
 int failures;
 int test_cnt;
 
-# include "angle_include.h"
+#include "angle_include.h"
 
 #define CONST42 42
 int test1() { return CONST42; }
@@ -98,16 +98,13 @@ int test13() { return 13; }
 int test14() { return ANGLE_MACRO(TEST14_BASE); }
 
 #define MULTILINE_COND 1
-#if MULTILINE_COND && \
-    defined(CONST42)
+#if MULTILINE_COND && defined(CONST42)
 int test15() { return 15; }
 #else
 int test15() { return -15; }
 #endif
 
-#define MULTI_LINE_MACRO(x) \
-  ((x) + \
-   1)
+#define MULTI_LINE_MACRO(x) ((x) + 1)
 int test16() { return MULTI_LINE_MACRO(5); }
 
 #ifdef __LACC__
@@ -127,6 +124,13 @@ int test19() { return __LP64__; }
 #else
 int test19() { return -19; }
 #endif
+
+// Block comment across multiple lines in a macro definition should be ignored
+#define WITH_BLOCK_COMMENT                                                                                             \
+  0x20000000 /* this is a
+                                        multi-line
+                                        comment */
+int test20() { return WITH_BLOCK_COMMENT == 0x20000000; }
 
 void check(int result, int id, int expected) {
   test_cnt++;
@@ -159,6 +163,7 @@ int main() {
   check(test17(), 17, 1);
   check(test18(), 18, 1);
   check(test19(), 19, 1);
+  check(test20(), 20, 1);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d macro tests passed\033[0m\n", test_cnt);

@@ -1,69 +1,48 @@
-
-
+// すでにある宣言はそのまま利用
 int printf();
 void *malloc();
 
 int test(int x) { return x; }
 
-// 1. int→pointer 変換警告
-int test1() {
-  int *a;
-  return test(a);
-}
-
-// 2. 文字列初期化の配列宣言
-void test2() { char str[5] = "Hello, World!"; }
-
-// 3. 配列の初期化
-void test3() { int arr[3] = {2, 4, 6, 5, 7}; }
-
-// 4. const pointerの代入警告
+// 既存: 2,3,4,6,7 はそのまま
+void test2() { char str[5] = "Hello, World!"; } // 初期化子過多
+void test3() { int arr[3] = {2, 4, 6, 5, 7}; }  // 要素過多
 void test4() {
   int y = 11;
   const int *x = &y;
   int *z;
-  z = x;
+  z = x; // const 破棄
 }
-
-// 5. ポインタ代入警告
-void test5() {
-  int x = 19;
-  int *a = x;
-}
-
-// 6. 戻り値型の警告 (int 関数から pointer)
 void test6() {
   char *str = "hello";
-  int v = (int)str;
+  int v = (int)str; // ポインタ→整数の狭い変換
+  (void)v;
 }
 
-// 7. ポインタを整数にキャストする警告
-int test7() {
-  char *ptr = "test";
-  return (int)ptr;
+// 14. ポインタと整数の比較
+void test14() {
+  char *p = 0;
+  int i = 0;
+  if (p == i)
+    printf(); // 異なる領域の比較
 }
 
-// 8. ポインタを整数にキャストする警告
-int *test8() { return 5; }
-
-void test9() {
-  int *a;
-  int *b;
-  a -= b;
-}
-
-int test10() {
-  int *a;
-  return (0 ? 1 : a);
+// 23. enum の異種比較
+enum E1 { EA, EB };
+enum E2 { EC, ED };
+void test23() {
+  enum E1 a = EA;
+  enum E2 b = EC;
+  int x = a == b; // 別enum同士
 }
 
 int main() {
-  test1();
   test2();
   test3();
   test4();
-  test5();
   test6();
-  test7();
-  test8();
+  test14();
+  test23();
+
+  return 0;
 }

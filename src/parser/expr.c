@@ -23,8 +23,11 @@ Node *assign_sub(Node *lhs, Node *rhs, Location *loc, int check_const) {
     error_at(loc, "incompatible operand types ('%s' and '%s') [in assign_sub]", type_name(lhs->type),
              type_name(rhs->type));
   } else if (!is_type_compatible(lhs->type, rhs->type)) {
-    warning_at(loc, "incompatible operand types ('%s' and '%s') [in assign_sub]", type_name(lhs->type),
-               type_name(rhs->type));
+    // 例外: ヌルポインタ定数（整数定数 0）のポインタ代入は互換として扱う
+    if (!(is_ptr_or_arr(lhs->type) && rhs->kind == ND_NUM && rhs->val == 0)) {
+      warning_at(loc, "incompatible operand types ('%s' and '%s') [in assign_sub]", type_name(lhs->type),
+                 type_name(rhs->type));
+    }
   }
   Node *node = new_binary(ND_ASSIGN, lhs, rhs);
   return node;
@@ -135,7 +138,8 @@ Node *logical_or() {
   for (;;) {
     if (consume("||")) {
       node = new_binary(ND_OR, node, logical_and());
-      node->type = node->lhs->type;
+      // C の規格では論理演算子の結果は常に int 型
+      node->type = new_type(TY_INT);
       node->id = label_cnt++;
     } else {
       break;
@@ -149,7 +153,8 @@ Node *logical_and() {
   for (;;) {
     if (consume("&&")) {
       node = new_binary(ND_AND, node, bit_or());
-      node->type = node->lhs->type;
+      // C の規格では論理演算子の結果は常に int 型
+      node->type = new_type(TY_INT);
       node->id = label_cnt++;
     } else {
       break;
@@ -203,10 +208,21 @@ Node *equality() {
 
   for (;;) {
     if (consume("==")) {
-      node = new_binary(ND_EQ, node, relational());
+      Node *rhs = relational();
+      // enum の異種比較は警告
+      if (is_enum_type(node->type) && is_enum_type(rhs->type) && node->type->object != rhs->type->object) {
+        warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(node->type),
+                   type_name(rhs->type));
+      }
+      node = new_binary(ND_EQ, node, rhs);
       node->type = new_type(TY_INT);
     } else if (consume("!=")) {
-      node = new_binary(ND_NE, node, relational());
+      Node *rhs = relational();
+      if (is_enum_type(node->type) && is_enum_type(rhs->type) && node->type->object != rhs->type->object) {
+        warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(node->type),
+                   type_name(rhs->type));
+      }
+      node = new_binary(ND_NE, node, rhs);
       node->type = new_type(TY_INT);
     } else {
       break;
@@ -221,16 +237,36 @@ Node *relational() {
 
   for (;;) {
     if (consume("<")) {
-      node = new_binary(ND_LT, node, bit_shift());
+      Node *rhs = bit_shift();
+      if (is_enum_type(node->type) && is_enum_type(rhs->type) && node->type->object != rhs->type->object) {
+        warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(node->type),
+                   type_name(rhs->type));
+      }
+      node = new_binary(ND_LT, node, rhs);
       node->type = new_type(TY_INT);
     } else if (consume("<=")) {
-      node = new_binary(ND_LE, node, bit_shift());
+      Node *rhs = bit_shift();
+      if (is_enum_type(node->type) && is_enum_type(rhs->type) && node->type->object != rhs->type->object) {
+        warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(node->type),
+                   type_name(rhs->type));
+      }
+      node = new_binary(ND_LE, node, rhs);
       node->type = new_type(TY_INT);
     } else if (consume(">")) {
-      node = new_binary(ND_LT, bit_shift(), node);
+      Node *lhs = bit_shift();
+      if (is_enum_type(lhs->type) && is_enum_type(node->type) && lhs->type->object != node->type->object) {
+        warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(lhs->type),
+                   type_name(node->type));
+      }
+      node = new_binary(ND_LT, lhs, node);
       node->type = new_type(TY_INT);
     } else if (consume(">=")) {
-      node = new_binary(ND_LE, bit_shift(), node);
+      Node *lhs = bit_shift();
+      if (is_enum_type(lhs->type) && is_enum_type(node->type) && lhs->type->object != node->type->object) {
+        warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(lhs->type),
+                   type_name(node->type));
+      }
+      node = new_binary(ND_LE, lhs, node);
       node->type = new_type(TY_INT);
     } else {
       break;
@@ -396,6 +432,15 @@ Node *type_cast() {
   } else if (node->lhs->type->ty == TY_UNION) {
     error_at(tok->loc, "cannot cast from union type [in type_cast]");
   }
+
+  // 警告: ポインタ → より小さい整数型へのキャスト
+  if (is_ptr_or_arr(node->lhs->type) && is_number(type)) {
+    int from_sz = type_size(node->lhs->type); // ポインタ幅 (LP64 なら 8)
+    int to_sz = type_size(type);
+    if (to_sz < from_sz) {
+      warning_at(tok->loc, "cast to smaller integer type '%s' from pointer [in type cast]", type_name(type));
+    }
+  }
   return node;
 }
 
@@ -436,7 +481,8 @@ Node *unary() {
   if (consume("!")) {
     node = new_node(ND_NOT);
     node->lhs = type_cast();
-    node->type = node->lhs->type;
+    // 論理否定の結果は常に int 型
+    node->type = new_type(TY_INT);
     return node;
   }
   if (consume("~")) {
@@ -600,7 +646,21 @@ Node *primary() {
 
   // 数値
   if (token->kind == TK_NUM) {
-    return new_num(expect_number("primary"));
+    Token *numtok = token;
+    consumed_loc = numtok->loc;
+    token = token->next;
+    Node *n = new_num(numtok->val);
+    // Override type based on literal suffix
+    Type *t;
+    if (numtok->lit_rank == 2)
+      t = new_type(TY_LONGLONG);
+    else if (numtok->lit_rank == 1)
+      t = new_type(TY_LONG);
+    else
+      t = new_type(TY_INT);
+    t->is_unsigned = numtok->lit_is_unsigned;
+    n->type = t;
+    return n;
   }
 
   // 文字列

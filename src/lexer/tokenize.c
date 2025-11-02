@@ -122,35 +122,66 @@ static int parse_number_literal(char **p) {
   }
   char *digits;
   char *end;
+  char *start = cur;
+  int base = 10;
 
   if (startswith(cur, "0b")) {
-    new_token(TK_NUM, cur, cur, 0);
     cur += 2;
     digits = cur;
-    token->val = strtol(cur, &end, 2);
+    new_token(TK_NUM, start, start, 0);
+    base = 2;
+    token->val = strtol(cur, &end, base);
     cur = end;
-    token->len = cur - digits + 2;
   } else if (startswith(cur, "0x")) {
     cur += 2;
     digits = cur;
-    new_token(TK_NUM, digits, digits, 0);
-    token->val = strtol(cur, &end, 16);
+    new_token(TK_NUM, start, start, 0);
+    base = 16;
+    token->val = strtol(cur, &end, base);
     cur = end;
-    token->len = cur - digits + 2;
   } else if (startswith(cur, "0")) {
-    new_token(TK_NUM, cur, cur, 0);
     cur += 1;
     digits = cur;
-    token->val = strtol(cur, &end, 8);
+    new_token(TK_NUM, start, start, 0);
+    base = 8;
+    token->val = strtol(cur, &end, base);
     cur = end;
-    token->len = cur - digits + 2;
   } else {
-    new_token(TK_NUM, cur, cur, 0);
     digits = cur;
-    token->val = strtol(cur, &end, 10);
+    new_token(TK_NUM, start, start, 0);
+    base = 10;
+    token->val = strtol(cur, &end, base);
     cur = end;
-    token->len = cur - digits;
   }
+
+  // Parse integer literal suffixes: u/U, l/L, ll/LL (in any order)
+  int seen_u = 0;
+  int l_count = 0;
+  for (;;) {
+    if (*cur == 'u' || *cur == 'U') {
+      seen_u = 1;
+      cur++;
+      continue;
+    }
+    if (*cur == 'l' || *cur == 'L') {
+      // Count consecutive l/L occurrences (across the whole suffix, not only contiguous)
+      l_count++;
+      cur++;
+      // Support both "ll" and separated sequences like "lL"
+      continue;
+    }
+    break;
+  }
+  if (l_count >= 2)
+    token->lit_rank = 2; // long long
+  else if (l_count == 1)
+    token->lit_rank = 1; // long
+  else
+    token->lit_rank = 0; // int
+  token->lit_is_unsigned = seen_u;
+
+  // Set token length to cover the whole literal including prefix and suffix
+  token->len = cur - start;
   *p = cur;
   return 1;
 }
