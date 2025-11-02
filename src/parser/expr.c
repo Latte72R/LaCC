@@ -23,8 +23,11 @@ Node *assign_sub(Node *lhs, Node *rhs, Location *loc, int check_const) {
     error_at(loc, "incompatible operand types ('%s' and '%s') [in assign_sub]", type_name(lhs->type),
              type_name(rhs->type));
   } else if (!is_type_compatible(lhs->type, rhs->type)) {
-    warning_at(loc, "incompatible operand types ('%s' and '%s') [in assign_sub]", type_name(lhs->type),
-               type_name(rhs->type));
+    // 例外: ヌルポインタ定数（整数定数 0）のポインタ代入は互換として扱う
+    if (!(is_ptr_or_arr(lhs->type) && rhs->kind == ND_NUM && rhs->val == 0)) {
+      warning_at(loc, "incompatible operand types ('%s' and '%s') [in assign_sub]", type_name(lhs->type),
+                 type_name(rhs->type));
+    }
   }
   Node *node = new_binary(ND_ASSIGN, lhs, rhs);
   return node;

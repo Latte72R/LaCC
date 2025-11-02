@@ -269,9 +269,37 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   type = parse_declarator(base_type, &tok, "variable declaration");
 
   if (type->ty == TY_FUNC) {
-    if (current_fn)
-      error_at(token->loc, "nested function is not supported [in function definition]");
-    return function_definition(tok, type, is_static);
+    // 関数型の宣言/定義
+    // ブロック内でも関数プロトタイプ宣言は合法 (int f(void);)。
+    // 一方、関数本体を伴う定義 ( { ... } ) はネストした関数となり未対応。
+    if (peek("{")) {
+      if (current_fn)
+        error_at(token->loc, "nested function is not supported [in function definition]");
+      return function_definition(tok, type, is_static);
+    }
+
+    // ここはプロトタイプ宣言。外側の関数のローカル情報(locals/current_fn)を
+    // 破壊しないよう、関数定義用の処理は使わないで登録のみ行う。
+    Function *fn = find_fn(tok);
+    if (!fn) {
+      fn = malloc(sizeof(Function));
+      fn->next = functions;
+      functions = fn;
+      fn->name = tok->str;
+      fn->len = tok->len;
+    }
+    fn->offset = 0;
+    fn->is_static = is_static;
+    fn->type = type;
+    fn->is_defined = FALSE;
+    // パラメータ未指定(例: f();) は型チェックしない
+    fn->type_check = (type->param_count != 0) && !type->is_variadic;
+    fn->labels = NULL;
+
+    Node *node = new_node(ND_EXTERN);
+    expect(";", "after line", "function declaration");
+    node->endline = TRUE;
+    return node;
   }
 
   if (!is_extern && type->object && !type->object->is_defined) {

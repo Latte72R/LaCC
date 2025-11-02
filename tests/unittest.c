@@ -1797,6 +1797,29 @@ int test204() {
   return (int)v; /* 5 */
 }
 
+int test205() { // 代入
+  int *p = 0;
+  int *p5 = (void *)0; // CではOK
+  void *vp = 0;        // 当然OK
+  char *cp = vp;       // CではOK（void* → T* 暗黙変換）
+
+  // 関数ポインタ
+  int f(void);
+  int (*fp)(void) = 0;
+  int (*fp2)(void) = (void *)0; // NULLが((void*)0)でもOKにできる
+
+  // 比較
+  if (p == 0) {
+  }
+  if (fp != 0) {
+  }
+
+  // 条件演算子
+  int *q = (1 ? p : 0);
+  int (*fq)(void) = (0 ? 0 : fp);
+  return 0;
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
