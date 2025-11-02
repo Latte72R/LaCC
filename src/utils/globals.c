@@ -1,6 +1,8 @@
 
 #include "lacc.h"
 
+#include <stdio.h>
+
 int show_warning = 1;
 int warning_cnt = 0;
 char *user_input = 0;
@@ -35,7 +37,6 @@ IncludePath *include_paths = 0;
 FILE *fp = 0;
 Macro *macros = 0;
 
-void *NULL = 0;
 const int TRUE = 1;
 const int FALSE = 0;
 

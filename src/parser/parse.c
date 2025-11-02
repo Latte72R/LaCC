@@ -1,6 +1,9 @@
 
 #include "lacc.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 extern Token *token;
 extern Node **code;
 extern Location *consumed_loc;
@@ -11,7 +14,6 @@ extern Array *arrays;
 
 extern const int TRUE;
 extern const int FALSE;
-extern void *NULL;
 
 int peek(char *op) {
   if (token->kind != TK_RESERVED || strlen(op) != token->len || strncmp(token->str, op, token->len))

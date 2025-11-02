@@ -1,6 +1,9 @@
 
 #include "lacc.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 extern Token *token;
 extern int array_cnt;
 extern int block_id;
@@ -17,7 +20,6 @@ extern Location *consumed_loc;
 
 extern const int TRUE;
 extern const int FALSE;
-extern void *NULL;
 
 static int has_return_stmt(Node *n) {
   if (!n)

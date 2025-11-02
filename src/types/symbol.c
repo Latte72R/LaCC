@@ -1,6 +1,9 @@
 
 #include "lacc.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 extern Function *functions;
 extern Function *current_fn;
 extern LVar *locals;
@@ -12,7 +15,6 @@ extern TypeTag *type_tags;
 
 extern const int TRUE;
 extern const int FALSE;
-extern void *NULL;
 
 Node *new_node(NodeKind kind) {
   Node *node = malloc(sizeof(Node));

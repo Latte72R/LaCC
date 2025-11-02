@@ -1,8 +1,11 @@
 #include "lacc.h"
 
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+
 extern const int TRUE;
 extern const int FALSE;
-extern void *NULL;
 
 // table
 extern void define_macro(char *name, char *body, char **params, int param_count, int is_function, int is_variadic);

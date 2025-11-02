@@ -1,9 +1,13 @@
 #include "lacc.h"
 
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 // Common externs used across helpers/table/builtins
 extern const int TRUE;
 extern const int FALSE;
-extern void *NULL;
 extern Macro *macros;
 extern char *input_file;
 

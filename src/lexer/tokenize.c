@@ -1,12 +1,15 @@
 
 #include "lacc.h"
 
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+
 extern char *user_input;
 extern Token *token;
 
 extern const int TRUE;
 extern const int FALSE;
-extern void *NULL;
 
 static int tokenize_depth = 0;
 

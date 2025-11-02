@@ -1,9 +1,10 @@
 #include "lacc.h"
 
+#include <stdlib.h>
+
 extern CharPtrList *user_input_list;
 extern Token *token_head;
 extern Token *token;
-extern void *NULL;
 extern Function *functions;
 extern LVar *locals;
 extern LVar *globals;

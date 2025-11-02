@@ -1,12 +1,14 @@
 
 #include "lacc.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 extern Token *token;
 extern Location *consumed_loc;
 
 extern const int TRUE;
 extern const int FALSE;
-extern void *NULL;
 
 // 前方宣言: 式パーサ
 extern Node *expr();

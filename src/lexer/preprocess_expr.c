@@ -1,5 +1,9 @@
 #include "lacc.h"
 
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+
 extern const int TRUE;
 extern const int FALSE;
 

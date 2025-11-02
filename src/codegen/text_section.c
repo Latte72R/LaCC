@@ -1,6 +1,8 @@
 
 #include "lacc.h"
 
+#include <string.h>
+
 extern Node **code;
 extern LVar *globals;
 extern LVar *statics;
@@ -8,7 +10,6 @@ extern String *strings;
 
 extern const int TRUE;
 extern const int FALSE;
-extern void *NULL;
 
 char *regs1[] = {"dil", "sil", "dl", "cl", "r8b", "r9b"};
 char *regs2[] = {"di", "si", "dx", "cx", "r8w", "r9w"};

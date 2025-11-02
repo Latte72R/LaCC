@@ -1,6 +1,9 @@
 
 #include "lacc.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 extern Token *token;
 extern int label_cnt;
 extern int label_cnt;
@@ -18,7 +21,6 @@ extern Location *consumed_loc;
 
 extern const int TRUE;
 extern const int FALSE;
-extern void *NULL;
 
 Node *block_stmt() {
   Node *node = new_node(ND_BLOCK);

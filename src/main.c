@@ -1,6 +1,10 @@
 
 #include "lacc.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 extern int show_warning;
 extern int warning_cnt;
 extern char *user_input;
@@ -24,7 +28,6 @@ extern String *strings;
 extern Array *arrays;
 extern const int TRUE;
 extern const int FALSE;
-extern void *NULL;
 
 static char *duplicate_cstring(const char *src) {
   int len = strlen(src);

@@ -1,5 +1,9 @@
 #include "lacc.h"
 
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+
 extern char *user_input;
 extern CharPtrList *user_input_list;
 extern Token *token;
@@ -7,7 +11,6 @@ extern char *input_file;
 
 extern const int TRUE;
 extern const int FALSE;
-extern void *NULL;
 
 // Local helpers duplicated from original implementation
 static int is_ident_start_char(char c) { return (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_'); }

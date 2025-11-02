@@ -1,8 +1,11 @@
 
 #include "lacc.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 extern FILE *fp;
-extern void *NULL;
 extern IncludePath *include_paths;
 
 // 指定されたファイルの内容を返す

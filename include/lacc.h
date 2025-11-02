@@ -1,5 +1,8 @@
 // lacc.h
 
+#ifndef __LACC_H__
+#define __LACC_H__
+
 //
 // Main
 //
@@ -510,39 +513,4 @@ extern void error_at(Location *loc, char *fmt, ...);
 extern void warning(char *fmt, ...);
 extern void warning_at(Location *loc, char *fmt, ...);
 
-//
-// Standard library functions
-//
-
-// stdio.h
-extern int printf(char *fmt, ...);
-extern int sprintf(char *fmt, ...);
-extern int snprintf();
-typedef struct _IO_FILE FILE;
-extern FILE *fopen(const char *filename, const char *mode);
-extern int fprintf();
-extern int fclose();
-extern int fseek();
-extern int ftell();
-extern int fread();
-
-// ctype.h
-extern int isspace();
-extern int isdigit();
-
-// string.h
-extern int strcmp();
-extern int strncmp();
-extern int strncpy();
-extern int memcpy();
-extern int strlen();
-extern int strtol();
-extern char *strstr();
-extern char *strchr();
-extern char *strrchr();
-
-// stdlib.h
-extern void *malloc();
-extern void *realloc();
-extern void *calloc();
-extern void free();
+#endif // __LACC_H__
