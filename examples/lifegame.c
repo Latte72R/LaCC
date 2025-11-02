@@ -9,7 +9,7 @@ int usleep(int time);
 
 int count_nbr(int (*grid)[20], int i, int j, int size);
 
-int init_grid(int (*grid)[20], int *grid_binaries) {
+void init_grid(int (*grid)[20], int *grid_binaries) {
   for (int i = 0; i < 20; i = i + 1) {
     for (int j = 0; j < 20; j = j + 1) {
       grid[i][j] = (grid_binaries[i] >> (19 - j)) & 1;

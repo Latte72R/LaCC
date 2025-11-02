@@ -1646,26 +1646,26 @@ int test178() {
   return x >> 28; // 15
 }
 
-// int test179() {
-//   /* wraparound: 0xFFFFFFFFu + 2 -> 1 (mod 2^32) */
-//   return 0xFFFFFFFFu + 2u;
-// }
+int test179() {
+  /* wraparound: 0xFFFFFFFFu + 2 -> 1 (mod 2^32) */
+  return 0xFFFFFFFFu + 2u;
+}
 
-// int test180() {
-//   /* underflow: 0u - 1u -> UINT_MAX -> (int) -1 (実装依存だが GCC/Clang/二の補数で -1) */
-//   unsigned int x = 0u;
-//   return (int)(x - 1u); /* -1 */
-// }
+int test180() {
+  /* underflow: 0u - 1u -> UINT_MAX -> (int) -1 (実装依存だが GCC/Clang/二の補数で -1) */
+  unsigned int x = 0u;
+  return (int)(x - 1u); /* -1 */
+}
 
-// int test181() {
-//   /* 符号付きvs非符号の比較: -1 < 1U ? 0 */
-//   return (-1 < 1u);
-// }
+int test181() {
+  /* 符号付きvs非符号の比較: -1 < 1U ? 0 */
+  return (-1 < 1u);
+}
 
-// int test182() {
-//   /* 等値とキャスト: (unsigned)-1 は UINT_MAX */
-//   return ((unsigned)-1 == 0xFFFFFFFFu);
-// }
+int test182() {
+  /* 等値とキャスト: (unsigned)-1 は UINT_MAX */
+  return ((unsigned)-1 == 0xFFFFFFFFu);
+}
 
 int test183() {
   /* 昇格: unsigned char は int に昇格して演算 */
@@ -1680,53 +1680,53 @@ int test184() {
   return r;
 }
 
-// int test185() {
-//   /* 右シフトは論理: 0x8000_0000 >> 31 == 1 */
-//   unsigned int v = 0x80000000u;
-//   return v >> 31;
-// }
+int test185() {
+  /* 右シフトは論理: 0x8000_0000 >> 31 == 1 */
+  unsigned int v = 0x80000000u;
+  return v >> 31;
+}
 
-// int test186() {
-//   /* 左シフトの定義動作(非符号): ビットが溢れても mod 2^32 */
-//   return ((0xFFFFFFFFu << 1) == 0xFFFFFFFEu);
-// }
+int test186() {
+  /* 左シフトの定義動作(非符号): ビットが溢れても mod 2^32 */
+  return ((0xFFFFFFFFu << 1) == 0xFFFFFFFEu);
+}
 
-// int test187() {
-//   /* ~ とマスク: 非符号全1の下位8bitは 0xFF */
-//   return (~0u) & 0xFFu; /* 255 */
-// }
+int test187() {
+  /* ~ とマスク: 非符号全1の下位8bitは 0xFF */
+  return (~0u) & 0xFFu; /* 255 */
+}
 
-// int test188() {
-//   /* 条件演算子の型決定: (int,-1) と (unsigned,1u) -> 共通型は unsigned */
-//   int x = 1;
-//   unsigned r = x ? -1 : 1u; /* -1 が unsigned に変換され UINT_MAX */
-//   return (int)r;            /* -1 */
-// }
+int test188() {
+  /* 条件演算子の型決定: (int,-1) と (unsigned,1u) -> 共通型は unsigned */
+  int x = 1;
+  unsigned r = x ? -1 : 1u; /* -1 が unsigned に変換され UINT_MAX */
+  return (int)r;            /* -1 */
+}
 
-// int test189() {
-//   /* 負値を非符号へ, その後の剰余 */
-//   return ((unsigned)-3) % 2u; /* 1 */
-// }
+int test189() {
+  /* 負値を非符号へ, その後の剰余 */
+  return ((unsigned)-3) % 2u; /* 1 */
+}
 
 int test190() {
   /* sizeof は size_t(非符号)。比較で -1 は size_t に変換され巨大値 */
   return (sizeof(int) > -1); /* 0 */
 }
 
-// int test191() {
-//   /* 大きな非符号 / 3 の商 (4294967294 / 3) */
-//   return ((unsigned)-2) / 3u; /* 1431655764 */
-// }
+int test191() {
+  /* 大きな非符号 / 3 の商 (4294967294 / 3) */
+  return ((unsigned)-2) / 3u; /* 1431655764 */
+}
 
 int test192() {
   /* 符号混在比較その2: -2 < -1U ? 1 */
   return (-2 < (unsigned)-1);
 }
 
-// int test193() {
-//   /* ビット演算の通常算術変換: -1 & 1U -> 1 */
-//   return (-1 & 1u);
-// }
+int test193() {
+  /* ビット演算の通常算術変換: -1 & 1U -> 1 */
+  return (-1 & 1u);
+}
 
 int test194() {
   /* 整数昇格: (unsigned short)0 は int に昇格して ~0 -> -1 */
@@ -1746,15 +1746,15 @@ int test196() {
   return x == (unsigned)-1; /* 1 */
 }
 
-// int test197() {
-//   /* 符号混在の加算: 2U + (-1) == 1U */
-//   return (2u + (-1)) == 1u; /* 1 */
-// }
+int test197() {
+  /* 符号混在の加算: 2U + (-1) == 1U */
+  return (2u + (-1)) == 1u; /* 1 */
+}
 
-// int test198() {
-//   /* wrap結果と比較: (0u-2) < 3u は偽 */
-//   return ((0u - 2u) < 3u); /* 0 */
-// }
+int test198() {
+  /* wrap結果と比較: (0u-2) < 3u は偽 */
+  return ((0u - 2u) < 3u); /* 0 */
+}
 
 int test199() {
   /* 型指定子の順序: long unsigned int が受理される */
@@ -2035,26 +2035,26 @@ int main() {
   check(test176(), 176, 255);
   check(test177(), 177, 65535);
   check(test178(), 178, 15);
-  // check(test179(), 179, 1);
-  // check(test180(), 180, -1);
-  // check(test181(), 181, 0);
-  // check(test182(), 182, 1);
+  check(test179(), 179, 1);
+  check(test180(), 180, -1);
+  check(test181(), 181, 0);
+  check(test182(), 182, 1);
   check(test183(), 183, 260);
   check(test184(), 184, 65536);
-  // check(test185(), 185, 1);
-  // check(test186(), 186, 1);
-  // check(test187(), 187, 255);
-  // check(test188(), 188, -1);
-  // check(test189(), 189, 1);
+  check(test185(), 185, 1);
+  check(test186(), 186, 1);
+  check(test187(), 187, 255);
+  check(test188(), 188, -1);
+  check(test189(), 189, 1);
   check(test190(), 190, 0);
-  // check(test191(), 191, 1431655764);
+  check(test191(), 191, 1431655764);
   check(test192(), 192, 1);
-  // check(test193(), 193, 1);
+  check(test193(), 193, 1);
   check(test194(), 194, -1);
   check(test195(), 195, 0);
   check(test196(), 196, 1);
-  // check(test197(), 197, 1);
-  // check(test198(), 198, 0);
+  check(test197(), 197, 1);
+  check(test198(), 198, 0);
   check(test199(), 199, 7);
   check(test200(), 200, 1);
   check(test201(), 201, 1);

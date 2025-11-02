@@ -239,15 +239,26 @@ void gen_expression(Node *node) {
   case ND_SHL:
     // シフト量は CL レジスタで指定する
     write_file("  mov rcx, rdi\n");
-    write_file("  shl rax, cl\n");
+    // 演算幅はオペランド型の幅に合わせる（例: unsigned int なら 32bit）
+    if (type_size(node->type) == 4)
+      write_file("  shl eax, cl\n");
+    else
+      write_file("  shl rax, cl\n");
     break;
   case ND_SHR:
     // シフト量は CL レジスタで指定する
     write_file("  mov rcx, rdi\n");
-    if (node->type->is_unsigned)
-      write_file("  shr rax, cl\n");
-    else
-      write_file("  sar rax, cl\n");
+    if (type_size(node->type) == 4) {
+      if (node->type->is_unsigned)
+        write_file("  shr eax, cl\n");
+      else
+        write_file("  sar eax, cl\n");
+    } else {
+      if (node->type->is_unsigned)
+        write_file("  shr rax, cl\n");
+      else
+        write_file("  sar rax, cl\n");
+    }
     break;
   default:
     error("invalid node kind");
@@ -260,8 +271,29 @@ void gen_expression(Node *node) {
 void gen(Node *node) {
   switch (node->kind) {
   case ND_NUM:
-    if (!node->endline)
-      write_file("  push %d\n", node->val);
+    if (!node->endline) {
+      // 数値リテラルはその型情報に基づいてレジスタへロードし、
+      // 必要に応じてゼロ拡張/符号拡張してからスタックへ積む。
+      // これにより、(unsigned)-1 と 0xFFFFFFFFu の比較などで
+      // 片側だけが 64bit 符号拡張される不一致を防ぐ。
+      if (node->type && node->type->ty == TY_INT) {
+        // 32bit 即値を EAX にロード。EAX への書き込みは上位 32bit を 0 にする。
+        write_file("  mov eax, %d\n", node->val);
+        if (node->type->is_unsigned) {
+          // 非符号は 0 拡張のままで OK（RAX は 0x00000000XXXXXXXX）。
+          write_file("  mov eax, eax\n");
+        } else {
+          // 符号付きは 32bit 値から 64bit へ符号拡張。
+          write_file("  movsxd rax, eax\n");
+        }
+        write_file("  push rax\n");
+      } else {
+        // それ以外（long/long long など）は従来通り。
+        // 必要になれば今後、桁数に応じた imm64 生成へ拡張する。
+        write_file("  mov rax, %d\n", node->val);
+        write_file("  push rax\n");
+      }
+    }
     break;
   case ND_STRING:
     write_file("  lea rax, [rip + .L.str%d]\n", node->id);
