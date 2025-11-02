@@ -14,6 +14,7 @@ void check_with_name(int result, const char *name, int ans) {
 
 // Split test units (order matters for helper references)
 #include "unittests/basic.c"
+#include "unittests/bool.c"
 #include "unittests/enum_init.c"
 #include "unittests/funcptrs_ternary_sizeof.c"
 #include "unittests/literals_and_switch.c"
@@ -237,6 +238,21 @@ int main() {
   CHECK(unsigned_test31(), 4);
   CHECK(unsigned_test32(), 0);
   CHECK(unsigned_test33(), 8);
+
+  // bool / _Bool tests
+  CHECK(bool_test1(), 2);
+  CHECK(bool_test2(), 2);
+  CHECK(bool_test3(), 2);
+  CHECK(bool_test4(), 2);
+  CHECK(bool_test5(), 1);
+  CHECK(bool_test7(), 2);
+  CHECK(bool_test8(), 2);
+  CHECK(bool_test9(), 20);
+  CHECK(bool_test10(), 3);
+  CHECK(bool_test11(), 2);
+  CHECK(bool_test12(), 1);
+  CHECK(bool_test13(), 2);
+  CHECK(bool_test14(), 7);
 
   // enum initializer tests
   CHECK(enum_init_test1(), 1);

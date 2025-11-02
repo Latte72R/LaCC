@@ -540,6 +540,9 @@ void gen(Node *node) {
     write_file("  pop rax\n");
     switch (node->lhs->type->ty) {
     case TY_BOOL:
+      // normalize to 0/1 when storing back to _Bool
+      write_file("  cmp rdi, 0\n");
+      write_file("  setne dil\n");
       write_file("  mov BYTE PTR [rax], dil\n");
       break;
     case TY_INT:

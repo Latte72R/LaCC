@@ -181,9 +181,15 @@ static int parse_array_initializer_value(Array *array, Type *type, int *idx, int
     return 1;
   }
 
-  Token *tok = token;
+  int sign = parse_sign();
+  Token *tok = token; // capture location of the numeric token after optional sign
   int value = expect_number("array_literal");
+  value *= sign;
   consumed_loc = tok->loc;
+  // For _Bool elements, normalize initializer to 0 or 1 per C rules
+  if (type->ty == TY_BOOL) {
+    value = (value != 0);
+  }
   append_array_value(array, value, NULL, idx, cap);
   return 1;
 }
