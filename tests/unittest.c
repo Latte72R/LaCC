@@ -12,17 +12,17 @@ void check_with_name(int result, const char *name, int ans) {
 }
 
 // Split test units (order matters for helper references)
-#include "unittests/basic.inc"
-#include "unittests/enum_init.inc"
-#include "unittests/funcptrs_ternary_sizeof.inc"
-#include "unittests/include_next.inc"
-#include "unittests/literals_and_switch.inc"
-#include "unittests/loops_strings_arrays.inc"
-#include "unittests/macro.inc"
-#include "unittests/struct_arrays_bits.inc"
-#include "unittests/switch_goto_casts.inc"
-#include "unittests/unions_typedefs_funcptrs.inc"
-#include "unittests/unsigned_and_suffixes.inc"
+#include "unittests/basic.c"
+#include "unittests/enum_init.c"
+#include "unittests/funcptrs_ternary_sizeof.c"
+#include "unittests/include_next.c"
+#include "unittests/literals_and_switch.c"
+#include "unittests/loops_strings_arrays.c"
+#include "unittests/macro.c"
+#include "unittests/struct_arrays_bits.c"
+#include "unittests/switch_goto_casts.c"
+#include "unittests/unions_typedefs_funcptrs.c"
+#include "unittests/unsigned_and_suffixes.c"
 
 // Test invocation helpers: no need to pass numeric ids; use expression string instead
 #define CHECK(EXPR, EXPECTED) check_with_name((EXPR), #EXPR, (EXPECTED))

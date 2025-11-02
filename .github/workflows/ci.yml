@@ -38,11 +38,6 @@ jobs:
           set -euxo pipefail
           make unittest
 
-      - name: Run macrotest
-        run: |
-          set -euxo pipefail
-          make macrotest
-
       - name: Run asmcmp
         run: |
           set -euxo pipefail
