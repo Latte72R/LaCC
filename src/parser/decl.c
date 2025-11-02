@@ -16,6 +16,7 @@ extern LVar *statics;
 extern Object *structs;
 extern Object *unions;
 extern Object *enums;
+extern Object *current_enum_scope;
 extern TypeTag *type_tags;
 extern Location *consumed_loc;
 // from types/type.c
@@ -552,6 +553,9 @@ Object *enum_declaration(const int should_record) {
   }
   object->is_defined = true;
 
+  Object *prev_enum_scope = current_enum_scope;
+  current_enum_scope = object;
+
   int value = 0;
   expect("{", "before enum members", "enum");
   for (;;) {
@@ -586,6 +590,8 @@ Object *enum_declaration(const int should_record) {
     break;
   }
   expect("}", "after enum members", "enum");
+
+  current_enum_scope = prev_enum_scope;
 
   return object;
 }

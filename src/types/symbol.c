@@ -12,6 +12,7 @@ extern LVar *globals;
 extern Object *structs;
 extern Object *unions;
 extern Object *enums;
+extern Object *current_enum_scope;
 extern TypeTag *type_tags;
 
 Node *new_node(NodeKind kind) {
@@ -123,12 +124,24 @@ Object *find_enum(Token *tok) {
   return NULL;
 }
 
+static LVar *find_enum_member_in_object(Object *enum_obj, Token *tok) {
+  if (!enum_obj)
+    return NULL;
+  for (LVar *var = enum_obj->var; var; var = var->next)
+    if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
+      return var;
+  return NULL;
+}
+
 // enumのメンバーを名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_enum_member(Token *tok) {
+  LVar *var = find_enum_member_in_object(current_enum_scope, tok);
+  if (var)
+    return var;
   for (Object *enum_ = enums; enum_; enum_ = enum_->next) {
-    for (LVar *var = enum_->var; var; var = var->next)
-      if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
-        return var;
+    var = find_enum_member_in_object(enum_, tok);
+    if (var)
+      return var;
   }
   return NULL;
 }

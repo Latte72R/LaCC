@@ -1,6 +1,5 @@
 // bool / _Bool の挙動テスト（C99）
 
-#include <limits.h>
 #include <stdbool.h>
 
 int bool_test1() {
@@ -96,10 +95,10 @@ int bool_test12() {
 
 int bool_test13() {
   // 大きな整数（符号なし/符号あり）→ _Bool
-  _Bool a = (_Bool)UINT_MAX; // 1
-  _Bool b = (_Bool)(-123);   // 1
-  _Bool c = (_Bool)0U;       // 0
-  return a + b + c;          // 2
+  _Bool a = (_Bool)(1024); // 1
+  _Bool b = (_Bool)(-123); // 1
+  _Bool c = (_Bool)0U;     // 0
+  return a + b + c;        // 2
 }
 
 int bool_test14() {

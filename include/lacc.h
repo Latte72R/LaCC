@@ -85,6 +85,8 @@ struct Array {
   Array *next;
   int *val;
   String **str;
+  int val_cap;
+  int str_cap;
   int byte;
   int len;        // 配列の要素数
   int init;       // 初期化されている数

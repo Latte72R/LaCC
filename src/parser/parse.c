@@ -118,21 +118,21 @@ static Type *array_base_type(Type *type) {
   return type;
 }
 
-static void append_array_value(Array *array, int value, String *str, int *idx, int *cap) {
-  array->val = safe_realloc_array(array->val, sizeof(int), *idx + 1, cap);
-  array->str = safe_realloc_array(array->str, sizeof(String *), *idx + 1, cap);
+static void append_array_value(Array *array, int value, String *str, int *idx) {
+  array->val = safe_realloc_array(array->val, sizeof(int), *idx + 1, &array->val_cap);
+  array->str = safe_realloc_array(array->str, sizeof(String *), *idx + 1, &array->str_cap);
   array->val[*idx] = value;
   array->str[*idx] = str;
   (*idx)++;
 }
 
-static int parse_array_initializer_value(Array *array, Type *type, int *idx, int *cap) {
+static int parse_array_initializer_value(Array *array, Type *type, int *idx) {
   if (type->ty == TY_ARR) {
     if (peek("{")) {
       consume("{");
       int provided = 0;
       while (!peek("}")) {
-        parse_array_initializer_value(array, type->ptr_to, idx, cap);
+        parse_array_initializer_value(array, type->ptr_to, idx);
         provided++;
         if (!consume(","))
           break;
@@ -163,11 +163,11 @@ static int parse_array_initializer_value(Array *array, Type *type, int *idx, int
         int value = 0;
         if (i < copy_len)
           value = (unsigned char)tok->str[i];
-        append_array_value(array, value, NULL, idx, cap);
+        append_array_value(array, value, NULL, idx);
       }
       return 1;
     }
-    parse_array_initializer_value(array, type->ptr_to, idx, cap);
+    parse_array_initializer_value(array, type->ptr_to, idx);
     if (type->array_size == 0)
       type->array_size = 1;
     return 1;
@@ -177,7 +177,7 @@ static int parse_array_initializer_value(Array *array, Type *type, int *idx, int
     Token *tok = token;
     consumed_loc = tok->loc;
     String *str = string_literal();
-    append_array_value(array, 0, str, idx, cap);
+    append_array_value(array, 0, str, idx);
     return 1;
   }
 
@@ -190,7 +190,7 @@ static int parse_array_initializer_value(Array *array, Type *type, int *idx, int
   if (type->ty == TY_BOOL) {
     value = (value != 0);
   }
-  append_array_value(array, value, NULL, idx, cap);
+  append_array_value(array, value, NULL, idx);
   return 1;
 }
 
@@ -201,15 +201,16 @@ Array *array_literal(Type *type) {
   array->id = array_cnt++;
   Type *base = array_base_type(org_type);
   array->byte = get_sizeof(base);
-  int cap = 16;
+  array->val_cap = 16;
+  array->str_cap = 16;
   int idx = 0;
-  array->val = malloc(sizeof(int) * cap);
-  array->str = calloc(cap, sizeof(String *));
+  array->val = malloc(sizeof(int) * array->val_cap);
+  array->str = calloc(array->str_cap, sizeof(String *));
   array->next = arrays;
   array->elem_count = 0;
   arrays = array;
   while (!peek("}")) {
-    parse_array_initializer_value(array, org_type, &idx, &cap);
+    parse_array_initializer_value(array, org_type, &idx);
     array->elem_count++;
     if (!consume(","))
       break;

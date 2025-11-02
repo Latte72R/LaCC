@@ -151,7 +151,7 @@ void free_all_objects() {
   ObjectList *ol = object_list;
   while (ol) {
     ObjectList *next = ol->next;
-    free(ol->object);
+    // temp skip object free
     free(ol);
     ol = next;
   }

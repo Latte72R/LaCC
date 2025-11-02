@@ -25,6 +25,7 @@ LVar *statics = 0;
 Object *structs = 0;
 Object *unions = 0;
 Object *enums = 0;
+Object *current_enum_scope = 0;
 TypeTag *type_tags = 0;
 String *strings = 0;
 Array *arrays = 0;
@@ -46,6 +47,7 @@ void init_global_variables() {
   functions = NULL;
   current_fn = NULL;
   enums = NULL;
+  current_enum_scope = NULL;
   structs = NULL;
   unions = NULL;
   type_tags = NULL;

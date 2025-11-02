@@ -1,11 +1,7 @@
 // Edited by uint256_t
 
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <unistd.h>
-
-int printf(char *msg);
-int usleep(int time);
+#include <poll.h>
+#include <stdio.h>
 
 int count_nbr(int (*grid)[20], int i, int j, int size);
 
@@ -58,7 +54,7 @@ int main() {
       }
     }
 
-    usleep(100000);
+    poll(NULL, 0, 100);
   }
 
   return 0;
