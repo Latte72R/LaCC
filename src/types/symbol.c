@@ -1,6 +1,7 @@
 
 #include "lacc.h"
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -13,9 +14,6 @@ extern Object *unions;
 extern Object *enums;
 extern TypeTag *type_tags;
 
-extern const int TRUE;
-extern const int FALSE;
-
 Node *new_node(NodeKind kind) {
   Node *node = malloc(sizeof(Node));
   register_node(node);
@@ -24,11 +22,11 @@ Node *new_node(NodeKind kind) {
   node->rhs = NULL;
   node->val = 0;
   node->id = 0;
-  node->endline = FALSE;
+  node->endline = false;
   node->cases = NULL;
   node->case_cnt = 0;
   node->case_cap = 0;
-  node->has_default = FALSE;
+  node->has_default = false;
   node->cond = NULL;
   node->then = NULL;
   node->els = NULL;

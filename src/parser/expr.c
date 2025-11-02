@@ -1,15 +1,13 @@
 
 #include "lacc.h"
 
+#include <stdbool.h>
 #include <stddef.h>
 
 extern Token *token;
 extern int label_cnt;
 extern int label_cnt;
 extern Location *consumed_loc;
-
-extern const int TRUE;
-extern const int FALSE;
 
 Node *expr() { return assign(); }
 
@@ -40,7 +38,7 @@ Node *assign() {
   Location *loc;
   if (consume("=")) {
     loc = consumed_loc;
-    node = assign_sub(node, expr(), loc, TRUE);
+    node = assign_sub(node, expr(), loc, true);
   } else if (consume("+=")) {
     loc = consumed_loc;
     rhs = expr();
@@ -48,14 +46,14 @@ Node *assign() {
       error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
                type_name(rhs->type));
     }
-    node = assign_sub(node, new_binary(ND_ADD, node, rhs), loc, TRUE);
+    node = assign_sub(node, new_binary(ND_ADD, node, rhs), loc, true);
   } else if (consume("-=")) {
     loc = consumed_loc;
     rhs = expr();
     if (is_ptr_or_arr(node->type) && is_ptr_or_arr(rhs->type)) {
       warning_at(loc, "incompatible integer to pointer conversion [in assign]");
     }
-    node = assign_sub(node, new_binary(ND_SUB, node, rhs), loc, TRUE);
+    node = assign_sub(node, new_binary(ND_SUB, node, rhs), loc, true);
   } else if (consume("*=")) {
     loc = consumed_loc;
     rhs = expr();
@@ -63,7 +61,7 @@ Node *assign() {
       error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
                type_name(rhs->type));
     }
-    node = assign_sub(node, new_binary(ND_MUL, node, rhs), loc, TRUE);
+    node = assign_sub(node, new_binary(ND_MUL, node, rhs), loc, true);
   } else if (consume("/=")) {
     loc = consumed_loc;
     rhs = expr();
@@ -71,7 +69,7 @@ Node *assign() {
       error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
                type_name(rhs->type));
     }
-    node = assign_sub(node, new_binary(ND_DIV, node, rhs), loc, TRUE);
+    node = assign_sub(node, new_binary(ND_DIV, node, rhs), loc, true);
   } else if (consume("%=")) {
     loc = consumed_loc;
     rhs = expr();
@@ -79,7 +77,7 @@ Node *assign() {
       error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
                type_name(rhs->type));
     }
-    node = assign_sub(node, new_binary(ND_MOD, node, rhs), loc, TRUE);
+    node = assign_sub(node, new_binary(ND_MOD, node, rhs), loc, true);
   }
   return node;
 }
@@ -439,7 +437,7 @@ Node *type_cast() {
     token = tok;
     return unary();
   }
-  Type *type = consume_type(TRUE);
+  Type *type = consume_type(true);
   if (!type) {
     token = tok;
     return unary();
@@ -485,7 +483,7 @@ Node *unary() {
     int sz;
     if (consume("(")) {
       Token *tok2 = token;
-      Type *ty = consume_type(TRUE);
+      Type *ty = consume_type(true);
       if (ty) {
         expect(")", "after type", "sizeof");
         sz = get_sizeof(ty);
@@ -502,7 +500,7 @@ Node *unary() {
     Node *n = new_num(sz);
     // C の sizeof の結果型は size_t（LP64想定で unsigned long）
     n->type = new_type(TY_LONG);
-    n->type->is_unsigned = TRUE;
+    n->type->is_unsigned = true;
     return n;
   }
   if (consume("+"))
@@ -549,11 +547,11 @@ Node *increment_decrement() {
   if (consume("++")) {
     loc = consumed_loc;
     node = access_member();
-    return assign_sub(node, new_add(node, new_num(1), consumed_loc), loc, TRUE);
+    return assign_sub(node, new_add(node, new_num(1), consumed_loc), loc, true);
   } else if (consume("--")) {
     loc = consumed_loc;
     node = access_member();
-    return assign_sub(node, new_sub(node, new_num(1), consumed_loc), loc, TRUE);
+    return assign_sub(node, new_sub(node, new_num(1), consumed_loc), loc, true);
   }
   node = access_member();
   if (consume("++")) {
@@ -723,7 +721,7 @@ Node *primary() {
 
   // 型
   if (is_type(token)) {
-    Type *type = consume_type(TRUE);
+    Type *type = consume_type(true);
     node = new_node(ND_TYPE);
     node->type = type;
     return node;

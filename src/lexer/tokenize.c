@@ -8,9 +8,6 @@
 extern char *user_input;
 extern Token *token;
 
-extern const int TRUE;
-extern const int FALSE;
-
 static int tokenize_depth = 0;
 
 // マクロ引数解析は preprocess 側の parse_macro_arguments を利用する
@@ -516,6 +513,13 @@ static int parse_basic_type(char **p) {
   if (startswith(cur, "void") && !is_alnum(cur[4])) {
     new_token(TK_TYPE, cur, cur, 4);
     cur += 4;
+    *p = cur;
+    return 1;
+  }
+
+  if (startswith(cur, "_Bool") && !is_alnum(cur[5])) {
+    new_token(TK_TYPE, cur, cur, 5);
+    cur += 5;
     *p = cur;
     return 1;
   }

@@ -1,11 +1,9 @@
 #include "lacc.h"
 
 #include <ctype.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-extern const int TRUE;
-extern const int FALSE;
 
 // table
 extern void define_macro(char *name, char *body, char **params, int param_count, int is_function, int is_variadic);
@@ -45,19 +43,19 @@ int parse_define_directive(char **p) {
   memcpy(name, name_start, name_len);
   name[name_len] = '\0';
 
-  int is_function = FALSE;
-  int is_variadic = FALSE;
+  int is_function = false;
+  int is_variadic = false;
   char **params = NULL;
   int param_count = 0;
   int param_cap = 0;
 
   if (*cur == '(') {
-    is_function = TRUE;
+    is_function = true;
     cur++;
     if (*cur == ')') {
       cur++;
     } else {
-      while (TRUE) {
+      while (true) {
         while (*cur == ' ' || *cur == '\t')
           cur++;
         // Variadic-only '...' or named variadic 'NAME...'
@@ -74,7 +72,7 @@ int parse_define_directive(char **p) {
             error("memory allocation failed");
           memcpy(param_name, "__VA_ARGS__", strlen("__VA_ARGS__") + 1);
           params[param_count++] = param_name;
-          is_variadic = TRUE;
+          is_variadic = true;
           cur += 3;
           while (*cur == ' ' || *cur == '\t')
             cur++;
@@ -107,7 +105,7 @@ int parse_define_directive(char **p) {
               error("memory allocation failed");
           }
           params[param_count++] = param_name;
-          is_variadic = TRUE;
+          is_variadic = true;
           cur += 3;
           while (*cur == ' ' || *cur == '\t')
             cur++;
@@ -149,8 +147,8 @@ int parse_define_directive(char **p) {
   if (!value)
     error("memory allocation failed");
 
-  int in_string = FALSE;
-  int in_char = FALSE;
+  int in_string = false;
+  int in_char = false;
   while (*cur) {
     // Handle line splicing first (backslash-newline)
     if (*cur == '\\') {

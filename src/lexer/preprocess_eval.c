@@ -1,10 +1,8 @@
 #include "lacc.h"
 
 #include <ctype.h>
+#include <stdbool.h>
 #include <stdlib.h>
-
-extern const int TRUE;
-extern const int FALSE;
 
 // dependencies
 extern Macro *find_macro(char *name, int len);
@@ -29,7 +27,7 @@ static long long parse_number_literal_pp(ExprParser *ctx, int *ok) {
   if (p[0] == '0' && (p[1] == 'b' || p[1] == 'B')) {
     p += 2;
     if (*p != '0' && *p != '1') {
-      *ok = FALSE;
+      *ok = false;
       return 0;
     }
     long long val = 0;
@@ -45,7 +43,7 @@ static long long parse_number_literal_pp(ExprParser *ctx, int *ok) {
   char *end;
   long val_long = strtol(p, &end, 0);
   if (end == p) {
-    *ok = FALSE;
+    *ok = false;
     return 0;
   }
   ctx->p = end;
@@ -57,12 +55,12 @@ static long long parse_number_literal_pp(ExprParser *ctx, int *ok) {
 static long long parse_char_literal_pp(ExprParser *ctx, int *ok) {
   const char *p = ctx->p;
   if (*p != '\'') {
-    *ok = FALSE;
+    *ok = false;
     return 0;
   }
   p++;
   if (*p == '\0') {
-    *ok = FALSE;
+    *ok = false;
     return 0;
   }
   long long val;
@@ -106,7 +104,7 @@ static long long parse_char_literal_pp(ExprParser *ctx, int *ok) {
       val = '\0';
       break;
     default:
-      *ok = FALSE;
+      *ok = false;
       return 0;
     }
     p++;
@@ -115,7 +113,7 @@ static long long parse_char_literal_pp(ExprParser *ctx, int *ok) {
     p++;
   }
   if (*p != '\'') {
-    *ok = FALSE;
+    *ok = false;
     return 0;
   }
   p++;
@@ -133,14 +131,14 @@ static long long parse_primary(ExprParser *ctx, int *ok) {
   if (startswith((char *)ctx->p, "defined") && !is_ident_char(ctx->p[7])) {
     ctx->p += 7;
     skip_spaces_expr(ctx);
-    int has_paren = FALSE;
+    int has_paren = false;
     if (*ctx->p == '(') {
-      has_paren = TRUE;
+      has_paren = true;
       ctx->p++;
       skip_spaces_expr(ctx);
     }
     if (!is_ident_start_char(*ctx->p)) {
-      *ok = FALSE;
+      *ok = false;
       return 0;
     }
     const char *ident_start = ctx->p;
@@ -151,7 +149,7 @@ static long long parse_primary(ExprParser *ctx, int *ok) {
     if (has_paren) {
       skip_spaces_expr(ctx);
       if (*ctx->p != ')') {
-        *ok = FALSE;
+        *ok = false;
         return 0;
       }
       ctx->p++;
@@ -166,7 +164,7 @@ static long long parse_primary(ExprParser *ctx, int *ok) {
       return 0;
     skip_spaces_expr(ctx);
     if (*ctx->p != ')') {
-      *ok = FALSE;
+      *ok = false;
       return 0;
     }
     ctx->p++;
@@ -181,7 +179,7 @@ static long long parse_primary(ExprParser *ctx, int *ok) {
       ctx->p++;
     return 0;
   }
-  *ok = FALSE;
+  *ok = false;
   return 0;
 }
 
@@ -212,7 +210,7 @@ static long long parse_mul(ExprParser *ctx, int *ok) {
   long long val = parse_unary(ctx, ok);
   if (!*ok)
     return 0;
-  while (TRUE) {
+  while (true) {
     skip_spaces_expr(ctx);
     if (*ctx->p == '*') {
       ctx->p++;
@@ -246,7 +244,7 @@ static long long parse_add(ExprParser *ctx, int *ok) {
   long long val = parse_mul(ctx, ok);
   if (!*ok)
     return 0;
-  while (TRUE) {
+  while (true) {
     skip_spaces_expr(ctx);
     if (*ctx->p == '+') {
       ctx->p++;
@@ -270,7 +268,7 @@ static long long parse_shift(ExprParser *ctx, int *ok) {
   long long val = parse_add(ctx, ok);
   if (!*ok)
     return 0;
-  while (TRUE) {
+  while (true) {
     skip_spaces_expr(ctx);
     if (startswith((char *)ctx->p, "<<")) {
       ctx->p += 2;
@@ -294,7 +292,7 @@ static long long parse_relational(ExprParser *ctx, int *ok) {
   long long val = parse_shift(ctx, ok);
   if (!*ok)
     return 0;
-  while (TRUE) {
+  while (true) {
     skip_spaces_expr(ctx);
     if (startswith((char *)ctx->p, "<=")) {
       ctx->p += 2;
@@ -330,7 +328,7 @@ static long long parse_equality(ExprParser *ctx, int *ok) {
   long long val = parse_relational(ctx, ok);
   if (!*ok)
     return 0;
-  while (TRUE) {
+  while (true) {
     skip_spaces_expr(ctx);
     if (startswith((char *)ctx->p, "==")) {
       ctx->p += 2;
@@ -354,7 +352,7 @@ static long long parse_bitand(ExprParser *ctx, int *ok) {
   long long val = parse_equality(ctx, ok);
   if (!*ok)
     return 0;
-  while (TRUE) {
+  while (true) {
     skip_spaces_expr(ctx);
     if (*ctx->p == '&' && ctx->p[1] != '&') {
       ctx->p++;
@@ -372,7 +370,7 @@ static long long parse_bitxor(ExprParser *ctx, int *ok) {
   long long val = parse_bitand(ctx, ok);
   if (!*ok)
     return 0;
-  while (TRUE) {
+  while (true) {
     skip_spaces_expr(ctx);
     if (*ctx->p == '^') {
       ctx->p++;
@@ -390,7 +388,7 @@ static long long parse_bitor(ExprParser *ctx, int *ok) {
   long long val = parse_bitxor(ctx, ok);
   if (!*ok)
     return 0;
-  while (TRUE) {
+  while (true) {
     skip_spaces_expr(ctx);
     if (*ctx->p == '|' && ctx->p[1] != '|') {
       ctx->p++;
@@ -408,7 +406,7 @@ static long long parse_logical_and(ExprParser *ctx, int *ok) {
   long long val = parse_bitor(ctx, ok);
   if (!*ok)
     return 0;
-  while (TRUE) {
+  while (true) {
     skip_spaces_expr(ctx);
     if (startswith((char *)ctx->p, "&&")) {
       ctx->p += 2;
@@ -426,7 +424,7 @@ static long long parse_logical_or(ExprParser *ctx, int *ok) {
   long long val = parse_logical_and(ctx, ok);
   if (!*ok)
     return 0;
-  while (TRUE) {
+  while (true) {
     skip_spaces_expr(ctx);
     if (startswith((char *)ctx->p, "||")) {
       ctx->p += 2;
@@ -453,7 +451,7 @@ static long long parse_conditional(ExprParser *ctx, int *ok) {
     return 0;
   skip_spaces_expr(ctx);
   if (*ctx->p != ':') {
-    *ok = FALSE;
+    *ok = false;
     return 0;
   }
   ctx->p++;
@@ -467,22 +465,22 @@ int preprocess_evaluate_if_expression(char *expr_start, char *expr_end, int *res
   char *trimmed = copy_trim_directive_expr(expr_start, expr_end);
   if (!trimmed[0]) {
     free(trimmed);
-    return FALSE;
+    return false;
   }
   char *expanded = expand_expression_internal(trimmed);
   ExprParser parser;
   parser.p = expanded;
-  int ok = TRUE;
+  int ok = true;
   long long value = parse_conditional(&parser, &ok);
   if (ok) {
     skip_spaces_expr(&parser);
     if (*parser.p != '\0')
-      ok = FALSE;
+      ok = false;
   }
   free(trimmed);
   free(expanded);
   if (!ok)
-    return FALSE;
+    return false;
   *result = (value != 0);
-  return TRUE;
+  return true;
 }

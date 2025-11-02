@@ -1,6 +1,7 @@
 
 #include "lacc.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,8 +27,6 @@ extern Object *enums;
 extern TypeTag *type_tags;
 extern String *strings;
 extern Array *arrays;
-extern const int TRUE;
-extern const int FALSE;
 
 static char *duplicate_cstring(const char *src) {
   int len = strlen(src);
@@ -51,9 +50,9 @@ static char *normalize_include_path(const char *path) {
 static int include_path_exists(const char *path) {
   for (IncludePath *ip = include_paths; ip; ip = ip->next) {
     if (!strcmp(ip->path, path))
-      return TRUE;
+      return true;
   }
-  return FALSE;
+  return false;
 }
 
 static void add_include_path_front(const char *path) {
@@ -91,7 +90,7 @@ int main(int argc, char **argv) {
   init_global_variables();
   input_file = NULL;
   output_file = NULL;
-  int output_file_specified = FALSE;
+  int output_file_specified = false;
 
   if (argc < 2) {
     error("invalid number of arguments.");
@@ -102,7 +101,7 @@ int main(int argc, char **argv) {
       add_include_path_front(argv[++i]);
     } else if (!strncmp(argv[i], "-S", 2)) {
     } else if (!strncmp(argv[i], "-w", 2)) {
-      show_warning = FALSE;
+      show_warning = false;
     } else if (!strncmp(argv[i], "-o", 2) && i + 1 < argc) {
       if (output_file_specified) {
         error("multiple output files specified.");
@@ -110,7 +109,7 @@ int main(int argc, char **argv) {
       if (output_file) {
         free(output_file);
       }
-      output_file_specified = TRUE;
+      output_file_specified = true;
       char *out = argv[++i];
       if (out[0] == '-') {
         error("output file cannot start with '-'.");

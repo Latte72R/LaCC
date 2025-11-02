@@ -1,6 +1,7 @@
 
 #include "lacc.h"
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -12,21 +13,18 @@ extern int array_cnt;
 extern String *strings;
 extern Array *arrays;
 
-extern const int TRUE;
-extern const int FALSE;
-
 int peek(char *op) {
   if (token->kind != TK_RESERVED || strlen(op) != token->len || strncmp(token->str, op, token->len))
-    return FALSE;
-  return TRUE;
+    return false;
+  return true;
 }
 
 int consume(char *op) {
   if (!peek(op))
-    return FALSE;
+    return false;
   consumed_loc = token->loc;
   token = token->next;
-  return TRUE;
+  return true;
 }
 
 Token *consume_ident() {

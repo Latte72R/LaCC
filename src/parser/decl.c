@@ -1,6 +1,7 @@
 
 #include "lacc.h"
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -18,40 +19,37 @@ extern Object *enums;
 extern TypeTag *type_tags;
 extern Location *consumed_loc;
 
-extern const int TRUE;
-extern const int FALSE;
-
 static int has_return_stmt(Node *n) {
   if (!n)
-    return FALSE;
+    return false;
   if (n->kind == ND_RETURN)
-    return TRUE;
+    return true;
 
   // 再帰的に主要フィールドを探索
   if (has_return_stmt(n->lhs))
-    return TRUE;
+    return true;
   if (has_return_stmt(n->rhs))
-    return TRUE;
+    return true;
   if (has_return_stmt(n->cond))
-    return TRUE;
+    return true;
   if (has_return_stmt(n->then))
-    return TRUE;
+    return true;
   if (has_return_stmt(n->els))
-    return TRUE;
+    return true;
   if (has_return_stmt(n->init))
-    return TRUE;
+    return true;
   if (has_return_stmt(n->step))
-    return TRUE;
+    return true;
 
   if (n->kind == ND_BLOCK && n->body) {
     for (int i = 0; n->body[i]; i++) {
       if (n->body[i]->kind == ND_NONE)
         break;
       if (has_return_stmt(n->body[i]))
-        return TRUE;
+        return true;
     }
   }
-  return FALSE;
+  return false;
 }
 
 Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int set_offset) {
@@ -74,7 +72,7 @@ Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int set_of
     arr_node->id = array->id;
     node = new_binary(ND_ASSIGN, node, arr_node);
     node->type = type;
-    node->val = TRUE;
+    node->val = true;
     return node;
   }
 
@@ -88,7 +86,7 @@ Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int set_of
       node->type = type;
       return node;
     }
-    node = assign_sub(node, arr_node, consumed_loc, FALSE);
+    node = assign_sub(node, arr_node, consumed_loc, false);
     node->type = type;
     return node;
   }
@@ -113,9 +111,9 @@ Node *handle_string_initialization(Node *node, Type *type, Location *loc) {
     }
     node = new_binary(ND_ASSIGN, node, string_node);
     node->type = type;
-    node->val = TRUE;
+    node->val = true;
   } else if (type->ty == TY_PTR) {
-    node = assign_sub(node, string_node, loc, FALSE);
+    node = assign_sub(node, string_node, loc, false);
     node->type = type;
   } else {
     error_at(loc, "string literal is only allowed for array or pointer type [in variable declaration]");
@@ -124,7 +122,7 @@ Node *handle_string_initialization(Node *node, Type *type, Location *loc) {
 }
 
 Node *handle_scalar_initialization(Node *node, Type *type, Location *loc) {
-  node = assign_sub(node, expr(), loc, FALSE);
+  node = assign_sub(node, expr(), loc, false);
   node->type = type;
   if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR) {
     node->val = node->lhs->type->ptr_to->ty == TY_CHAR;
@@ -168,7 +166,7 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   fn->offset = 0;
   fn->is_static = is_static;
   fn->type = type;
-  fn->is_defined = FALSE;
+  fn->is_defined = false;
   fn->type_check = !type->is_variadic;
   fn->labels = NULL;
   locals = NULL;
@@ -182,7 +180,7 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
     Type *ptype = type->param_types[i];
     Node *nd_lvar = new_node(ND_LVAR);
     node->args[i] = nd_lvar;
-    LVar *lvar = new_lvar(tok_lvar, ptype, FALSE, FALSE);
+    LVar *lvar = new_lvar(tok_lvar, ptype, false, false);
     int base = 0;
     if (locals)
       base = locals->offset;
@@ -204,11 +202,11 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
     expect(";", "after line", "function definition");
     if (fn->type->param_count == 0) {
       // C99のprototypeでは、引数を省略可能
-      fn->type_check = FALSE;
+      fn->type_check = false;
     }
   } else {
     node->lhs = stmt();
-    fn->is_defined = TRUE;
+    fn->is_defined = true;
 
     if (fn->type->return_type->ty != TY_VOID && strncmp(fn->name, "main", 4) != 0) {
       if (!has_return_stmt(node->lhs)) {
@@ -226,11 +224,11 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
     error_duplicate_name(tok, "local variable declaration");
   }
   Node *node = new_node(ND_VARDEC);
-  lvar = new_lvar(tok, type, is_static, FALSE);
+  lvar = new_lvar(tok, type, is_static, false);
   LVar *static_lvar = NULL;
   if (is_static) {
     lvar->block = block_id;
-    static_lvar = new_lvar(tok, type, TRUE, FALSE);
+    static_lvar = new_lvar(tok, type, true, false);
     static_lvar->block = lvar->block;
     static_lvar->next = statics;
     statics = static_lvar;
@@ -253,7 +251,7 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
   node = handle_variable_initialization(node, lvar, type, is_static);
   if (static_lvar)
     static_lvar->offset = lvar->offset;
-  node->endline = TRUE;
+  node->endline = true;
   return node;
 }
 
@@ -263,15 +261,15 @@ Node *global_variable_declaration(Token *tok, Type *type, int is_static) {
     error_duplicate_name(tok, "global variable declaration");
   }
   Node *node = new_node(ND_GLBDEC);
-  lvar = new_lvar(tok, type, is_static, FALSE);
+  lvar = new_lvar(tok, type, is_static, false);
   lvar->next = globals;
   globals = lvar;
   node->var = lvar;
   node->type = type;
 
   // 要修正
-  node = handle_variable_initialization(node, lvar, type, TRUE);
-  node->endline = TRUE;
+  node = handle_variable_initialization(node, lvar, type, true);
+  node->endline = true;
   return node;
 }
 
@@ -281,19 +279,19 @@ Node *extern_variable_declaration(Token *tok, Type *type) {
   if (lvar) {
     return node;
   }
-  lvar = new_lvar(tok, type, FALSE, TRUE);
+  lvar = new_lvar(tok, type, false, true);
   lvar->next = globals;
   globals = lvar;
   node->var = lvar;
   node->type = type;
-  node->endline = TRUE;
+  node->endline = true;
   return node;
 }
 
 Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   // 変数宣言または関数定義
   Token *prev_tok = token;
-  Type *type = consume_type(FALSE);
+  Type *type = consume_type(false);
 
   Node *node;
   if (consume(";")) {
@@ -303,7 +301,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   }
 
   token = prev_tok;
-  Type *base_type = parse_base_type_internal(TRUE, TRUE);
+  Type *base_type = parse_base_type_internal(true, true);
   // ヘッダ由来の未対応トークンなどで基底型を解釈できない場合、
   // 壊れた状態で進めず式文として扱って安全にエラーへ誘導する
   if (!base_type) {
@@ -338,14 +336,14 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
     fn->offset = 0;
     fn->is_static = is_static;
     fn->type = type;
-    fn->is_defined = FALSE;
+    fn->is_defined = false;
     // パラメータ未指定(例: f();) は型チェックしない
     fn->type_check = (type->param_count != 0) && !type->is_variadic;
     fn->labels = NULL;
 
     Node *node = new_node(ND_EXTERN);
     expect(";", "after line", "function declaration");
-    node->endline = TRUE;
+    node->endline = true;
     return node;
   }
 
@@ -375,7 +373,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
   node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1, &cap);
   node->body[i] = new_node(ND_NONE);
   expect(";", "after line", "variable declaration");
-  node->endline = TRUE;
+  node->endline = true;
 
   return node;
 }
@@ -407,7 +405,7 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
     object = malloc(sizeof(Object));
     register_object(object);
     object->next = NULL;
-    object->is_defined = FALSE;
+    object->is_defined = false;
     object->var = NULL;
     object->size = 0;
     if (tok) {
@@ -430,13 +428,13 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
   if (!peek("{")) {
     return object;
   }
-  object->is_defined = TRUE;
+  object->is_defined = true;
   object->var = NULL;
   int offset = 0;
   int max_size = 0;
   expect("{", "before object members", "object");
   while (!consume("}")) {
-    Type *base_type = parse_base_type_internal(TRUE, TRUE);
+    Type *base_type = parse_base_type_internal(true, true);
     Token *member_tok;
     // 型が解釈できない場合は、安全にセミコロンまで読み飛ばして次へ（システムヘッダ拡張の簡易回避）
     if (!base_type) {
@@ -449,7 +447,7 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
     }
     // 無名メンバ（例: 'union { ... };'）を許容（構造体・共用体型に限る）
     if (base_type && (base_type->ty == TY_STRUCT || base_type->ty == TY_UNION) && peek(";")) {
-      LVar *member_var = new_lvar(NULL, base_type, FALSE, FALSE);
+      LVar *member_var = new_lvar(NULL, base_type, false, false);
       Type *align_type = base_type;
       while (align_type->ty == TY_ARR || align_type->ty == TY_ARGARR)
         align_type = align_type->ptr_to;
@@ -474,7 +472,7 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
     }
     for (;;) {
       Type *type = parse_declarator(base_type, &member_tok, "object member declaration");
-      LVar *member_var = new_lvar(member_tok, type, FALSE, FALSE);
+      LVar *member_var = new_lvar(member_tok, type, false, false);
       member_var->next = object->var;
       object->var = member_var;
 
@@ -533,7 +531,7 @@ Object *enum_declaration(const int should_record) {
     object = malloc(sizeof(Object));
     register_object(object);
     object->next = NULL;
-    object->is_defined = FALSE;
+    object->is_defined = false;
     object->var = NULL;
     if (tok) {
       object->name = tok->str;
@@ -550,24 +548,24 @@ Object *enum_declaration(const int should_record) {
   if (!peek("{")) {
     return object;
   }
-  object->is_defined = TRUE;
+  object->is_defined = true;
 
   int value = 0;
   expect("{", "before enum members", "enum");
   for (;;) {
     Token *member_tok = expect_ident("enum declaration");
-    int assigned = FALSE;
+    int assigned = false;
     int assigned_val = 0;
     if (consume("=")) {
       Node *e = expr();
-      int ok = TRUE;
+      int ok = true;
       assigned_val = eval_const_expr(e, &ok);
       if (!ok) {
         error_at(consumed_loc, "expected a compile time constant [in enum initializer]");
       }
-      assigned = TRUE;
+      assigned = true;
     }
-    LVar *member_var = new_lvar(member_tok, new_type(TY_INT), FALSE, FALSE);
+    LVar *member_var = new_lvar(member_tok, new_type(TY_INT), false, false);
     if (assigned) {
       member_var->offset = assigned_val;
       value = assigned_val + 1;
@@ -593,7 +591,7 @@ Object *enum_declaration(const int should_record) {
 Node *typedef_stmt() {
   token = token->next;
   Node *node;
-  Type *type = consume_type(TRUE);
+  Type *type = consume_type(true);
   node = new_node(ND_TYPEDEF);
   Token *tok;
   type = parse_declarator(type, &tok, "typedef");
@@ -614,6 +612,6 @@ Node *typedef_stmt() {
   tag->next = type_tags;
   type_tags = tag;
   expect(";", "after line", "typedef");
-  node->endline = TRUE;
+  node->endline = true;
   return node;
 }

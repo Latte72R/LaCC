@@ -10,7 +10,7 @@ LaCC is a minimalist C compiler that implements only the core language features 
 
 ### 1. Data Types
 
-- **Primitive**: `int`, `char`, `void`, `unsigned`, `long`, `long long`, `short` 
+- **Primitive**: `int`, `char`, `void`, `unsigned`, `long`, `long long`, `short`, `_Bool`
 - **Derived**: pointer types (`T*`), arrays (`T[]`)  
 - **Composite**: structures (`struct`), unions (`union`), enumerations (`enum`)  
 

@@ -11,9 +11,6 @@ extern Token *token_head;
 extern FileName *filenames;
 extern char *input_file;
 
-extern const int TRUE;
-extern const int FALSE;
-
 Location *new_location(char *loc) {
   Location *location = malloc(sizeof(Location));
   location->loc = loc;

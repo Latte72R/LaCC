@@ -37,9 +37,6 @@ IncludePath *include_paths = 0;
 FILE *fp = 0;
 Macro *macros = 0;
 
-const int TRUE = 1;
-const int FALSE = 0;
-
 void init_global_variables() {
   // グローバル変数の初期化
   current_switch = NULL;

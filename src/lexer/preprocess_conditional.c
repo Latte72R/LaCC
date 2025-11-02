@@ -1,11 +1,9 @@
 #include "lacc.h"
 
 #include <ctype.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-extern const int TRUE;
-extern const int FALSE;
 
 // from preprocess_table.c
 extern Macro *find_macro(char *name, int len);
@@ -67,7 +65,7 @@ int parse_ifdef_directive(char **p) {
     error_at(new_location(rest), "unexpected tokens after identifier in #ifdef");
 
   int ignoring = skip_depth > 0;
-  int cond = FALSE;
+  int cond = false;
   if (!ignoring)
     cond = find_macro(name_start, name_len) != NULL;
 
@@ -76,17 +74,17 @@ int parse_ifdef_directive(char **p) {
     error("memory allocation failed");
   state->prev = if_stack;
   state->start = hash;
-  state->branch_taken = FALSE;
-  state->currently_active = FALSE;
+  state->branch_taken = false;
+  state->currently_active = false;
   state->ignoring = ignoring;
-  state->else_seen = FALSE;
+  state->else_seen = false;
   if_stack = state;
 
   if (state->ignoring || !cond) {
     skip_depth++;
   } else {
-    state->branch_taken = TRUE;
-    state->currently_active = TRUE;
+    state->branch_taken = true;
+    state->currently_active = true;
   }
 
   if (*rest == '\n')
@@ -122,7 +120,7 @@ int parse_ifndef_directive(char **p) {
     error_at(new_location(rest), "unexpected tokens after identifier in #ifndef");
 
   int ignoring = skip_depth > 0;
-  int cond = FALSE;
+  int cond = false;
   if (!ignoring) {
     int macro_defined = find_macro(name_start, name_len) != NULL;
     cond = !macro_defined;
@@ -133,17 +131,17 @@ int parse_ifndef_directive(char **p) {
     error("memory allocation failed");
   state->prev = if_stack;
   state->start = hash;
-  state->branch_taken = FALSE;
-  state->currently_active = FALSE;
+  state->branch_taken = false;
+  state->currently_active = false;
   state->ignoring = ignoring;
-  state->else_seen = FALSE;
+  state->else_seen = false;
   if_stack = state;
 
   if (state->ignoring || !cond) {
     skip_depth++;
   } else {
-    state->branch_taken = TRUE;
-    state->currently_active = TRUE;
+    state->branch_taken = true;
+    state->currently_active = true;
   }
 
   if (*rest == '\n')
@@ -182,7 +180,7 @@ int parse_if_directive(char **p) {
   }
 
   int ignoring = skip_depth > 0;
-  int cond = FALSE;
+  int cond = false;
   if (ignoring) {
     char *trimmed = copy_trim_directive_expr(expr_start, scan);
     if (!trimmed[0]) {
@@ -199,17 +197,17 @@ int parse_if_directive(char **p) {
     error("memory allocation failed");
   state->prev = if_stack;
   state->start = hash;
-  state->branch_taken = FALSE;
-  state->currently_active = FALSE;
+  state->branch_taken = false;
+  state->currently_active = false;
   state->ignoring = ignoring;
-  state->else_seen = FALSE;
+  state->else_seen = false;
   if_stack = state;
 
   if (state->ignoring || !cond) {
     skip_depth++;
   } else {
-    state->branch_taken = TRUE;
-    state->currently_active = TRUE;
+    state->branch_taken = true;
+    state->currently_active = true;
   }
 
   if (*scan == '\n')
@@ -254,7 +252,7 @@ int parse_elif_directive(char **p) {
   }
 
   int should_eval = !state->ignoring && !state->branch_taken;
-  int cond = FALSE;
+  int cond = false;
   if (should_eval && !preprocess_evaluate_if_expression(expr_start, scan, &cond)) {
     error_at(new_location(expr_start), "invalid expression in #elif directive");
   } else if (!should_eval) {
@@ -268,12 +266,12 @@ int parse_elif_directive(char **p) {
 
   if (!state->ignoring) {
     if (state->currently_active) {
-      state->currently_active = FALSE;
+      state->currently_active = false;
       skip_depth++;
     }
     if (!state->branch_taken && cond) {
-      state->branch_taken = TRUE;
-      state->currently_active = TRUE;
+      state->branch_taken = true;
+      state->currently_active = true;
       if (skip_depth <= 0)
         error_at(new_location(hash), "internal error: skip depth underflow");
       skip_depth--;
@@ -308,15 +306,15 @@ int parse_else_directive(char **p) {
   if (*check && *check != '\n')
     error_at(new_location(check), "unexpected tokens after #else");
 
-  state->else_seen = TRUE;
+  state->else_seen = true;
   if (!state->ignoring) {
     if (state->currently_active) {
-      state->currently_active = FALSE;
+      state->currently_active = false;
       skip_depth++;
     }
     if (!state->branch_taken) {
-      state->branch_taken = TRUE;
-      state->currently_active = TRUE;
+      state->branch_taken = true;
+      state->currently_active = true;
       if (skip_depth <= 0)
         error_at(new_location(hash), "internal error: skip depth underflow");
       skip_depth--;

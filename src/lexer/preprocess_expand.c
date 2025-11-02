@@ -1,6 +1,7 @@
 #include "lacc.h"
 
 #include <ctype.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -8,9 +9,6 @@ extern char *user_input;
 extern CharPtrList *user_input_list;
 extern Token *token;
 extern char *input_file;
-
-extern const int TRUE;
-extern const int FALSE;
 
 // Local helpers duplicated from original implementation
 static int is_ident_start_char(char c) { return (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_'); }
@@ -40,7 +38,7 @@ static void append_with_concat(char **buf, int *len, int *cap, const char *text,
       text++;
       text_len--;
     }
-    *pending_concat = FALSE;
+    *pending_concat = false;
   }
   append_text(buf, len, cap, text, text_len);
 }
@@ -89,9 +87,9 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
   if (!buf)
     error("memory allocation failed");
 
-  int in_string = FALSE;
-  int in_char = FALSE;
-  int pending_concat = FALSE;
+  int in_string = false;
+  int in_char = false;
+  int pending_concat = false;
 
   for (char *p = body; *p;) {
     char ch = *p;
@@ -103,7 +101,7 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
         ch = *p;
         append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
       } else if (ch == '"') {
-        in_string = FALSE;
+        in_string = false;
       }
       p++;
       continue;
@@ -116,28 +114,28 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
         ch = *p;
         append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
       } else if (ch == '\'') {
-        in_char = FALSE;
+        in_char = false;
       }
       p++;
       continue;
     }
 
     if (ch == '"') {
-      in_string = TRUE;
+      in_string = true;
       append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
       p++;
       continue;
     }
 
     if (ch == '\'') {
-      in_char = TRUE;
+      in_char = true;
       append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
       p++;
       continue;
     }
 
     if (ch == '#' && *(p + 1) == '#') {
-      pending_concat = TRUE;
+      pending_concat = true;
       p += 2;
       while (isspace((unsigned char)*p))
         p++;
@@ -176,12 +174,12 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
       while (is_ident_char(*p))
         p++;
       int ident_len = (int)(p - start);
-      int replaced = FALSE;
+      int replaced = false;
       for (int i = 0; i < macro->param_count; i++) {
         if ((int)strlen(macro->params[i]) == ident_len && !strncmp(macro->params[i], start, ident_len)) {
           char *arg = args[i] ? args[i] : "";
           append_with_concat(&buf, &len, &cap, arg, (int)strlen(arg), &pending_concat);
-          replaced = TRUE;
+          replaced = true;
           break;
         }
       }
@@ -211,8 +209,8 @@ char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count) 
     error("expected '(' after macro name");
   p++;
   int depth = 1;
-  int in_string = FALSE;
-  int in_char = FALSE;
+  int in_string = false;
+  int in_char = false;
   const char *arg_start = p;
   int arg_cap = macro->param_count > 0 ? macro->param_count : 1;
   char **args = NULL;
@@ -225,7 +223,7 @@ char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count) 
   }
 
   int fixed_params = macro->is_variadic ? (macro->param_count - 1) : macro->param_count;
-  int vararg_mode = FALSE;
+  int vararg_mode = false;
 
   while (*p) {
     char c = *p;
@@ -235,7 +233,7 @@ char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count) 
         continue;
       }
       if (c == '"')
-        in_string = FALSE;
+        in_string = false;
       p++;
       continue;
     }
@@ -245,17 +243,17 @@ char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count) 
         continue;
       }
       if (c == '\'')
-        in_char = FALSE;
+        in_char = false;
       p++;
       continue;
     }
     if (c == '"') {
-      in_string = TRUE;
+      in_string = true;
       p++;
       continue;
     }
     if (c == '\'') {
-      in_char = TRUE;
+      in_char = true;
       p++;
       continue;
     }
@@ -364,7 +362,7 @@ char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count) 
           args[arg_cnt++] = arg;
           p++;
           arg_start = p;
-          vararg_mode = TRUE;
+          vararg_mode = true;
           continue;
         } else {
           // Already in vararg: do not split on commas
@@ -397,7 +395,7 @@ void expand_macro(Macro *macro, char **args, int arg_count) {
   char *saved_input = user_input;
   char *saved_file = input_file;
 
-  macro->is_expanding = TRUE;
+  macro->is_expanding = true;
   char *expanded_input = macro->body;
 
   if (macro->is_function) {
@@ -415,7 +413,7 @@ void expand_macro(Macro *macro, char **args, int arg_count) {
 
   user_input = expanded_input;
   tokenize();
-  macro->is_expanding = FALSE;
+  macro->is_expanding = false;
 
   user_input = saved_input;
   input_file = saved_file;

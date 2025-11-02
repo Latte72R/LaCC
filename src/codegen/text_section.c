@@ -8,9 +8,6 @@ extern LVar *globals;
 extern LVar *statics;
 extern String *strings;
 
-extern const int TRUE;
-extern const int FALSE;
-
 char *regs1[] = {"dil", "sil", "dl", "cl", "r8b", "r9b"};
 char *regs2[] = {"di", "si", "dx", "cx", "r8w", "r9w"};
 char *regs4[] = {"edi", "esi", "edx", "ecx", "r8d", "r9d"};
