@@ -619,6 +619,12 @@ int is_number(Type *type) {
          type->ty == TY_LONGLONG;
 }
 
+int is_enum_type(Type *type) {
+  // このコンパイラでは enum は内部的に TY_INT だが、enum 由来の型は object に対応する enum オブジェクトが入る。
+  // よって TY_INT かつ object != NULL を enum とみなす。
+  return type && type->ty == TY_INT && type->object != NULL;
+}
+
 static int type_rank(Type *type) {
   switch (type->ty) {
   case TY_CHAR:

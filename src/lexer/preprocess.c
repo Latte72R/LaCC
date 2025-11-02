@@ -560,12 +560,16 @@ int parse_define_directive(char **p) {
       cur++;
   }
 
-  int value_cap = 32;
+  int value_cap = 64;
   int value_len = 0;
   char *value = malloc(value_cap);
   if (!value)
     error("memory allocation failed");
+
+  int in_string = FALSE;
+  int in_char = FALSE;
   while (*cur) {
+    // Handle line splicing first (backslash-newline)
     if (*cur == '\\') {
       if (cur[1] == '\n') {
         cur += 2;
@@ -576,8 +580,78 @@ int parse_define_directive(char **p) {
         continue;
       }
     }
-    if (*cur == '\n')
+
+    // End of directive line if not inside a block comment or string/char
+    if (!in_string && !in_char && *cur == '\n')
       break;
+
+    // Skip line comments (//...) to end of physical line
+    if (!in_string && !in_char && startswith(cur, "//")) {
+      while (*cur && *cur != '\n')
+        cur++;
+      break;
+    }
+
+    // Skip block comments and treat them as single space
+    if (!in_string && !in_char && startswith(cur, "/*")) {
+      char *end = strstr(cur + 2, "*/");
+      if (!end)
+        error_at(new_location(cur), "unclosed block comment in #define");
+      // Append a single space to separate tokens if needed
+      if (value_len + 1 >= value_cap) {
+        value_cap *= 2;
+        value = realloc(value, value_cap);
+        if (!value)
+          error("memory allocation failed");
+      }
+      value[value_len++] = ' ';
+      cur = end + 2;
+      continue;
+    }
+
+    // Handle entering/exiting string literal
+    if (!in_char && *cur == '"') {
+      in_string = !in_string;
+      if (value_len + 1 >= value_cap) {
+        value_cap *= 2;
+        value = realloc(value, value_cap);
+        if (!value)
+          error("memory allocation failed");
+      }
+      value[value_len++] = *cur++;
+      continue;
+    }
+    if (!in_string && *cur == '\'') {
+      in_char = !in_char;
+      if (value_len + 1 >= value_cap) {
+        value_cap *= 2;
+        value = realloc(value, value_cap);
+        if (!value)
+          error("memory allocation failed");
+      }
+      value[value_len++] = *cur++;
+      continue;
+    }
+
+    // Inside string/char, handle escapes and copy verbatim
+    if (in_string || in_char) {
+      if (*cur == '\\' && *(cur + 1)) {
+        // Copy escape sequence as-is
+        if (value_len + 2 >= value_cap) {
+          value_cap *= 2;
+          value = realloc(value, value_cap);
+          if (!value)
+            error("memory allocation failed");
+        }
+        value[value_len++] = *cur++;
+        value[value_len++] = *cur++;
+        continue;
+      }
+      if ((in_string && *cur == '"') || (in_char && *cur == '\'')) {
+        // Toggle state will be handled above on next iteration; just fall through
+      }
+    }
+
     if (value_len + 1 >= value_cap) {
       value_cap *= 2;
       value = realloc(value, value_cap);

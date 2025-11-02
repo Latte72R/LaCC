@@ -19,6 +19,39 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
+static int has_return_stmt(Node *n) {
+  if (!n)
+    return FALSE;
+  if (n->kind == ND_RETURN)
+    return TRUE;
+
+  // 再帰的に主要フィールドを探索
+  if (has_return_stmt(n->lhs))
+    return TRUE;
+  if (has_return_stmt(n->rhs))
+    return TRUE;
+  if (has_return_stmt(n->cond))
+    return TRUE;
+  if (has_return_stmt(n->then))
+    return TRUE;
+  if (has_return_stmt(n->els))
+    return TRUE;
+  if (has_return_stmt(n->init))
+    return TRUE;
+  if (has_return_stmt(n->step))
+    return TRUE;
+
+  if (n->kind == ND_BLOCK && n->body) {
+    for (int i = 0; n->body[i]; i++) {
+      if (n->body[i]->kind == ND_NONE)
+        break;
+      if (has_return_stmt(n->body[i]))
+        return TRUE;
+    }
+  }
+  return FALSE;
+}
+
 Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int set_offset) {
   Array *array = array_literal(type);
   if (type->ty == TY_ARR) {
@@ -174,6 +207,12 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   } else {
     node->lhs = stmt();
     fn->is_defined = TRUE;
+
+    if (fn->type->return_type->ty != TY_VOID && strncmp(fn->name, "main", 4) != 0) {
+      if (!has_return_stmt(node->lhs)) {
+        error_at(tok->loc, "non-void function must return a value [in function definition]");
+      }
+    }
   }
   current_fn = prev_fn;
   return node;

@@ -1820,6 +1820,32 @@ int test205() { // 代入
   return 0;
 }
 
+// 整数リテラル接尾辞のテスト群
+int test206() {
+  // sizeof の違い: 1(int)=4, 1L(long)=8, 1LL(long long)=8 (LP64)
+  return sizeof(1) + sizeof(1L) + sizeof(1LL); // 4 + 8 + 8 = 20
+}
+
+int test207() {
+  // unsigned リテラルにより右シフトが論理シフトになる
+  return ((1u << 31) >> 31); // 1
+}
+
+int test208() {
+  // U 接尾辞の sizeof は unsigned int だがサイズは int と同じ 4 (LP64)
+  return sizeof(1U); // 4
+}
+
+int test209() {
+  // 符号混在比較: -1 < 1u は偽 (0)
+  return (-1 < 1u);
+}
+
+int test210() {
+  // ULL 接尾辞: long long として扱うので 8 (LP64)
+  return sizeof(1ULL); // 8
+}
+
 int test_cnt = 0;
 void check(int result, int id, int ans) {
   test_cnt++;
@@ -2035,6 +2061,11 @@ int main() {
   check(test202(), 202, 0);
   check(test203(), 203, 20);
   check(test204(), 204, 5);
+  check(test206(), 206, 20);
+  check(test207(), 207, 1);
+  check(test208(), 208, 4);
+  check(test209(), 209, 0);
+  check(test210(), 210, 8);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

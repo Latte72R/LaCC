@@ -4,7 +4,7 @@ TEST_DIR:=./tests
 EXAMPLE_DIR:=./examples
 BUILD_DIR:=./build
 CC_FLAGS_1:=-std=c99 -I $(INCLUDE_DIR) -w
-CC_FLAGS_2:=-std=c99 -w
+CC_FLAGS_2:=-std=c99
 CC_FLAGS_3:=-std=c99 -I $(INCLUDE_DIR) \
 	-O0 -w -g -fsanitize=address,undefined -fno-omit-frame-pointer
 CC_FLAGS:=$(CC_FLAGS_1)
