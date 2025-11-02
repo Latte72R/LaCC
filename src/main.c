@@ -26,6 +26,64 @@ extern const int TRUE;
 extern const int FALSE;
 extern void *NULL;
 
+static char *duplicate_cstring(const char *src) {
+  int len = strlen(src);
+  char *copy = malloc(len + 1);
+  if (!copy)
+    error("memory allocation failed");
+  memcpy(copy, src, len + 1);
+  return copy;
+}
+
+static char *normalize_include_path(const char *path) {
+  char *copy = duplicate_cstring(path);
+  int len = strlen(copy);
+  while (len > 1 && copy[len - 1] == '/') {
+    copy[len - 1] = '\0';
+    len--;
+  }
+  return copy;
+}
+
+static int include_path_exists(const char *path) {
+  for (IncludePath *ip = include_paths; ip; ip = ip->next) {
+    if (!strcmp(ip->path, path))
+      return TRUE;
+  }
+  return FALSE;
+}
+
+static void add_include_path_front(const char *path) {
+  char *normalized = normalize_include_path(path);
+  IncludePath *ip = malloc(sizeof *ip);
+  if (!ip)
+    error("memory allocation failed");
+  ip->path = normalized;
+  ip->next = include_paths;
+  include_paths = ip;
+}
+
+static void append_include_path_if_absent(const char *path) {
+  char *normalized = normalize_include_path(path);
+  if (include_path_exists(normalized)) {
+    free(normalized);
+    return;
+  }
+  IncludePath *ip = malloc(sizeof *ip);
+  if (!ip)
+    error("memory allocation failed");
+  ip->path = normalized;
+  ip->next = NULL;
+  if (!include_paths) {
+    include_paths = ip;
+    return;
+  }
+  IncludePath *tail = include_paths;
+  while (tail->next)
+    tail = tail->next;
+  tail->next = ip;
+}
+
 int main(int argc, char **argv) {
   init_global_variables();
   input_file = NULL;
@@ -38,10 +96,7 @@ int main(int argc, char **argv) {
 
   for (int i = 1; i < argc; i++) {
     if (!strncmp(argv[i], "-I", 2) && i + 1 < argc) {
-      IncludePath *ip = malloc(sizeof *ip);
-      ip->path = argv[++i]; // "./include" など
-      ip->next = include_paths;
-      include_paths = ip;
+      add_include_path_front(argv[++i]);
     } else if (!strncmp(argv[i], "-S", 2)) {
     } else if (!strncmp(argv[i], "-w", 2)) {
       show_warning = FALSE;
@@ -91,6 +146,12 @@ int main(int argc, char **argv) {
       }
     }
   }
+
+  append_include_path_if_absent("/usr/lib/gcc/x86_64-linux-gnu/13/include");
+  append_include_path_if_absent("/usr/include/x86_64-linux-gnu");
+  append_include_path_if_absent("/usr/include");
+
+  preprocess_initialize_builtins();
 
   // トークナイズしてパースする
   // 結果はcodeに保存される

@@ -47,14 +47,18 @@ Both global and local (stack) variable declarations are supported.
 ### 6. Others
 
 - **Include directive** (with limitations)  
-  LaCC can process `#include` statements with double quotes like `#include "lacc.h"`, 
-  but it does not support the standard library headers like `<stdio.h>` in the traditional sense.
+  LaCC can process `#include` statements with double quotes (e.g., `#include "foo.h"`) and with angle brackets (e.g., `#include <bar.h>`).  
+  Quoted includes first look relative to the including file, while angle brackets search configured include paths.  
+  `/usr/include` and `/usr/include/x86_64-linux-gnu` are added automatically, but many system headers still rely on unsupported language features.
 
 - **Preprocessor macros**  
   Object-like and function-like `#define` directives (including `#` stringizing and `##` token pasting) are expanded during tokenization.
 
 - **Preprocessor conditionals**  
   Conditional compilation with `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else`, and `#endif` is supported, along with `#undef` for removing macro definitions.
+
+- **Built-in predefined macros**  
+  `__LACC__`, `__x86_64__`, and `__LP64__` are defined to `1` so typical Unix headers can detect the environment.
 
 - **Initializer lists for arrays** (with limitations)  
   1. **Array initialization with a list of values:**  

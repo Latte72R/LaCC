@@ -31,22 +31,77 @@ char *read_file(char *path) {
   return buf;
 }
 
-char *read_include_file(char *name) {
-  // まずは指定された名前のファイルを直接試す
-  char *src = read_file(name);
+static char *duplicate_cstring(const char *src) {
+  int len = strlen(src);
+  char *copy = malloc(len + 1);
+  if (!copy)
+    error("memory allocation failed");
+  memcpy(copy, src, len + 1);
+  return copy;
+}
+
+static char *join_paths(const char *dir, const char *name) {
+  if (!dir || !dir[0])
+    return duplicate_cstring(name);
+  int need_sep = dir[strlen(dir) - 1] == '/' ? 0 : 1;
+  int len = strlen(dir) + need_sep + strlen(name) + 1;
+  char *full = malloc(len);
+  if (!full)
+    error("memory allocation failed");
+  if (need_sep)
+    snprintf(full, len, "%s/%s", dir, name);
+  else
+    snprintf(full, len, "%s%s", dir, name);
+  return full;
+}
+
+static char *try_read_path(const char *path, char **resolved_name) {
+  char *src = read_file((char *)path);
+  if (src && resolved_name) {
+    *resolved_name = duplicate_cstring(path);
+  }
+  return src;
+}
+
+char *read_include_file(char *name, const char *including_file, int is_system, char **resolved_name) {
+  if (resolved_name)
+    *resolved_name = NULL;
+
+  char *src = NULL;
+
+  if (!is_system && including_file && name[0] != '\0' && name[0] != '/') {
+    const char *slash = strrchr(including_file, '/');
+    if (slash) {
+      int dir_len = slash - including_file;
+      char *dir;
+      if (dir_len <= 0) {
+        dir = duplicate_cstring("/");
+      } else {
+        dir = malloc(dir_len + 1);
+        if (!dir)
+          error("memory allocation failed");
+        memcpy(dir, including_file, dir_len);
+        dir[dir_len] = '\0';
+      }
+      char *full = join_paths(dir, name);
+      free(dir);
+      src = try_read_path(full, resolved_name);
+      free(full);
+      if (src)
+        return src;
+    }
+  }
+
+  src = try_read_path(name, resolved_name);
   if (src)
     return src;
 
-  // 見つからなければ登録されたインクルードパスを順番に探索
   for (IncludePath *path = include_paths; path; path = path->next) {
-    int len = strlen(path->path) + strlen(name) + 2;
-    // ディレクトリとファイル名を結合して完全パスを作成
-    char *full = malloc(len);
-    snprintf(full, len, "%s/%s", path->path, name);
-    src = read_file(full); // 生成したパスでファイルを読み込む
+    char *full = join_paths(path->path, name);
+    src = try_read_path(full, resolved_name);
     free(full);
     if (src)
-      return src; // 最初に見つかったものを返す
+      return src;
   }
-  return NULL; // どのパスにも存在しない
+  return NULL;
 }
