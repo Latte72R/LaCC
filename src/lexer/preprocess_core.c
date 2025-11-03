@@ -260,6 +260,7 @@ void preprocess_initialize_builtins(void) {
 #endif
   define_builtin_object_macro("__x86_64__", "1");
   define_builtin_object_macro("__unix__", "1");
+  define_builtin_object_macro("__GNUC__", "4");
 
   // 型同定マクロ（LP64）
   define_builtin_object_macro("__LP64__", "1");
@@ -300,12 +301,11 @@ void preprocess_initialize_builtins(void) {
   // Drop C99 qualifiers for our simple type system
   define_builtin_function_macro("__attribute__", 1, "");
   define_builtin_function_macro("__nonnull", 1, "");
-  define_builtin_function_macro("__asm", 1, "asm");
-  define_builtin_function_macro("__asm__", 1, "asm");
-  define_builtin_function_macro("asm", 1, "");
+  define_builtin_function_macro("__asm", 1, "");
+  define_builtin_function_macro("__asm__", 1, "");
   define_builtin_object_macro("__volatile__", "");
-  define_builtin_object_macro("__restrict", "restrict");
-  define_builtin_object_macro("__restrict__", "restrict");
+  define_builtin_object_macro("__restrict", "");
+  define_builtin_object_macro("__restrict__", "");
   define_builtin_object_macro("restrict", "");
   define_builtin_object_macro("__inline", "inline");
   define_builtin_object_macro("__inline__", "inline");
