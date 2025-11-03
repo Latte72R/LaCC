@@ -552,7 +552,8 @@ static int parse_identifier(char **p) {
         while (isspace((unsigned char)*pos))
           pos++;
         *p = (char *)pos;
-        expand_macro(macro, args, arg_cnt);
+        int invocation_line = get_line_number(start);
+        expand_macro(macro, args, arg_cnt, invocation_line);
         if (args) {
           for (int i = 0; i < arg_cnt; i++)
             free(args[i]);
@@ -564,7 +565,8 @@ static int parse_identifier(char **p) {
       }
     } else if (macro && !macro->is_expanding) {
       *p = cur;
-      expand_macro(macro, NULL, 0);
+      int invocation_line = get_line_number(start);
+      expand_macro(macro, NULL, 0, invocation_line);
       return 1;
     }
 

@@ -58,7 +58,9 @@ static void handle_include_directive(char *name, char *p, int is_system_header) 
   user_input_list->next = user_input_list_prev;
 
   user_input = new_input;
+  push_input_context(new_input, input_file, 0);
   tokenize();
+  pop_input_context();
 
   user_input = user_input_prev;
   input_file = input_file_prev;
@@ -103,7 +105,9 @@ static void handle_include_next_directive(char *name, char *p) {
   user_input_list->next = user_input_list_prev;
 
   user_input = new_input;
+  push_input_context(new_input, input_file, 0);
   tokenize();
+  pop_input_context();
 
   user_input = user_input_prev;
   input_file = input_file_prev;

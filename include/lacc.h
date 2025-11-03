@@ -37,10 +37,22 @@ struct IncludePath {
   IncludePath *next;
 };
 
+typedef struct InputContext InputContext;
+struct InputContext {
+  InputContext *prev;
+  char *input;
+  char *path;
+  int line_offset;
+};
+
 typedef struct {
   char *path;
   char *loc;
   char *input;
+  const char *line_start;
+  const char *line_end;
+  int line;
+  int column;
 } Location;
 
 //
@@ -284,7 +296,7 @@ int preprocess_is_skipping(void);
 void preprocess_check_unterminated_ifs(void);
 void preprocess_initialize_builtins(void);
 Macro *find_macro(char *name, int len);
-void expand_macro(Macro *macro, char **args, int arg_count);
+void expand_macro(Macro *macro, char **args, int arg_count, int invocation_line);
 char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count);
 
 // token_parser.c からエクスポートする関数
@@ -549,6 +561,11 @@ void free_all_strings();
 void free_all_filenames();
 void free_all_arrays();
 void free_all_include_paths();
+
+// input context helpers (lexer.c)
+void push_input_context(char *input, char *path, int line_offset);
+void pop_input_context(void);
+int get_line_number(char *pos);
 
 //
 // Extensions

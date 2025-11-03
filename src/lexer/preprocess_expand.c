@@ -412,7 +412,7 @@ char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count) 
   return args;
 }
 
-void expand_macro(Macro *macro, char **args, int arg_count) {
+void expand_macro(Macro *macro, char **args, int arg_count, int invocation_line) {
   if (!macro) {
     return;
   }
@@ -442,7 +442,9 @@ void expand_macro(Macro *macro, char **args, int arg_count) {
   }
 
   user_input = expanded_input;
+  push_input_context(expanded_input, saved_file, invocation_line > 0 ? invocation_line - 1 : 0);
   tokenize();
+  pop_input_context();
   macro->is_expanding = false;
 
   user_input = saved_input;

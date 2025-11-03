@@ -59,7 +59,7 @@
 #include <mqueue.h>
 #include <poll.h>
 #include <pwd.h>
-#include <regex.h>
+// #include <regex.h>
 #include <semaphore.h>
 #include <spawn.h>
 #include <sys/file.h>

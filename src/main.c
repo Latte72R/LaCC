@@ -182,7 +182,9 @@ int main(int argc, char **argv) {
   user_input_list->str = user_input;
   user_input_list->next = NULL;
 
+  push_input_context(user_input, input_file, 0);
   tokenize();
+  pop_input_context();
   new_token(TK_EOF, NULL, NULL, 0);
   token = token_head;
 
