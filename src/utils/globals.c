@@ -10,6 +10,7 @@ Token *token_head = 0;
 Node **code = 0;
 int label_cnt = 0;
 int array_cnt = 0;
+int struct_literal_cnt = 0;
 int loop_id = -1;
 int variable_cnt = 0;
 int block_cnt = 0;
@@ -26,6 +27,7 @@ Object *enums = 0;
 TypeTag *type_tags = 0;
 String *strings = 0;
 Array *arrays = 0;
+StructLiteral *struct_literals = 0;
 FileName *filenames = 0;
 char *input_file = 0;
 char *output_file = 0;
@@ -56,10 +58,15 @@ void init_global_variables() {
   statics = NULL;
   strings = NULL;
   arrays = NULL;
+  struct_literals = NULL;
   token = NULL;
   token_head = NULL;
   include_paths = NULL;
   macros = NULL;
+
+  label_cnt = 0;
+  array_cnt = 0;
+  struct_literal_cnt = 0;
 
   // fileポインタの初期化
   fp = NULL;

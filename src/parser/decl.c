@@ -130,6 +130,24 @@ Node *handle_scalar_initialization(Node *node, Type *type, Location *loc) {
   return node;
 }
 
+Node *handle_struct_initialization(Node *node, LVar *lvar, Type *type, int set_offset) {
+  StructLiteral *literal = struct_literal(type);
+  if (set_offset) {
+    if (lvar)
+      lvar->init_struct = literal;
+    node->type = type;
+    return node;
+  }
+  literal->needs_label = TRUE;
+  Node *struct_node = new_node(ND_STRUCT_LITERAL);
+  struct_node->type = type;
+  struct_node->id = literal->id;
+  node = new_binary(ND_ASSIGN, node, struct_node);
+  node->type = type;
+  node->val = TRUE;
+  return node;
+}
+
 // 変数初期化の共通処理
 Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int set_offset) {
   if (!consume("=")) {
@@ -143,7 +161,11 @@ Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int set
     return node;
   }
   if (peek("{")) {
-    node = handle_array_initialization(node, lvar, type, set_offset);
+    if (type->ty == TY_STRUCT || type->ty == TY_UNION) {
+      node = handle_struct_initialization(node, lvar, type, set_offset);
+    } else {
+      node = handle_array_initialization(node, lvar, type, set_offset);
+    }
   } else if (token->kind == TK_STRING) {
     node = handle_string_initialization(node, type, loc);
   } else {

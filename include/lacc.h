@@ -89,6 +89,15 @@ struct Array {
   int id;
 };
 
+typedef struct StructLiteral StructLiteral;
+struct StructLiteral {
+  StructLiteral *next;
+  unsigned char *data;
+  int size;
+  int id;
+  int needs_label;
+};
+
 typedef enum {
   TY_NONE,
   TY_INT,
@@ -140,6 +149,7 @@ struct LVar {
   int is_static;     // staticかどうか
   int block;         // ブロックのID
   Array *init_array; // 静的記憶域期間の配列初期化データ
+  StructLiteral *init_struct; // 静的記憶域期間の構造体初期化データ
 };
 
 typedef struct LVarList LVarList;
@@ -302,6 +312,7 @@ typedef enum {
   ND_ENUM,     // 列挙体
   ND_UNION,    // union
   ND_STRUCT,   // 構造体
+  ND_STRUCT_LITERAL, // 構造体リテラル
   ND_TYPEDEF,  // typedef
   ND_TYPE,     // 型
   ND_TYPECAST  // 型キャスト
@@ -374,6 +385,7 @@ int parse_sign();
 int expect_signed_number();
 String *string_literal();
 Array *array_literal(Type *org_type);
+StructLiteral *struct_literal(Type *type);
 
 // type.c
 Type *parse_base_type_internal(int should_consume, int should_record);

@@ -6,8 +6,15 @@ extern Node **code;
 extern Location *consumed_loc;
 extern int label_cnt;
 extern int array_cnt;
+extern int struct_literal_cnt;
 extern String *strings;
 extern Array *arrays;
+extern StructLiteral *struct_literals;
+
+static void zero_bytes(unsigned char *buffer, int size) {
+  for (int i = 0; i < size; i++)
+    buffer[i] = 0;
+}
 
 extern const int TRUE;
 extern const int FALSE;
@@ -214,6 +221,123 @@ Array *array_literal(Type *type) {
   array->len = idx;
   array->init = idx;
   return array;
+}
+
+static void store_scalar_bytes(Type *type, unsigned char *buffer, int offset, long long value) {
+  int size = get_sizeof(type);
+  unsigned long long v = (unsigned long long)value;
+  for (int i = 0; i < size; i++)
+    buffer[offset + i] = (unsigned char)((v >> (8 * i)) & 0xFF);
+}
+
+static void parse_array_member_initializer(Type *type, unsigned char *buffer) {
+  int size = get_sizeof(type);
+  zero_bytes(buffer, size);
+  Type *elem = type->ptr_to;
+  if (!elem) {
+    error_at(token->loc, "array element type is undefined [in struct initializer]");
+  }
+  if (elem->ty == TY_STRUCT || elem->ty == TY_UNION || elem->ty == TY_ARR) {
+    error_at(token->loc, "nested aggregate initializers are not supported for array members [in struct initializer]");
+  }
+
+  int elem_size = get_sizeof(elem);
+  int count = type->array_size;
+
+  if (elem->ty == TY_CHAR && token->kind == TK_STRING) {
+    Token *tok = token;
+    consumed_loc = tok->loc;
+    String *str = string_literal();
+    int copy_len = str->len;
+    if (count && copy_len > count) {
+      warning_at(tok->loc, "initializer-string for char array member is too long [in struct initializer]");
+      copy_len = count;
+    }
+    for (int i = 0; i < copy_len && i < size; i++)
+      buffer[i] = (unsigned char)str->text[i];
+    return;
+  }
+
+  expect("{", "before array initializer", "struct initializer");
+  int idx = 0;
+  while (!peek("}")) {
+    Location *value_loc = token->loc;
+    long long value = expect_signed_number();
+    if (idx < count)
+      store_scalar_bytes(elem, buffer, idx * elem_size, value);
+    else
+      warning_at(value_loc, "excess elements in array member initializer [in struct initializer]");
+    idx++;
+    if (!consume(","))
+      break;
+    if (peek("}"))
+      break;
+  }
+  expect("}", "after array initializer", "struct initializer");
+}
+
+static void parse_struct_or_union_initializer(Type *type, unsigned char *buffer);
+
+static void parse_member_initializer(Type *type, unsigned char *buffer) {
+  if (type->ty == TY_STRUCT || type->ty == TY_UNION) {
+    if (!peek("{"))
+      error_at(token->loc, "expected '{' for aggregate member initializer [in struct initializer]");
+    parse_struct_or_union_initializer(type, buffer);
+    return;
+  }
+  if (type->ty == TY_ARR) {
+    parse_array_member_initializer(type, buffer);
+    return;
+  }
+
+  Location *value_loc = token->loc;
+  long long value = expect_signed_number();
+  store_scalar_bytes(type, buffer, 0, value);
+  (void)value_loc;
+}
+
+static void parse_struct_or_union_initializer(Type *type, unsigned char *buffer) {
+  int size = get_sizeof(type);
+  zero_bytes(buffer, size);
+  expect("{", "before struct initializer", "struct initializer");
+  if (peek("}")) {
+    token = token->next;
+    return;
+  }
+  for (;;) {
+    expect(".", "before member designator", "struct initializer");
+    Token *member_tok = expect_ident("struct initializer");
+    if (!type->object) {
+      error_at(member_tok->loc, "incomplete type cannot be initialized [in struct initializer]");
+    }
+    LVar *member = find_object_member(type->object, member_tok);
+    if (!member) {
+      error_at(member_tok->loc, "unknown member '%.*s' in initializer [in struct initializer]", member_tok->len,
+               member_tok->str);
+    }
+    expect("=", "after member designator", "struct initializer");
+    parse_member_initializer(member->type, buffer + member->offset);
+    if (!consume(","))
+      break;
+    if (peek("}"))
+      break;
+  }
+  expect("}", "after struct initializer", "struct initializer");
+}
+
+StructLiteral *struct_literal(Type *type) {
+  if (type->ty != TY_STRUCT && type->ty != TY_UNION) {
+    error_at(token->loc, "initializer applies to non-aggregate type [in struct literal]");
+  }
+  StructLiteral *literal = malloc(sizeof(StructLiteral));
+  literal->id = struct_literal_cnt++;
+  literal->size = get_sizeof(type);
+  literal->data = calloc(literal->size, sizeof(unsigned char));
+  literal->needs_label = FALSE;
+  literal->next = struct_literals;
+  struct_literals = literal;
+  parse_struct_or_union_initializer(type, literal->data);
+  return literal;
 }
 
 String *string_literal() {
