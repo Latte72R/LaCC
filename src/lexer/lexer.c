@@ -16,6 +16,7 @@ Location *new_location(char *loc) {
   location->loc = loc;
   location->path = input_file;
   location->input = user_input;
+  register_location(location);
   return location;
 }
 

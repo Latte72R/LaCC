@@ -184,6 +184,7 @@ int main(int argc, char **argv) {
 
   free_all_tokens();
   free_all_macros();
+  free_all_locations();
 
   generate_assembly();
 

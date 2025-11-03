@@ -497,6 +497,8 @@ void free_all_types();
 void register_char_ptr(char *str);
 void update_char_ptr(char *old_ptr, char *new_ptr);
 void free_all_char_ptrs();
+void register_location(Location *loc);
+void free_all_locations();
 void register_object(Object *object);
 void free_all_objects();
 void free_all_functions();

@@ -35,7 +35,6 @@ void free_all_tokens() {
   Token *cur = token_head;
   while (cur) {
     Token *next = cur->next;
-    free(cur->loc);
     free(cur);
     cur = next;
   }
@@ -98,6 +97,32 @@ void free_all_char_ptrs() {
   char_ptr_list = NULL;
 }
 
+typedef struct LocationList LocationList;
+struct LocationList {
+  LocationList *next;
+  Location *loc;
+};
+
+static LocationList *location_list = 0;
+
+void register_location(Location *loc) {
+  LocationList *ll = malloc(sizeof(LocationList));
+  ll->loc = loc;
+  ll->next = location_list;
+  location_list = ll;
+}
+
+void free_all_locations() {
+  LocationList *ll = location_list;
+  while (ll) {
+    LocationList *next = ll->next;
+    free(ll->loc);
+    free(ll);
+    ll = next;
+  }
+  location_list = NULL;
+}
+
 static LVarList *lvar_list = 0;
 
 void register_lvar(LVar *var) {
@@ -151,11 +176,14 @@ void free_all_objects() {
   ObjectList *ol = object_list;
   while (ol) {
     ObjectList *next = ol->next;
-    // temp skip object free
+    free(ol->object);
     free(ol);
     ol = next;
   }
   object_list = NULL;
+  structs = NULL;
+  unions = NULL;
+  enums = NULL;
 }
 
 static void free_labels(Label *label) {
