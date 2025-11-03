@@ -142,13 +142,13 @@ Node *handle_struct_initialization(Node *node, LVar *lvar, Type *type, int set_o
     node->type = type;
     return node;
   }
-  literal->needs_label = TRUE;
+  literal->needs_label = true;
   Node *struct_node = new_node(ND_STRUCT_LITERAL);
   struct_node->type = type;
   struct_node->id = literal->id;
   node = new_binary(ND_ASSIGN, node, struct_node);
   node->type = type;
-  node->val = TRUE;
+  node->val = true;
   return node;
 }
 

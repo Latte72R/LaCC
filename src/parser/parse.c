@@ -340,7 +340,7 @@ StructLiteral *struct_literal(Type *type) {
   literal->id = struct_literal_cnt++;
   literal->size = get_sizeof(type);
   literal->data = calloc(literal->size, sizeof(unsigned char));
-  literal->needs_label = FALSE;
+  literal->needs_label = false;
   literal->next = struct_literals;
   struct_literals = literal;
   parse_struct_or_union_initializer(type, literal->data);
