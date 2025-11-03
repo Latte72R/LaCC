@@ -33,7 +33,7 @@
 #include <fenv.h>
 #include <float.h>
 #include <iso646.h>
-// #include <math.h>
+#include <math.h>
 #include <stdalign.h>
 // #include <stdatomic.h>
 #include <stdnoreturn.h>

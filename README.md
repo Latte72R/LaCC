@@ -52,13 +52,14 @@ Both global and local (stack) variable declarations are supported.
   `/usr/include` and `/usr/include/x86_64-linux-gnu` are added automatically, but many system headers still rely on unsupported language features.
 
 - **Preprocessor macros**  
-  Object-like and function-like `#define` directives (including `#` stringizing and `##` token pasting) are expanded during tokenization.
+  Object-like and function-like `#define` directives (including `#` stringizing and `##` token pasting) are expanded during tokenization.  
+  Diagnostics that originate inside macro expansions point back to the original file/line so complex headers remain debuggable.
 
 - **Preprocessor conditionals**  
   Conditional compilation with `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else`, and `#endif` is supported, along with `#undef` for removing macro definitions.
 
 - **Built-in predefined macros**  
-  `__LACC__`, `__x86_64__`, and `__LP64__` are defined to `1` so typical Unix headers can detect the environment.
+  `__LACC__`, `__x86_64__`, `__LP64__`, , and a handful of compat aliases are defined so typical Unix headers can detect the environment.
 
 - **Initializer lists for arrays and structs** (with limitations)  
   1. **Array initialization with a list of integer constants:**  
@@ -77,7 +78,7 @@ Both global and local (stack) variable declarations are supported.
 - **Typedef support**  
   LaCC supports the `typedef` keyword for creating type aliases.
 
-- **Type qualifiers & storage-class specifiers:** `const`, `volatile`, `static`
+- **Type qualifiers & storage-class specifiers:** `const`, `volatile`, `static`, and pointer-only qualifiers seen in system headers (`restrict`, `_Nullable`, `_Nonnull`, `__strong`, etc.) are parsed and safely ignored.
 
 - **`goto` statement and labels**  
   LaCC supports `goto` statements and label definitions, allowing for non-linear control flow.
@@ -85,7 +86,13 @@ Both global and local (stack) variable declarations are supported.
 - **Struct and Union member access**  
   Both dot notation (`.`) for direct access and arrow notation (`->`) for pointer access are supported.
 
+- **Struct/union bit-fields**  
+  C-style bit-field declarations (with optional zero-width separators and unnamed fields) are parsed and contribute to layout checks. Code-gen still treats them as opaque aggregates.
+
 - **Binary and Hexadecimal numbers:** `0b001011` or `0xFF2A`
+
+- **Inline Assembly passthrough**  
+  `__asm__`, and variants with `volatile`/clobber lists are recognized and skipped, allowing headers that embed inline assembly to preprocess successfully (no assembly is emitted by LaCC).
 
 - **Comment support**
   ```c
