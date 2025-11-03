@@ -46,7 +46,7 @@ Both global and local (stack) variable declarations are supported.
 
 ### 6. Others
 
-- **Include directive** (with limitations)  
+- **Include directive**
   LaCC can process `#include` statements with double quotes (e.g., `#include "foo.h"`) and with angle brackets (e.g., `#include <bar.h>`).  
   Quoted includes first look relative to the including file, while angle brackets search configured include paths.  
   `/usr/include` and `/usr/include/x86_64-linux-gnu` are added automatically, but many system headers still rely on unsupported language features.
@@ -60,14 +60,16 @@ Both global and local (stack) variable declarations are supported.
 - **Built-in predefined macros**  
   `__LACC__`, `__x86_64__`, and `__LP64__` are defined to `1` so typical Unix headers can detect the environment.
 
-- **Initializer lists for arrays** (with limitations)  
-  1. **Array initialization with a list of values:**  
+- **Initializer lists for arrays and structs** (with limitations)  
+  1. **Array initialization with a list of integer constants:**  
      `int arr[3] = {3, 6, 2};`
   2. **String literal initialization for character arrays:**  
      `char str[15] = "Hello, World!\n";`  
+  3. **Designated initializers for structs/unions:**  
+     `struct AB v = {.a = 1, .b = 2};`
   
-  The initializer list can **only** contain numeric literals, 
-  and there's **no** support for nested initializer lists.
+  Initializer expressions must currently be integer constants (or string literals for `char[]`).
+  Nested array initializers beyond a single level are not supported.
 
 - **Extern declarations**  
   LaCC supports external variable declarations with basic types, pointers, and arrays.
@@ -115,11 +117,10 @@ Full floating-point semantics (dedicated `TY_FLOAT` / `TY_DOUBLE`, arithmetic, a
 
 LaCC does **not** support the following:
 
- - Floating-point operations: while `float` and `double` are recognized for parsing and `sizeof`, arithmetic and codegen are not implemented
-- No initializer lists for structs (e.g.,  `struct AB p = {.a = 1, .b = 2};`)  
+- Floating-point operations: while `float` and `double` are recognized for parsing and `sizeof`, arithmetic and codegen are not implemented
+- Initializer lists do not yet support deeply nested array initializers  
 - Inline assembly  
 - Variadic functions (macros such as `va_list`, `va_start`, and `va_arg` are not supported)  
-- The comma operator
 - Nested functions (functions defined within other functions) 
 - Variable Length Arrays (VLAs)
 

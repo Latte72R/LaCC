@@ -303,6 +303,11 @@ void gen(Node *node) {
     if (!node->endline)
       write_file("  push rax\n");
     break;
+  case ND_STRUCT_LITERAL:
+    write_file("  lea rax, [rip + .L.struct%d]\n", node->id);
+    if (!node->endline)
+      write_file("  push rax\n");
+    break;
   case ND_FUNCNAME:
     write_file("  lea rax, %.*s[rip]\n", node->fn->len, node->fn->name);
     if (!node->endline)

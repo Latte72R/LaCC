@@ -6,6 +6,7 @@ extern LVar *globals;
 extern LVar *statics;
 extern String *strings;
 extern Array *arrays;
+extern StructLiteral *struct_literals;
 
 static void write_array_data(Array *arr) {
   for (int i = 0; i < arr->len; i++) {
@@ -35,6 +36,11 @@ static void write_array_data(Array *arr) {
   }
 }
 
+static void write_struct_data(StructLiteral *lit) {
+  for (int i = 0; i < lit->size; i++)
+    write_file("  .byte %d\n", lit->data[i]);
+}
+
 // 文字列リテラルの生成
 void gen_string_literal() {
   for (String *str = strings; str; str = str->next) {
@@ -58,6 +64,8 @@ void gen_global_variables() {
     write_file("%.*s:\n", var->len, var->name);
     if (var->init_array) {
       write_array_data(var->init_array);
+    } else if (var->init_struct) {
+      write_struct_data(var->init_struct);
     } else if (var->offset) {
       int sz = get_sizeof(var->type);
       if (sz == 1)
@@ -84,6 +92,8 @@ void gen_static_variables() {
     write_file("%.*s.%d:\n", var->len, var->name, var->block);
     if (var->init_array) {
       write_array_data(var->init_array);
+    } else if (var->init_struct) {
+      write_struct_data(var->init_struct);
     } else if (var->offset) {
       int sz = get_sizeof(var->type);
       if (sz == 1)
@@ -110,6 +120,15 @@ void gen_array_literals() {
   }
 }
 
+static void gen_struct_literals() {
+  for (StructLiteral *lit = struct_literals; lit; lit = lit->next) {
+    if (!lit->needs_label)
+      continue;
+    write_file(".L.struct%d:\n", lit->id);
+    write_struct_data(lit);
+  }
+}
+
 void gen_rodata_section() {
   write_file("  .section .rodata\n");
   gen_string_literal();
@@ -120,4 +139,5 @@ void gen_data_section() {
   gen_global_variables();
   gen_static_variables();
   gen_array_literals();
+  gen_struct_literals();
 }

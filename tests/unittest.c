@@ -22,6 +22,7 @@ void check_with_name(int result, const char *name, int ans) {
 #include "unittests/loops_strings_arrays.c"
 #include "unittests/macro.c"
 #include "unittests/struct_arrays_bits.c"
+#include "unittests/struct_initializers.c"
 #include "unittests/switch_goto_casts.c"
 #include "unittests/unions_typedefs_funcptrs.c"
 #include "unittests/unsigned_and_suffixes.c"
@@ -80,6 +81,10 @@ int main() {
   CHECK(struct_bits_test23(), 1);
   CHECK(struct_bits_test24(), 26);
   CHECK(struct_bits_test25(), -4);
+  CHECK(struct_init_test1(), 3);
+  CHECK(struct_init_test2(), 94);
+  CHECK(struct_init_test3(), 65);
+  CHECK(struct_init_test4(), 18);
 
   CHECK(loops_arrays_test1(), 45);
   CHECK(loops_arrays_test2(), 15);

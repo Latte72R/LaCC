@@ -16,6 +16,7 @@ extern TypeTag *type_tags;
 extern String *strings;
 extern FileName *filenames;
 extern Array *arrays;
+extern StructLiteral *struct_literals;
 extern IncludePath *include_paths;
 extern Node **code;
 extern Macro *macros;
@@ -231,6 +232,16 @@ static void free_arrays_list(Array *arr) {
   }
 }
 
+static void free_struct_literals_list(StructLiteral *lit) {
+  while (lit) {
+    StructLiteral *next = lit->next;
+    if (lit->data)
+      free(lit->data);
+    free(lit);
+    lit = next;
+  }
+}
+
 static void free_include_paths_list(IncludePath *path) {
   while (path) {
     IncludePath *next = path->next;
@@ -269,6 +280,11 @@ void free_all_filenames() {
 void free_all_arrays() {
   free_arrays_list(arrays);
   arrays = NULL;
+}
+
+void free_all_struct_literals() {
+  free_struct_literals_list(struct_literals);
+  struct_literals = NULL;
 }
 
 void free_all_include_paths() {
