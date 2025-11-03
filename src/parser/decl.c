@@ -466,6 +466,8 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
   object->var = NULL;
   int offset = 0;
   int max_size = 0;
+  Type *active_bitfield_type = NULL;
+  int active_bit_offset_bits = 0;
   expect("{", "before object members", "object");
   while (!consume("}")) {
     Type *base_type = parse_base_type_internal(true, true);
@@ -506,7 +508,18 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
     }
     for (;;) {
       Type *type = parse_declarator(base_type, &member_tok, "object member declaration");
-      if (!member_tok) {
+      int bit_width = -1;
+      int is_bitfield = 0;
+      if (consume(":")) {
+        Node *width_expr = assign();
+        int ok = true;
+        bit_width = eval_const_expr(width_expr, &ok);
+        if (!ok || bit_width < 0) {
+          error_at(consumed_loc, "bit-field width must be a non-negative constant [in object member declaration]");
+        }
+        is_bitfield = 1;
+      }
+      if (!member_tok && !is_bitfield) {
         Location *loc = token ? token->loc : consumed_loc;
         error_at(loc, "expected an identifier [in object member declaration statement]");
       }
@@ -519,25 +532,75 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
         align_type = align_type->ptr_to;
 
       int single_size = get_sizeof(align_type);
-      if (offset % single_size != 0)
-        offset += single_size - (offset % single_size);
-      if (max_size < single_size)
-        max_size = single_size;
+      if (single_size <= 0)
+        error_at(consumed_loc, "invalid member type size [in object member declaration]");
 
-      if (is_struct) {
-        // 構造体のメンバーはオフセットを持つ
-        member_var->offset = offset;
+      if (is_bitfield) {
+        member_var->is_bitfield = 1;
+        member_var->bit_width = bit_width;
+        if (is_struct) {
+          if (bit_width == 0) {
+            if (active_bitfield_type && active_bit_offset_bits > 0) {
+              offset += get_sizeof(active_bitfield_type);
+            }
+            active_bitfield_type = NULL;
+            active_bit_offset_bits = 0;
+            if (offset % single_size != 0)
+              offset += single_size - (offset % single_size);
+            member_var->bit_offset = 0;
+            member_var->offset = offset;
+          } else {
+            int storage_bits = single_size * 8;
+            if (!active_bitfield_type || active_bitfield_type != type || active_bit_offset_bits + bit_width > storage_bits) {
+              if (active_bitfield_type && active_bit_offset_bits > 0)
+                offset += get_sizeof(active_bitfield_type);
+              if (offset % single_size != 0)
+                offset += single_size - (offset % single_size);
+              active_bitfield_type = type;
+              active_bit_offset_bits = 0;
+            }
+            member_var->offset = offset;
+            member_var->bit_offset = active_bit_offset_bits;
+            active_bit_offset_bits += bit_width;
+            if (active_bit_offset_bits == storage_bits) {
+              offset += single_size;
+              active_bitfield_type = NULL;
+              active_bit_offset_bits = 0;
+            }
+          }
+        } else {
+          member_var->offset = 0;
+          member_var->bit_offset = 0;
+        }
+        if (max_size < single_size)
+          max_size = single_size;
       } else {
-        // unionのメンバーはオフセットを持たない
-        member_var->offset = 0;
+        if (is_struct) {
+          if (active_bitfield_type && active_bit_offset_bits > 0) {
+            offset += get_sizeof(active_bitfield_type);
+            active_bitfield_type = NULL;
+            active_bit_offset_bits = 0;
+          }
+          if (offset % single_size != 0)
+            offset += single_size - (offset % single_size);
+          if (max_size < single_size)
+            max_size = single_size;
+          member_var->offset = offset;
+          offset += get_sizeof(type);
+        } else {
+          member_var->offset = 0;
+          if (max_size < single_size)
+            max_size = single_size;
+        }
       }
-      offset += get_sizeof(type);
 
       if (!consume(","))
         break;
     }
     expect(";", "after object member declaration", "object declaration");
   }
+  if (is_struct && active_bitfield_type && active_bit_offset_bits > 0)
+    offset += get_sizeof(active_bitfield_type);
   if (is_struct) {
     // 構造体のサイズはメンバーの合計サイズ
     if (offset % max_size != 0) {

@@ -178,6 +178,9 @@ struct LVar {
   Type *type;                 // 変数の型
   int is_static;              // staticかどうか
   int block;                  // ブロックのID
+  int is_bitfield;            // ビットフィールドかどうか
+  int bit_width;              // ビット幅
+  int bit_offset;             // ストレージ単位内のビットオフセット
   Array *init_array;          // 静的記憶域期間の配列初期化データ
   StructLiteral *init_struct; // 静的記憶域期間の構造体初期化データ
 };
