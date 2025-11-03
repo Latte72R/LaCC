@@ -9,7 +9,21 @@ extern int label_cnt;
 extern int label_cnt;
 extern Location *consumed_loc;
 
-Node *expr() { return assign(); }
+static Node *comma_expr();
+
+Node *expr() { return comma_expr(); }
+
+static Node *comma_expr() {
+  Node *node = assign();
+  while (consume(",")) {
+    Node *rhs = assign();
+    Node *comma = new_binary(ND_COMMA, node, rhs);
+    comma->type = rhs->type;
+    comma->endline = rhs->endline;
+    node = comma;
+  }
+  return node;
+}
 
 Node *assign_sub(Node *lhs, Node *rhs, Location *loc, int check_const) {
   if (lhs->type->is_const && check_const) {
@@ -38,10 +52,12 @@ Node *assign() {
   Location *loc;
   if (consume("=")) {
     loc = consumed_loc;
-    node = assign_sub(node, expr(), loc, true);
+    // RHS of assignment is an assignment-expression (not comma-expression)
+    node = assign_sub(node, assign(), loc, true);
   } else if (consume("+=")) {
     loc = consumed_loc;
-    rhs = expr();
+    // Use assignment-expression to avoid swallowing comma operator
+    rhs = assign();
     if (is_ptr_or_arr(node->type) && is_ptr_or_arr(rhs->type)) {
       error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
                type_name(rhs->type));
@@ -49,14 +65,14 @@ Node *assign() {
     node = assign_sub(node, new_binary(ND_ADD, node, rhs), loc, true);
   } else if (consume("-=")) {
     loc = consumed_loc;
-    rhs = expr();
+    rhs = assign();
     if (is_ptr_or_arr(node->type) && is_ptr_or_arr(rhs->type)) {
       warning_at(loc, "incompatible integer to pointer conversion [in assign]");
     }
     node = assign_sub(node, new_binary(ND_SUB, node, rhs), loc, true);
   } else if (consume("*=")) {
     loc = consumed_loc;
-    rhs = expr();
+    rhs = assign();
     if (is_ptr_or_arr(node->type) && is_ptr_or_arr(rhs->type)) {
       error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
                type_name(rhs->type));
@@ -64,7 +80,7 @@ Node *assign() {
     node = assign_sub(node, new_binary(ND_MUL, node, rhs), loc, true);
   } else if (consume("/=")) {
     loc = consumed_loc;
-    rhs = expr();
+    rhs = assign();
     if (is_ptr_or_arr(node->type) && is_ptr_or_arr(rhs->type)) {
       error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
                type_name(rhs->type));
@@ -72,7 +88,7 @@ Node *assign() {
     node = assign_sub(node, new_binary(ND_DIV, node, rhs), loc, true);
   } else if (consume("%=")) {
     loc = consumed_loc;
-    rhs = expr();
+    rhs = assign();
     if (is_ptr_or_arr(node->type) && is_ptr_or_arr(rhs->type)) {
       error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
                type_name(rhs->type));
@@ -604,7 +620,7 @@ Node *access_member() {
       if (!consume(")")) {
         int n = 0;
         for (int i = 0; i < 6; i++) {
-          call->args[i] = expr();
+          call->args[i] = assign();
           n += 1;
           if (!consume(","))
             break;

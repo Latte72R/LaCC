@@ -555,6 +555,13 @@ int eval_const_expr(Node *node, int *ok) {
       return v;
     }
   }
+  case ND_COMMA: {
+    int ok1 = true, ok2 = true;
+    (void)eval_const_expr(node->lhs, &ok1);
+    int value = eval_const_expr(node->rhs, &ok2);
+    *ok = ok1 && ok2;
+    return value;
+  }
   case ND_TYPECAST: {
     int ok1 = true;
     long long v = eval_const_expr(node->lhs, &ok1);

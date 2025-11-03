@@ -15,6 +15,7 @@ void check_with_name(int result, const char *name, int ans) {
 // Split test units (order matters for helper references)
 #include "unittests/basic.c"
 #include "unittests/bool.c"
+#include "unittests/comma.c"
 #include "unittests/enum_init.c"
 #include "unittests/funcptrs_ternary_sizeof.c"
 #include "unittests/literals_and_switch.c"
@@ -179,6 +180,11 @@ int main() {
   CHECK(unions_funcptrs_test23(), 4);
   CHECK(unions_funcptrs_test24(), 6);
   CHECK(unions_funcptrs_test25(), 37);
+
+  CHECK(comma_basic(), 2);
+  CHECK(comma_assignments(), 10);
+  CHECK(comma_chained_side_effects(), 10);
+  CHECK(comma_in_for_loop(), 18);
 
   CHECK(fptr_ternary_sizeof_test1(), 5);
   CHECK(fptr_ternary_sizeof_test2(), 13);

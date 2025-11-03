@@ -412,6 +412,12 @@ void gen(Node *node) {
     if (!node->endline)
       write_file("  push rax\n");
     break;
+  case ND_COMMA:
+    gen(node->lhs);
+    if (!node->lhs->endline)
+      write_file("  pop rax\n");
+    gen(node->rhs);
+    break;
   case ND_ASSIGN:
     if (node->val) {
       gen_lval(node->lhs);

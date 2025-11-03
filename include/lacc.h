@@ -310,7 +310,8 @@ typedef enum {
   ND_STRUCT,   // 構造体
   ND_TYPEDEF,  // typedef
   ND_TYPE,     // 型
-  ND_TYPECAST  // 型キャスト
+  ND_TYPECAST, // 型キャスト
+  ND_COMMA     // コンマ演算子
 } NodeKind;
 
 // 抽象構文木のノード

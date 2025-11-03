@@ -136,7 +136,8 @@ Node *do_while_stmt() {
 }
 
 Node *for_stmt() {
-  int init;
+  int has_decl_init = 0;
+  LVar *locals_before_for = locals;
   token = token->next;
   expect("(", "before initialization", "for");
   Node *node = new_node(ND_FOR);
@@ -144,19 +145,32 @@ Node *for_stmt() {
   if (consume(";")) {
     node->init = new_node(ND_NONE);
     node->init->endline = true;
-    init = false;
+    has_decl_init = 0;
   } else if (is_type(token)) {
-    Type *type = consume_type(true);
-    Token *tok = expect_ident("variable declaration");
-    node->init = local_variable_declaration(tok, type, false);
+    // Declaration(s) in for-init: allow multiple declarators separated by commas
+    // and keep their scope limited to this for-statement.
+    Type *base_type = parse_base_type_internal(true, true);
+    Node *blk = new_node(ND_BLOCK);
+    int cap = 16;
+    int i = 0;
+    blk->body = malloc(sizeof(Node *) * cap);
+    do {
+      Token *tok;
+      Type *type = parse_declarator(base_type, &tok, "variable declaration");
+      blk->body = safe_realloc_array(blk->body, sizeof(Node *), i + 1, &cap);
+      blk->body[i++] = local_variable_declaration(tok, type, false);
+    } while (consume(","));
+    blk->body = safe_realloc_array(blk->body, sizeof(Node *), i + 1, &cap);
+    blk->body[i] = new_node(ND_NONE);
     expect(";", "after initialization", "for");
-    node->init->endline = true;
-    init = true;
+    blk->endline = true;
+    node->init = blk;
+    has_decl_init = 1;
   } else {
     node->init = expr();
     expect(";", "after initialization", "for");
     node->init->endline = true;
-    init = false;
+    has_decl_init = 0;
   }
   if (consume(";")) {
     node->cond = new_num(1);
@@ -177,11 +191,9 @@ Node *for_stmt() {
   int loop_id_prev = loop_id;
   loop_id = node->id;
   node->then = stmt();
-  if (init) {
-    if (locals)
-      locals = locals->next;
-    else
-      locals = NULL;
+  // Limit the lifetime of for-init declarations to the for-statement
+  if (has_decl_init) {
+    locals = locals_before_for;
   }
   loop_id = loop_id_prev;
   return node;

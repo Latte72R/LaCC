@@ -21,6 +21,7 @@ extern TypeTag *type_tags;
 extern Location *consumed_loc;
 // from types/type.c
 extern Type *parse_function_suffix(Type *type, char *stmt);
+extern Node *assign();
 
 static int has_return_stmt(Node *n) {
   if (!n)
@@ -125,7 +126,7 @@ Node *handle_string_initialization(Node *node, Type *type, Location *loc) {
 }
 
 Node *handle_scalar_initialization(Node *node, Type *type, Location *loc) {
-  node = assign_sub(node, expr(), loc, false);
+  node = assign_sub(node, assign(), loc, false);
   node->type = type;
   if (node->rhs->kind == ND_STRING && node->lhs->type->ty == TY_ARR) {
     node->val = node->lhs->type->ptr_to->ty == TY_CHAR;
@@ -563,7 +564,7 @@ Object *enum_declaration(const int should_record) {
     int assigned = false;
     int assigned_val = 0;
     if (consume("=")) {
-      Node *e = expr();
+      Node *e = assign();
       int ok = true;
       assigned_val = eval_const_expr(e, &ok);
       if (!ok) {
