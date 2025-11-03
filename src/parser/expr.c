@@ -619,8 +619,11 @@ Node *access_member() {
       call->type = ftype->return_type;
       if (!consume(")")) {
         int n = 0;
-        for (int i = 0; i < 6; i++) {
-          call->args[i] = assign();
+        for (;;) {
+          if (n >= MAX_FUNC_PARAMS) {
+            error_at(loc, "too many arguments to function call (supports up to %d)", MAX_FUNC_PARAMS);
+          }
+          call->args[n] = assign();
           n += 1;
           if (!consume(","))
             break;

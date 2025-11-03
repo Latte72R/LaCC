@@ -216,6 +216,8 @@ struct TypeTag {
   int len;    // 名前の長さ
 };
 
+#define MAX_FUNC_PARAMS 6
+
 struct Type {
   TypeKind ty;
   Type *ptr_to;
@@ -224,8 +226,8 @@ struct Type {
   int is_const;          // constかどうか
   int is_unsigned;       // unsignedかどうか
   Type *return_type;     // 戻り値の型
-  Type *param_types[6];  // 引数の型の配列
-  Token *param_names[6]; // 引数名のトークン
+  Type *param_types[MAX_FUNC_PARAMS];  // 引数の型の配列
+  Token *param_names[MAX_FUNC_PARAMS]; // 引数名のトークン
   int param_count;       // 引数の数
   int is_variadic;       // 可変長引数かどうか
 };
@@ -372,7 +374,7 @@ struct Node {
   Node *init;      // kindがND_FORの場合のみ使う
   Node *step;      // kindがND_FORの場合のみ使う
   Node **body;     // kindがND_BLOCKの場合のみ使う
-  Node *args[6];   // kindがND_FUNCALLの場合のみ使う
+  Node *args[MAX_FUNC_PARAMS]; // kindがND_FUNCALLの場合のみ使う
   Function *fn;    // kindがND_FUNCDEF, ND_FUNCALL, ND_FUNCNAMEの場合のみ使う
   LVar *var;       // kindがND_LVAR, ND_GVARの場合のみ使う
   Type *type;

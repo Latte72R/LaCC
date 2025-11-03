@@ -34,7 +34,7 @@ Node *new_node(NodeKind kind) {
   node->init = NULL;
   node->step = NULL;
   node->body = NULL;
-  for (int i = 0; i < 6; i++)
+  for (int i = 0; i < MAX_FUNC_PARAMS; i++)
     node->args[i] = NULL;
   node->fn = NULL;
   node->var = NULL;

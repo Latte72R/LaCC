@@ -1,8 +1,8 @@
 
 /*================= プリセット =================*/
 #define MEGA_ISO_EXTRA 1
-#define MEGA_POSIX_BASIC 0
-#define MEGA_POSIX_FS 0
+#define MEGA_POSIX_BASIC 1
+#define MEGA_POSIX_FS 1
 #define MEGA_POSIX_NET 0
 #define MEGA_POSIX_THREADS 0
 #define MEGA_GNU_EXTRAS 0

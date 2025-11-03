@@ -9,6 +9,7 @@ extern char *user_input;
 extern CharPtrList *user_input_list;
 extern Token *token;
 extern char *input_file;
+extern char *expand_expression_internal(const char *expr);
 
 // Local helpers duplicated from original implementation
 static int is_ident_start_char(char c) { return (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_'); }
@@ -90,6 +91,19 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
   int in_string = false;
   int in_char = false;
   int pending_concat = false;
+  char **expanded_args = NULL;
+  if (arg_count > 0) {
+    expanded_args = malloc(sizeof(char *) * arg_count);
+    if (!expanded_args)
+      error("memory allocation failed");
+    for (int i = 0; i < arg_count; i++) {
+      if (!args || !args[i]) {
+        expanded_args[i] = NULL;
+      } else {
+        expanded_args[i] = expand_expression_internal(args[i]);
+      }
+    }
+  }
 
   for (char *p = body; *p;) {
     char ch = *p;
@@ -177,8 +191,15 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
       int replaced = false;
       for (int i = 0; i < macro->param_count; i++) {
         if ((int)strlen(macro->params[i]) == ident_len && !strncmp(macro->params[i], start, ident_len)) {
-          char *arg = args[i] ? args[i] : "";
-          append_with_concat(&buf, &len, &cap, arg, (int)strlen(arg), &pending_concat);
+          const char *arg_text = NULL;
+          if (pending_concat) {
+            arg_text = (args && args[i]) ? args[i] : "";
+          } else if (expanded_args && expanded_args[i]) {
+            arg_text = expanded_args[i];
+          } else {
+            arg_text = (args && args[i]) ? args[i] : "";
+          }
+          append_with_concat(&buf, &len, &cap, arg_text, (int)strlen(arg_text), &pending_concat);
           replaced = true;
           break;
         }
@@ -200,6 +221,15 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
       error("memory allocation failed");
   }
   buf[len] = '\0';
+
+  if (expanded_args) {
+    for (int i = 0; i < arg_count; i++) {
+      if (expanded_args[i])
+        free(expanded_args[i]);
+    }
+    free(expanded_args);
+  }
+
   return buf;
 }
 

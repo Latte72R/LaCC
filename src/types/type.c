@@ -45,7 +45,7 @@ Type *new_type(TypeKind ty) {
   type->is_const = false;
   type->is_unsigned = false;
   type->return_type = NULL;
-  for (int i = 0; i < 6; i++) {
+  for (int i = 0; i < MAX_FUNC_PARAMS; i++) {
     type->param_types[i] = NULL;
     type->param_names[i] = NULL;
   }
@@ -328,9 +328,10 @@ Type *parse_function_suffix(Type *type, char *stmt) {
   consume("(");
   Type *func = new_type(TY_FUNC);
   func->return_type = type;
-  int n = 0;
+  int stored = 0;
+  int overflow = 0;
   if (!consume(")")) {
-    for (int i = 0; i < 6; i++) {
+    for (;;) {
       if (consume("...")) {
         func->is_variadic = true;
         break;
@@ -340,7 +341,7 @@ Type *parse_function_suffix(Type *type, char *stmt) {
         error_at(consumed_loc, "expected a type [in %s]", stmt);
         break;
       } else if (param->ty == TY_VOID && peek(")")) {
-        if (i != 0)
+        if (stored != 0)
           error_at(consumed_loc, "void type is only allowed for the first argument [in %s]", stmt);
         break;
       }
@@ -355,15 +356,21 @@ Type *parse_function_suffix(Type *type, char *stmt) {
         if (param->ty == TY_ARR)
           param->ty = TY_ARGARR;
       }
-      func->param_types[i] = param;
-      func->param_names[i] = ptok;
-      n += 1;
+      if (stored < MAX_FUNC_PARAMS) {
+        func->param_types[stored] = param;
+        func->param_names[stored] = ptok;
+        stored += 1;
+      } else {
+        overflow = 1;
+      }
       if (!consume(","))
         break;
     }
     expect(")", "after arguments", stmt);
   }
-  func->param_count = n;
+  func->param_count = stored;
+  if (overflow)
+    func->is_variadic = true;
   type = func;
   return type;
 }
