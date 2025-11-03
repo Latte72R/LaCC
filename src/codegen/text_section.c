@@ -854,9 +854,9 @@ void gen(Node *node) {
     } else {
       // スタックから関数ポインタを取り出して呼び出す
       write_file("  pop r10\n");
-      write_file("  mov rdx, rsp\n");
-      write_file("  and rdx, 0xF\n");
-      write_file("  cmp rdx, 0\n");
+      write_file("  mov rax, rsp\n");
+      write_file("  and rax, 0xF\n");
+      write_file("  cmp rax, 0\n");
       write_file("  je .Laligned%d\n", node->id);
       write_file("  sub rsp, 8\n");
       write_file("  mov rax, 0\n");

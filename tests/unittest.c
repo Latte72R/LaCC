@@ -21,6 +21,7 @@ void check_with_name(int result, const char *name, int ans) {
 #include "unittests/literals_and_switch.c"
 #include "unittests/loops_strings_arrays.c"
 #include "unittests/macro.c"
+#include "unittests/nullable_funcptrs.c"
 #include "unittests/struct_arrays_bits.c"
 #include "unittests/struct_initializers.c"
 #include "unittests/switch_goto_casts.c"
@@ -185,6 +186,10 @@ int main() {
   CHECK(unions_funcptrs_test23(), 4);
   CHECK(unions_funcptrs_test24(), 6);
   CHECK(unions_funcptrs_test25(), 37);
+  CHECK(nullable_fp_test1(), 6);
+  CHECK(nullable_fp_test2(), 31);
+  CHECK(nullable_fp_test3(), 11);
+  CHECK(nullable_fp_test4(), 8);
 
   CHECK(comma_basic(), 2);
   CHECK(comma_assignments(), 10);

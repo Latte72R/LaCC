@@ -157,6 +157,10 @@ Node *for_stmt() {
     do {
       Token *tok;
       Type *type = parse_declarator(base_type, &tok, "variable declaration");
+      if (!tok) {
+        Location *loc = token ? token->loc : consumed_loc;
+        error_at(loc, "expected an identifier [in variable declaration statement]");
+      }
       blk->body = safe_realloc_array(blk->body, sizeof(Node *), i + 1, &cap);
       blk->body[i++] = local_variable_declaration(tok, type, false);
     } while (consume(","));

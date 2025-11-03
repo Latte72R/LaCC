@@ -11,6 +11,30 @@ extern Location *consumed_loc;
 // 前方宣言: 式パーサ
 extern Node *expr();
 
+static int token_matches(Token *tok, const char *str) {
+  if (!tok || tok->len != (int)strlen(str))
+    return false;
+  return strncmp(tok->str, str, tok->len) == 0;
+}
+
+static int is_pointer_attribute(Token *tok) {
+  if (!tok)
+    return false;
+  if (tok->kind == TK_CONST)
+    return false;
+  if (tok->kind != TK_IDENT)
+    return false;
+  if (token_matches(tok, "_Nullable") || token_matches(tok, "_Nonnull") || token_matches(tok, "_Null_unspecified") ||
+      token_matches(tok, "__nullable") || token_matches(tok, "__nonnull") || token_matches(tok, "__null_unspecified"))
+    return true;
+  if (token_matches(tok, "restrict") || token_matches(tok, "__restrict") || token_matches(tok, "__restrict__"))
+    return true;
+  if (token_matches(tok, "__strong") || token_matches(tok, "__weak") || token_matches(tok, "__unsafe_unretained") ||
+      token_matches(tok, "__autoreleasing"))
+    return true;
+  return false;
+}
+
 Type *new_type(TypeKind ty) {
   Type *type = malloc(sizeof(Type));
   register_type(type);
@@ -281,11 +305,18 @@ Type *parse_pointer_qualifiers(Type *base_type) {
   Type *type = base_type;
   while (consume("*")) {
     Type *ptr = new_type_ptr(type);
-    if (token->kind == TK_CONST) {
-      ptr->is_const = true;
-      token = token->next;
-    } else {
-      ptr->is_const = false;
+    ptr->is_const = false;
+    for (;;) {
+      if (token->kind == TK_CONST) {
+        ptr->is_const = true;
+        token = token->next;
+        continue;
+      }
+      if (is_pointer_attribute(token)) {
+        token = token->next;
+        continue;
+      }
+      break;
     }
     type = ptr;
   }
@@ -395,7 +426,12 @@ Type *parse_declarator(Type *base_type, Token **tok, char *stmt) {
     return inner;
   }
 
-  *tok = expect_ident(stmt);
+  Token *ident = consume_ident();
+  if (!ident) {
+    *tok = NULL;
+    return parse_declarator_suffix(type, stmt);
+  }
+  *tok = ident;
   return parse_declarator_suffix(type, stmt);
 }
 

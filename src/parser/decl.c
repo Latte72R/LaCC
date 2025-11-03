@@ -338,6 +338,10 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
 
   Token *tok;
   type = parse_declarator(base_type, &tok, "variable declaration");
+  if (!tok) {
+    Location *loc = token ? token->loc : consumed_loc;
+    error_at(loc, "expected an identifier [in variable declaration statement]");
+  }
 
   if (type->ty == TY_FUNC) {
     // 関数型の宣言/定義
@@ -394,6 +398,10 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
     if (!consume(","))
       break;
     type = parse_declarator(base_type, &tok, "variable declaration");
+    if (!tok) {
+      Location *loc = token ? token->loc : consumed_loc;
+      error_at(loc, "expected an identifier [in variable declaration statement]");
+    }
   }
 
   node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1, &cap);
@@ -498,6 +506,10 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
     }
     for (;;) {
       Type *type = parse_declarator(base_type, &member_tok, "object member declaration");
+      if (!member_tok) {
+        Location *loc = token ? token->loc : consumed_loc;
+        error_at(loc, "expected an identifier [in object member declaration statement]");
+      }
       LVar *member_var = new_lvar(member_tok, type, false, false);
       member_var->next = object->var;
       object->var = member_var;
@@ -626,6 +638,10 @@ Node *typedef_stmt() {
   node = new_node(ND_TYPEDEF);
   Token *tok;
   type = parse_declarator(type, &tok, "typedef");
+  if (!tok) {
+    Location *loc = token ? token->loc : consumed_loc;
+    error_at(loc, "expected an identifier [in typedef statement]");
+  }
   node->type = type;
   TypeTag *tag = find_type_tag(tok);
   if (tag) {
