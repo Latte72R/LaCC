@@ -1,5 +1,5 @@
 
-void printf();
+#include <stdio.h>
 
 // 素数を30個表示する
 int main() {

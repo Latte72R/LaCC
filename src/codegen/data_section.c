@@ -7,10 +7,6 @@ extern LVar *statics;
 extern String *strings;
 extern Array *arrays;
 
-extern const int TRUE;
-extern const int FALSE;
-extern void *NULL;
-
 static void write_array_data(Array *arr) {
   for (int i = 0; i < arr->len; i++) {
     if (arr->byte == 1) {

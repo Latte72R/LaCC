@@ -1,6 +1,10 @@
 
 #include "lacc.h"
 
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+
 extern Token *token;
 extern int label_cnt;
 extern int label_cnt;
@@ -15,10 +19,6 @@ extern Object *unions;
 extern Object *enums;
 extern TypeTag *type_tags;
 extern Location *consumed_loc;
-
-extern const int TRUE;
-extern const int FALSE;
-extern void *NULL;
 
 Node *block_stmt() {
   Node *node = new_node(ND_BLOCK);
@@ -61,7 +61,7 @@ Node *goto_stmt() {
   node->label->name = tok->str;
   node->label->len = tok->len;
   node->fn = current_fn;
-  node->endline = TRUE;
+  node->endline = true;
   expect(";", "after line", "goto statement");
   return node;
 }
@@ -77,7 +77,7 @@ Node *label_stmt() {
   node->label = label;
   token = token->next;
   expect(":", "after label", "label statement");
-  node->endline = TRUE;
+  node->endline = true;
   return node;
 }
 
@@ -87,7 +87,7 @@ Node *if_stmt() {
   node->id = label_cnt++;
   expect("(", "before condition", "if");
   node->cond = expr();
-  node->cond->endline = FALSE;
+  node->cond->endline = false;
   expect(")", "after equality", "if");
   node->then = stmt();
   if (token->kind == TK_ELSE) {
@@ -105,7 +105,7 @@ Node *while_stmt() {
   Node *node = new_node(ND_WHILE);
   node->id = label_cnt++;
   node->cond = expr();
-  node->cond->endline = FALSE;
+  node->cond->endline = false;
   expect(")", "after equality", "while");
   int loop_id_prev = loop_id;
   loop_id = node->id;
@@ -128,60 +128,72 @@ Node *do_while_stmt() {
   token = token->next;
   expect("(", "before condition", "do-while");
   node->cond = expr();
-  node->cond->endline = FALSE;
+  node->cond->endline = false;
   expect(")", "after equality", "do-while");
   expect(";", "after line", "do-while");
-  node->endline = TRUE;
+  node->endline = true;
   return node;
 }
 
 Node *for_stmt() {
-  int init;
+  int has_decl_init = 0;
+  LVar *locals_before_for = locals;
   token = token->next;
   expect("(", "before initialization", "for");
   Node *node = new_node(ND_FOR);
   node->id = label_cnt++;
   if (consume(";")) {
     node->init = new_node(ND_NONE);
-    node->init->endline = TRUE;
-    init = FALSE;
+    node->init->endline = true;
+    has_decl_init = 0;
   } else if (is_type(token)) {
-    Type *type = consume_type(TRUE);
-    Token *tok = expect_ident("variable declaration");
-    node->init = local_variable_declaration(tok, type, FALSE);
+    // Declaration(s) in for-init: allow multiple declarators separated by commas
+    // and keep their scope limited to this for-statement.
+    Type *base_type = parse_base_type_internal(true, true);
+    Node *blk = new_node(ND_BLOCK);
+    int cap = 16;
+    int i = 0;
+    blk->body = malloc(sizeof(Node *) * cap);
+    do {
+      Token *tok;
+      Type *type = parse_declarator(base_type, &tok, "variable declaration");
+      blk->body = safe_realloc_array(blk->body, sizeof(Node *), i + 1, &cap);
+      blk->body[i++] = local_variable_declaration(tok, type, false);
+    } while (consume(","));
+    blk->body = safe_realloc_array(blk->body, sizeof(Node *), i + 1, &cap);
+    blk->body[i] = new_node(ND_NONE);
     expect(";", "after initialization", "for");
-    node->init->endline = TRUE;
-    init = TRUE;
+    blk->endline = true;
+    node->init = blk;
+    has_decl_init = 1;
   } else {
     node->init = expr();
     expect(";", "after initialization", "for");
-    node->init->endline = TRUE;
-    init = FALSE;
+    node->init->endline = true;
+    has_decl_init = 0;
   }
   if (consume(";")) {
     node->cond = new_num(1);
-    node->cond->endline = FALSE;
+    node->cond->endline = false;
   } else {
     node->cond = expr();
-    node->cond->endline = FALSE;
+    node->cond->endline = false;
     expect(";", "after condition", "for");
   }
   if (consume(")")) {
     node->step = new_node(ND_NONE);
-    node->step->endline = TRUE;
+    node->step->endline = true;
   } else {
     node->step = expr();
-    node->step->endline = TRUE;
+    node->step->endline = true;
     expect(")", "after step expression", "for");
   }
   int loop_id_prev = loop_id;
   loop_id = node->id;
   node->then = stmt();
-  if (init) {
-    if (locals)
-      locals = locals->next;
-    else
-      locals = NULL;
+  // Limit the lifetime of for-init declarations to the for-statement
+  if (has_decl_init) {
+    locals = locals_before_for;
   }
   loop_id = loop_id_prev;
   return node;
@@ -194,7 +206,7 @@ Node *break_stmt() {
   token = token->next;
   expect(";", "after line", "break");
   Node *node = new_node(ND_BREAK);
-  node->endline = TRUE;
+  node->endline = true;
   node->id = loop_id;
   return node;
 }
@@ -206,7 +218,7 @@ Node *continue_stmt() {
   token = token->next;
   expect(";", "after line", "continue");
   Node *node = new_node(ND_CONTINUE);
-  node->endline = TRUE;
+  node->endline = true;
   node->id = loop_id;
   return node;
 }
@@ -224,12 +236,14 @@ Node *return_stmt() {
     node->rhs = expr();
     expect(";", "after line", "return");
   }
+  // 戻り値の期待型を保持しておく（コード生成での変換に利用）
+  node->type = current_fn->type->return_type;
   if (current_fn->type->return_type->ty != TY_VOID &&
       !is_type_compatible(current_fn->type->return_type, node->rhs->type)) {
     warning_at(loc, "incompatible %s to %s conversion [in return statement]", type_name(node->rhs->type),
                type_name(current_fn->type->return_type));
   }
-  node->endline = TRUE;
+  node->endline = true;
   return node;
 }
 
@@ -239,12 +253,12 @@ Node *switch_stmt() {
   Node *node = new_node(ND_SWITCH);
   node->id = label_cnt++;
   node->cond = expr();
-  node->cond->endline = FALSE;
+  node->cond->endline = false;
   int cap = 16;
   node->cases = malloc(sizeof(int) * cap);
   node->case_cap = cap;
   node->case_cnt = 0;
-  node->has_default = FALSE;
+  node->has_default = false;
   expect(")", "after condition", "switch");
   Node *prev_switch = current_switch;
   current_switch = node;
@@ -253,7 +267,7 @@ Node *switch_stmt() {
   node->then = stmt();
   loop_id = loop_id_prev;
   current_switch = prev_switch;
-  node->endline = TRUE;
+  node->endline = true;
   return node;
 }
 
@@ -274,7 +288,7 @@ Node *case_stmt() {
       safe_realloc_array(current_switch->cases, sizeof(int), current_switch->case_cnt + 1, &current_switch->case_cap);
   current_switch->cases[current_switch->case_cnt++] = node->val;
   expect(":", "after case value", "case");
-  node->endline = TRUE;
+  node->endline = true;
   return node;
 }
 
@@ -285,29 +299,29 @@ Node *default_stmt() {
     error_at(token->loc, "multiple default statements in switch [in default statement]");
   }
   token = token->next;
-  current_switch->has_default = TRUE;
+  current_switch->has_default = true;
   Node *node = new_node(ND_DEFAULT);
   node->id = loop_id;
   expect(":", "after default", "default");
-  node->endline = TRUE;
+  node->endline = true;
   return node;
 }
 
 int check_label() {
   Token *tok = token;
   if (tok->kind != TK_IDENT) {
-    return FALSE;
+    return false;
   }
   tok = tok->next;
   if (tok->kind != TK_RESERVED || strncmp(tok->str, ":", tok->len)) {
-    return FALSE;
+    return false;
   }
-  return TRUE;
+  return true;
 }
 
 Node *expression_stmt() {
   Node *node = expr();
-  node->endline = TRUE;
+  node->endline = true;
   expect(";", "after line", "expression");
   return node;
 }
@@ -322,12 +336,12 @@ Node *stmt() {
     node = label_stmt();
   } else if (token->kind == TK_EXTERN) {
     token = token->next;
-    node = vardec_and_funcdef_stmt(FALSE, TRUE);
+    node = vardec_and_funcdef_stmt(false, true);
   } else if (token->kind == TK_STATIC) {
     token = token->next;
-    node = vardec_and_funcdef_stmt(TRUE, FALSE);
+    node = vardec_and_funcdef_stmt(true, false);
   } else if (is_type(token)) {
-    node = vardec_and_funcdef_stmt(FALSE, FALSE);
+    node = vardec_and_funcdef_stmt(false, false);
   } else if (token->kind == TK_TYPEDEF) {
     node = typedef_stmt();
   } else if (token->kind == TK_SWITCH) {

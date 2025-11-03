@@ -1,6 +1,8 @@
 
 #include "lacc.h"
 
+#include <stdio.h>
+
 int show_warning = 1;
 int warning_cnt = 0;
 char *user_input = 0;
@@ -23,6 +25,7 @@ LVar *statics = 0;
 Object *structs = 0;
 Object *unions = 0;
 Object *enums = 0;
+Object *current_enum_scope = 0;
 TypeTag *type_tags = 0;
 String *strings = 0;
 Array *arrays = 0;
@@ -35,10 +38,6 @@ IncludePath *include_paths = 0;
 FILE *fp = 0;
 Macro *macros = 0;
 
-void *NULL = 0;
-const int TRUE = 1;
-const int FALSE = 0;
-
 void init_global_variables() {
   // グローバル変数の初期化
   current_switch = NULL;
@@ -48,6 +47,7 @@ void init_global_variables() {
   functions = NULL;
   current_fn = NULL;
   enums = NULL;
+  current_enum_scope = NULL;
   structs = NULL;
   unions = NULL;
   type_tags = NULL;

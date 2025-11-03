@@ -1,6 +1,10 @@
 
 #include "lacc.h"
 
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+
 extern Function *functions;
 extern Function *current_fn;
 extern LVar *locals;
@@ -8,11 +12,8 @@ extern LVar *globals;
 extern Object *structs;
 extern Object *unions;
 extern Object *enums;
+extern Object *current_enum_scope;
 extern TypeTag *type_tags;
-
-extern const int TRUE;
-extern const int FALSE;
-extern void *NULL;
 
 Node *new_node(NodeKind kind) {
   Node *node = malloc(sizeof(Node));
@@ -22,11 +23,11 @@ Node *new_node(NodeKind kind) {
   node->rhs = NULL;
   node->val = 0;
   node->id = 0;
-  node->endline = FALSE;
+  node->endline = false;
   node->cases = NULL;
   node->case_cnt = 0;
   node->case_cap = 0;
-  node->has_default = FALSE;
+  node->has_default = false;
   node->cond = NULL;
   node->then = NULL;
   node->els = NULL;
@@ -123,12 +124,24 @@ Object *find_enum(Token *tok) {
   return NULL;
 }
 
+static LVar *find_enum_member_in_object(Object *enum_obj, Token *tok) {
+  if (!enum_obj)
+    return NULL;
+  for (LVar *var = enum_obj->var; var; var = var->next)
+    if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
+      return var;
+  return NULL;
+}
+
 // enumのメンバーを名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_enum_member(Token *tok) {
+  LVar *var = find_enum_member_in_object(current_enum_scope, tok);
+  if (var)
+    return var;
   for (Object *enum_ = enums; enum_; enum_ = enum_->next) {
-    for (LVar *var = enum_->var; var; var = var->next)
-      if (var->len == tok->len && !strncmp(tok->str, var->name, var->len))
-        return var;
+    var = find_enum_member_in_object(enum_, tok);
+    if (var)
+      return var;
   }
   return NULL;
 }

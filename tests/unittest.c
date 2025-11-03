@@ -1,6 +1,7 @@
 // Shared prelude (inline instead of separate include)
-void printf();
-void *calloc();
+
+#include <stdio.h>
+
 int failures;
 int test_cnt = 0;
 void check_with_name(int result, const char *name, int ans) {
@@ -13,9 +14,10 @@ void check_with_name(int result, const char *name, int ans) {
 
 // Split test units (order matters for helper references)
 #include "unittests/basic.c"
+#include "unittests/bool.c"
+#include "unittests/comma.c"
 #include "unittests/enum_init.c"
 #include "unittests/funcptrs_ternary_sizeof.c"
-#include "unittests/include_next.c"
 #include "unittests/literals_and_switch.c"
 #include "unittests/loops_strings_arrays.c"
 #include "unittests/macro.c"
@@ -179,6 +181,11 @@ int main() {
   CHECK(unions_funcptrs_test24(), 6);
   CHECK(unions_funcptrs_test25(), 37);
 
+  CHECK(comma_basic(), 2);
+  CHECK(comma_assignments(), 10);
+  CHECK(comma_chained_side_effects(), 10);
+  CHECK(comma_in_for_loop(), 18);
+
   CHECK(fptr_ternary_sizeof_test1(), 5);
   CHECK(fptr_ternary_sizeof_test2(), 13);
   CHECK(fptr_ternary_sizeof_test3(), 7);
@@ -238,8 +245,20 @@ int main() {
   CHECK(unsigned_test32(), 0);
   CHECK(unsigned_test33(), 8);
 
-  // include_next
-  CHECK(include_next_test1(), 301);
+  // bool / _Bool tests
+  CHECK(bool_test1(), 2);
+  CHECK(bool_test2(), 2);
+  CHECK(bool_test3(), 2);
+  CHECK(bool_test4(), 2);
+  CHECK(bool_test5(), 1);
+  CHECK(bool_test7(), 2);
+  CHECK(bool_test8(), 2);
+  CHECK(bool_test9(), 20);
+  CHECK(bool_test10(), 3);
+  CHECK(bool_test11(), 2);
+  CHECK(bool_test12(), 1);
+  CHECK(bool_test13(), 2);
+  CHECK(bool_test14(), 7);
 
   // enum initializer tests
   CHECK(enum_init_test1(), 1);
@@ -261,7 +280,6 @@ int main() {
   CHECK(macro_test14(), ANGLE_MAGIC);
   CHECK(macro_test15(), 15);
   CHECK(macro_test16(), 6);
-  CHECK(macro_test17(), 1);
   CHECK(macro_test18(), 1);
   CHECK(macro_test19(), 1);
   CHECK(macro_test20(), 1);

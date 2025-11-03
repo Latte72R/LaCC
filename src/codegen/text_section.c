@@ -1,14 +1,12 @@
 
 #include "lacc.h"
 
+#include <string.h>
+
 extern Node **code;
 extern LVar *globals;
 extern LVar *statics;
 extern String *strings;
-
-extern const int TRUE;
-extern const int FALSE;
-extern void *NULL;
 
 char *regs1[] = {"dil", "sil", "dl", "cl", "r8b", "r9b"};
 char *regs2[] = {"di", "si", "dx", "cx", "r8w", "r9w"};
@@ -315,6 +313,12 @@ void gen(Node *node) {
     gen_lval(node);
     write_file("  pop rax\n");
     switch (node->type->ty) {
+    case TY_BOOL:
+      if (node->type->is_unsigned)
+        write_file("  movzx rax, BYTE PTR [rax]\n");
+      else
+        write_file("  movsx rax, BYTE PTR [rax]\n");
+      break;
     case TY_INT:
       if (node->type->is_unsigned)
         write_file("  mov eax, DWORD PTR [rax]\n");
@@ -354,6 +358,12 @@ void gen(Node *node) {
     gen(node->lhs);
     write_file("  pop rax\n");
     switch (node->type->ty) {
+    case TY_BOOL:
+      if (node->type->is_unsigned)
+        write_file("  movzx rax, BYTE PTR [rax]\n");
+      else
+        write_file("  movsx rax, BYTE PTR [rax]\n");
+      break;
     case TY_INT:
       if (node->type->is_unsigned)
         write_file("  mov eax, DWORD PTR [rax]\n");
@@ -402,6 +412,12 @@ void gen(Node *node) {
     if (!node->endline)
       write_file("  push rax\n");
     break;
+  case ND_COMMA:
+    gen(node->lhs);
+    if (!node->lhs->endline)
+      write_file("  pop rax\n");
+    gen(node->rhs);
+    break;
   case ND_ASSIGN:
     if (node->val) {
       gen_lval(node->lhs);
@@ -425,6 +441,12 @@ void gen(Node *node) {
       write_file("  pop rdi\n");
       write_file("  pop rax\n");
       switch (node->lhs->type->ty) {
+      case TY_BOOL:
+        // normalize to 0/1 and store 1 byte
+        write_file("  cmp rdi, 0\n");
+        write_file("  setne dil\n");
+        write_file("  mov BYTE PTR [rax], dil\n");
+        break;
       case TY_INT:
         write_file("  mov DWORD PTR [rax], edi\n");
         break;
@@ -445,6 +467,9 @@ void gen(Node *node) {
       if (!node->endline) {
         // 結果の値は左辺の型で正しくトリムして積む
         switch (node->lhs->type->ty) {
+        case TY_BOOL:
+          write_file("  movzx rax, BYTE PTR [rax]\n");
+          break;
         case TY_INT:
           if (node->lhs->type->is_unsigned)
             write_file("  mov eax, DWORD PTR [rax]\n");
@@ -480,6 +505,12 @@ void gen(Node *node) {
     if (!node->endline) {
       write_file("  pop rax\n");
       switch (node->type->ty) {
+      case TY_BOOL:
+        if (node->type->is_unsigned)
+          write_file("  movzx rdi, BYTE PTR [rax]\n");
+        else
+          write_file("  movsx rdi, BYTE PTR [rax]\n");
+        break;
       case TY_INT:
         if (node->type->is_unsigned)
           write_file("  mov edi, DWORD PTR [rax]\n");
@@ -514,6 +545,12 @@ void gen(Node *node) {
     write_file("  pop rdi\n");
     write_file("  pop rax\n");
     switch (node->lhs->type->ty) {
+    case TY_BOOL:
+      // normalize to 0/1 when storing back to _Bool
+      write_file("  cmp rdi, 0\n");
+      write_file("  setne dil\n");
+      write_file("  mov BYTE PTR [rax], dil\n");
+      break;
     case TY_INT:
       write_file("  mov DWORD PTR [rax], edi\n");
       break;
@@ -535,6 +572,12 @@ void gen(Node *node) {
   case ND_RETURN:
     gen(node->rhs);
     write_file("  pop rax\n");
+    // Normalize to 0/1 if returning _Bool
+    if (node->type && node->type->ty == TY_BOOL) {
+      write_file("  cmp rax, 0\n");
+      write_file("  setne al\n");
+      write_file("  movzx rax, al\n");
+    }
     write_file("  mov rsp, rbp\n");
     write_file("  pop rbp\n");
     write_file("  ret\n");
@@ -658,6 +701,11 @@ void gen(Node *node) {
     write_file("  pop rax\n");
     // 目的の型 (node->type) に変換する
     switch (node->type->ty) {
+    case TY_BOOL:
+      write_file("  cmp rax, 0\n");
+      write_file("  setne al\n");
+      write_file("  movzx eax, al\n");
+      break;
     case TY_CHAR:
       if (node->type->is_unsigned)
         write_file("  movzx eax, al\n");
@@ -710,6 +758,9 @@ void gen(Node *node) {
       gen_lval(node->args[i]);
       write_file("  pop rax\n");
       switch (node->args[i]->type->ty) {
+      case TY_BOOL:
+        write_file("  mov BYTE PTR [rax], %s\n", regs1[i]);
+        break;
       case TY_INT:
         write_file("  mov DWORD PTR [rax], %s\n", regs4[i]);
         break;
@@ -750,6 +801,9 @@ void gen(Node *node) {
     for (int i = node->val - 1; i >= 0; i--) {
       write_file("  pop rax\n");
       switch (node->args[i]->type->ty) {
+      case TY_BOOL:
+        write_file("  movzx %s, al\n", regs4[i]);
+        break;
       case TY_INT:
         write_file("  mov %s, eax\n", regs4[i]);
         break;

@@ -1,12 +1,12 @@
 
 #include "lacc.h"
 
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+
 extern char *user_input;
 extern Token *token;
-
-extern const int TRUE;
-extern const int FALSE;
-extern void *NULL;
 
 static int tokenize_depth = 0;
 
@@ -513,6 +513,13 @@ static int parse_basic_type(char **p) {
   if (startswith(cur, "void") && !is_alnum(cur[4])) {
     new_token(TK_TYPE, cur, cur, 4);
     cur += 4;
+    *p = cur;
+    return 1;
+  }
+
+  if (startswith(cur, "_Bool") && !is_alnum(cur[5])) {
+    new_token(TK_TYPE, cur, cur, 5);
+    cur += 5;
     *p = cur;
     return 1;
   }
