@@ -1,12 +1,12 @@
 
 #include "lacc.h"
 
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+
 extern Token *token;
 extern Location *consumed_loc;
-
-extern const int TRUE;
-extern const int FALSE;
-extern void *NULL;
 
 // 前方宣言: 式パーサ
 extern Node *expr();
@@ -18,15 +18,15 @@ Type *new_type(TypeKind ty) {
   type->ptr_to = NULL;
   type->array_size = 0;
   type->object = NULL;
-  type->is_const = FALSE;
-  type->is_unsigned = FALSE;
+  type->is_const = false;
+  type->is_unsigned = false;
   type->return_type = NULL;
   for (int i = 0; i < 6; i++) {
     type->param_types[i] = NULL;
     type->param_names[i] = NULL;
   }
   type->param_count = 0;
-  type->is_variadic = FALSE;
+  type->is_variadic = false;
   return type;
 }
 
@@ -46,9 +46,9 @@ Type *new_type_arr(Type *ptr_to, int array_size) {
 
 int consume_base_type(char *name) {
   if (token->kind != TK_TYPE || strcmp(token->str, name))
-    return FALSE;
+    return false;
   token = token->next;
-  return TRUE;
+  return true;
 }
 
 Type *parse_base_type_internal(const int should_consume, const int should_record) {
@@ -64,19 +64,19 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
 
   // const修飾子の処理
   if (token->kind == TK_CONST) {
-    type->is_const = TRUE;
+    type->is_const = true;
     token = token->next;
   } else {
-    type->is_const = FALSE;
+    type->is_const = false;
   }
 
   // 基本型の処理
   if (token->kind == TK_STRUCT) {
     type->ty = TY_STRUCT;
-    type->object = struct_and_union_declaration(TRUE, FALSE, should_record);
+    type->object = struct_and_union_declaration(true, false, should_record);
   } else if (token->kind == TK_UNION) {
     type->ty = TY_UNION;
-    type->object = struct_and_union_declaration(FALSE, TRUE, should_record);
+    type->object = struct_and_union_declaration(false, true, should_record);
   } else if (token->kind == TK_ENUM) {
     type->ty = TY_INT;
     type->object = enum_declaration(should_record);
@@ -91,12 +91,12 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
     } else if (token->len == (int)strlen("wchar_t") && strncmp(token->str, "wchar_t", token->len) == 0) {
       // C では本来 typedef だが、ヘッダ互換性のためビルトイン扱い（LP64 では int 相当）
       type->ty = TY_INT;
-      type->is_unsigned = FALSE;
+      type->is_unsigned = false;
       token = token->next;
     } else if (token->len == (int)strlen("size_t") && strncmp(token->str, "size_t", token->len) == 0) {
       // size_t をビルトイン型として扱う（LP64 では unsigned long）
       type->ty = TY_LONG;
-      type->is_unsigned = TRUE;
+      type->is_unsigned = true;
       token = token->next;
     } else {
       TypeTag *type_tag = find_type_tag(token);
@@ -112,60 +112,69 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
     return NULL;
   } else {
     // 任意順序の基本型指定子に対応する（例: "long unsigned int" や "unsigned long" 等）
-    int seen_any = FALSE;
+    int seen_any = false;
+    int seen_bool = false;
     int long_count = 0;
-    int seen_short = FALSE;
-    int seen_char = FALSE;
-    int seen_int = FALSE;
-    int seen_void = FALSE;
-    int seen_signed = FALSE;
-    int seen_float = FALSE;
-    int seen_double = FALSE;
+    int seen_short = false;
+    int seen_char = false;
+    int seen_int = false;
+    int seen_void = false;
+    int seen_signed = false;
+    int seen_float = false;
+    int seen_double = false;
 
     for (;;) {
+      if (consume_base_type("_Bool")) {
+        if (seen_any) {
+          error_at(tok->loc, "invalid type specifier combination [_Bool with others] [in parse_base_type]");
+        }
+        seen_any = true;
+        seen_bool = true;
+        break; // _Bool は単独
+      }
       if (consume_base_type("unsigned")) {
-        type->is_unsigned = TRUE;
-        seen_any = TRUE;
+        type->is_unsigned = true;
+        seen_any = true;
         continue;
       }
       if (consume_base_type("signed")) {
-        seen_signed = TRUE;
-        seen_any = TRUE;
+        seen_signed = true;
+        seen_any = true;
         continue;
       }
       if (consume_base_type("long")) {
         long_count++;
-        seen_any = TRUE;
+        seen_any = true;
         continue;
       }
       if (consume_base_type("short")) {
-        seen_short = TRUE;
-        seen_any = TRUE;
+        seen_short = true;
+        seen_any = true;
         continue;
       }
       if (consume_base_type("char")) {
-        seen_char = TRUE;
-        seen_any = TRUE;
+        seen_char = true;
+        seen_any = true;
         continue;
       }
       if (consume_base_type("int")) {
-        seen_int = TRUE;
-        seen_any = TRUE;
+        seen_int = true;
+        seen_any = true;
         continue;
       }
       if (consume_base_type("float")) {
-        seen_float = TRUE;
-        seen_any = TRUE;
+        seen_float = true;
+        seen_any = true;
         continue;
       }
       if (consume_base_type("double")) {
-        seen_double = TRUE;
-        seen_any = TRUE;
+        seen_double = true;
+        seen_any = true;
         continue;
       }
       if (consume_base_type("void")) {
-        seen_void = TRUE;
-        seen_any = TRUE;
+        seen_void = true;
+        seen_any = true;
         break; // void は他の整数型指定子と組み合わせ不可
       }
       break; // 型指定子の並びが終了
@@ -175,10 +184,17 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
       error_at(token->loc, "unknown type: %.*s [in parse_base_type]", token->len, token->str);
     }
 
-    if (seen_void) {
+    if (seen_bool) {
+      type->ty = TY_BOOL;
+      type->is_unsigned = true; // _Bool は整数型だが 0/1 のみ。内部的には非負。
+      if (seen_signed)
+        error_at(tok->loc, "invalid type specifier combination [signed with _Bool] [in parse_base_type]");
+      if (long_count || seen_short || seen_char || seen_int || seen_float || seen_double)
+        error_at(tok->loc, "invalid type specifier combination [_Bool with others] [in parse_base_type]");
+    } else if (seen_void) {
       // void は単独扱い
       type->ty = TY_VOID;
-      type->is_unsigned = FALSE;
+      type->is_unsigned = false;
       if (seen_signed)
         error_at(tok->loc, "invalid type specifier combination [signed with void] [in parse_base_type]");
       if (seen_float || seen_double)
@@ -191,7 +207,7 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
       type->ty = TY_CHAR;
       if (seen_signed && type->is_unsigned)
         error_at(tok->loc, "conflicting type specifiers: signed and unsigned [in parse_base_type]");
-      // 明示的に signed があっても is_unsigned は既定の FALSE のまま
+      // 明示的に signed があっても is_unsigned は既定の false のまま
       if (seen_float || seen_double)
         error_at(tok->loc, "invalid type specifier combination [char with float/double] [in parse_base_type]");
     } else if (seen_short) {
@@ -233,11 +249,11 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
       if (seen_float) {
         // 擬似マップ: float は 4 バイト（int 相当）
         type->ty = TY_INT;
-        type->is_unsigned = FALSE;
+        type->is_unsigned = false;
       } else if (seen_double) {
         // 擬似マップ: double は 8 バイト（long 相当）
         type->ty = TY_LONG;
-        type->is_unsigned = FALSE;
+        type->is_unsigned = false;
       } else {
         (void)seen_int; // 明示的な int の有無は同じ扱い
         type->ty = TY_INT;
@@ -249,7 +265,7 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
 
   // 後続のconst
   if (token->kind == TK_CONST) {
-    type->is_const = TRUE;
+    type->is_const = true;
     token = token->next;
   }
 
@@ -258,7 +274,7 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
   return type;
 }
 
-Type *peek_base_type() { return parse_base_type_internal(FALSE, FALSE); }
+Type *peek_base_type() { return parse_base_type_internal(false, false); }
 
 // ポインタ修飾子を解析
 Type *parse_pointer_qualifiers(Type *base_type) {
@@ -266,10 +282,10 @@ Type *parse_pointer_qualifiers(Type *base_type) {
   while (consume("*")) {
     Type *ptr = new_type_ptr(type);
     if (token->kind == TK_CONST) {
-      ptr->is_const = TRUE;
+      ptr->is_const = true;
       token = token->next;
     } else {
-      ptr->is_const = FALSE;
+      ptr->is_const = false;
     }
     type = ptr;
   }
@@ -285,10 +301,10 @@ Type *parse_function_suffix(Type *type, char *stmt) {
   if (!consume(")")) {
     for (int i = 0; i < 6; i++) {
       if (consume("...")) {
-        func->is_variadic = TRUE;
+        func->is_variadic = true;
         break;
       }
-      Type *param = consume_type(TRUE);
+      Type *param = consume_type(true);
       if (!param) {
         error_at(consumed_loc, "expected a type [in %s]", stmt);
         break;
@@ -386,35 +402,35 @@ Type *parse_declarator(Type *base_type, Token **tok, char *stmt) {
 // 配列サイズ解析の共通処理
 int eval_const_expr(Node *node, int *ok) {
   if (!node) {
-    *ok = FALSE;
+    *ok = false;
     return 0;
   }
   switch (node->kind) {
   case ND_NUM:
     return node->val;
   case ND_ADD: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     long long l = eval_const_expr(node->lhs, &ok1);
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)(l + r);
   }
   case ND_SUB: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     long long l = eval_const_expr(node->lhs, &ok1);
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)(l - r);
   }
   case ND_MUL: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     long long l = eval_const_expr(node->lhs, &ok1);
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)(l * r);
   }
   case ND_DIV: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     long long l = eval_const_expr(node->lhs, &ok1);
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2 && (r != 0);
@@ -423,7 +439,7 @@ int eval_const_expr(Node *node, int *ok) {
     return (int)(l / r);
   }
   case ND_MOD: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     long long l = eval_const_expr(node->lhs, &ok1);
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2 && (r != 0);
@@ -432,122 +448,129 @@ int eval_const_expr(Node *node, int *ok) {
     return (int)(l % r);
   }
   case ND_SHL: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     unsigned long long l = (unsigned long long)eval_const_expr(node->lhs, &ok1);
     unsigned long long r = (unsigned long long)eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)(l << r);
   }
   case ND_SHR: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     unsigned long long l = (unsigned long long)eval_const_expr(node->lhs, &ok1);
     unsigned long long r = (unsigned long long)eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)(l >> r);
   }
   case ND_BITAND: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     long long l = eval_const_expr(node->lhs, &ok1);
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)(l & r);
   }
   case ND_BITOR: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     long long l = eval_const_expr(node->lhs, &ok1);
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)(l | r);
   }
   case ND_BITXOR: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     long long l = eval_const_expr(node->lhs, &ok1);
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)(l ^ r);
   }
   case ND_EQ: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     long long l = eval_const_expr(node->lhs, &ok1);
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)(l == r);
   }
   case ND_NE: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     long long l = eval_const_expr(node->lhs, &ok1);
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)(l != r);
   }
   case ND_LT: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     long long l = eval_const_expr(node->lhs, &ok1);
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)(l < r);
   }
   case ND_LE: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     long long l = eval_const_expr(node->lhs, &ok1);
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)(l <= r);
   }
   case ND_AND: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     long long l = eval_const_expr(node->lhs, &ok1);
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)((l != 0) && (r != 0));
   }
   case ND_OR: {
-    int ok1 = TRUE, ok2 = TRUE;
+    int ok1 = true, ok2 = true;
     long long l = eval_const_expr(node->lhs, &ok1);
     long long r = eval_const_expr(node->rhs, &ok2);
     *ok = ok1 && ok2;
     return (int)((l != 0) || (r != 0));
   }
   case ND_BITNOT: {
-    int ok1 = TRUE;
+    int ok1 = true;
     long long v = eval_const_expr(node->lhs, &ok1);
     *ok = ok1;
     return (int)(~v);
   }
   case ND_NOT: {
-    int ok1 = TRUE;
+    int ok1 = true;
     long long v = eval_const_expr(node->lhs, &ok1);
     *ok = ok1;
     return v ? 0 : 1;
   }
   case ND_TERNARY: {
-    int okc = TRUE;
+    int okc = true;
     long long c = eval_const_expr(node->cond, &okc);
     if (!okc) {
-      *ok = FALSE;
+      *ok = false;
       return 0;
     }
     if (c) {
-      int okt = TRUE;
+      int okt = true;
       int v = eval_const_expr(node->then, &okt);
       *ok = okt;
       return v;
     } else {
-      int oke = TRUE;
+      int oke = true;
       int v = eval_const_expr(node->els, &oke);
       *ok = oke;
       return v;
     }
   }
+  case ND_COMMA: {
+    int ok1 = true, ok2 = true;
+    (void)eval_const_expr(node->lhs, &ok1);
+    int value = eval_const_expr(node->rhs, &ok2);
+    *ok = ok1 && ok2;
+    return value;
+  }
   case ND_TYPECAST: {
-    int ok1 = TRUE;
+    int ok1 = true;
     long long v = eval_const_expr(node->lhs, &ok1);
     *ok = ok1;
     // 最低限、キャストは値をそのまま用いる（厳密な幅の切り詰めは不要）
     return (int)v;
   }
   default:
-    *ok = FALSE;
+    *ok = false;
     return 0;
   }
 }
@@ -564,7 +587,7 @@ Type *parse_array_dimensions(Type *base_type) {
   } else {
     Node *dim_expr = expr();
     expect("]", "after array dimension", "array dimension");
-    int ok = TRUE;
+    int ok = true;
     int dim = eval_const_expr(dim_expr, &ok);
     if (!ok) {
       error_at(consumed_loc, "expected a compile time constant [in array dimension]");
@@ -581,7 +604,7 @@ Type *parse_array_dimensions(Type *base_type) {
     } else {
       Node *dim_expr = expr();
       expect("]", "after array dimension", "array dimension");
-      int ok = TRUE;
+      int ok = true;
       int dim = eval_const_expr(dim_expr, &ok);
       if (!ok) {
         error_at(consumed_loc, "expected a compile time constant [in array dimension]");
@@ -597,7 +620,7 @@ Type *parse_array_dimensions(Type *base_type) {
 }
 
 Type *consume_type(const int should_record) {
-  Type *type = parse_base_type_internal(TRUE, should_record);
+  Type *type = parse_base_type_internal(true, should_record);
   if (!type)
     return NULL;
   type = parse_pointer_qualifiers(type);
@@ -606,18 +629,18 @@ Type *consume_type(const int should_record) {
 
 int is_type(Token *tok) {
   if (tok->kind == TK_TYPE)
-    return TRUE;
+    return true;
   if (tok->kind == TK_CONST)
-    return TRUE;
+    return true;
   if (token->kind == TK_STRUCT || token->kind == TK_UNION || token->kind == TK_ENUM) {
-    return TRUE;
+    return true;
   }
   if (tok->kind == TK_IDENT) {
     TypeTag *type_tag = find_type_tag(token);
     if (type_tag)
-      return TRUE;
+      return true;
   }
-  return FALSE;
+  return false;
 }
 
 // 予約しているスタック領域のサイズ
@@ -626,6 +649,8 @@ int get_sizeof(Type *type) {
     error_at(token->loc, "invalid application of 'sizeof' to an incomplete type [in get_sizeof]");
   }
   switch (type->ty) {
+  case TY_BOOL:
+    return 1;
   case TY_INT:
     return 4;
   case TY_CHAR:
@@ -656,6 +681,8 @@ int type_size(Type *type) {
   switch (type->ty) {
   case TY_VOID:
     return 0;
+  case TY_BOOL:
+    return 1;
   case TY_INT:
     return 4;
   case TY_CHAR:
@@ -680,8 +707,8 @@ int type_size(Type *type) {
 
 int is_ptr_or_arr(Type *type) { return type->ty == TY_PTR || type->ty == TY_ARR || type->ty == TY_ARGARR; }
 int is_number(Type *type) {
-  return type->ty == TY_INT || type->ty == TY_CHAR || type->ty == TY_SHORT || type->ty == TY_LONG ||
-         type->ty == TY_LONGLONG;
+  return type->ty == TY_BOOL || type->ty == TY_INT || type->ty == TY_CHAR || type->ty == TY_SHORT ||
+         type->ty == TY_LONG || type->ty == TY_LONGLONG;
 }
 
 int is_enum_type(Type *type) {
@@ -692,6 +719,8 @@ int is_enum_type(Type *type) {
 
 static int type_rank(Type *type) {
   switch (type->ty) {
+  case TY_BOOL:
+    return 0; // 最下位の整数昇格ランク（昇格で int へ）
   case TY_CHAR:
     return 1;
   case TY_SHORT:
@@ -725,6 +754,8 @@ Type *max_type(Type *lhs, Type *rhs) {
 char *type_name(Type *type) {
   if (type->is_unsigned) {
     switch (type->ty) {
+    case TY_BOOL:
+      return "_Bool";
     case TY_INT:
       return "unsigned int";
     case TY_CHAR:
@@ -740,6 +771,8 @@ char *type_name(Type *type) {
     }
   }
   switch (type->ty) {
+  case TY_BOOL:
+    return "_Bool";
   case TY_INT:
     return "int";
   case TY_CHAR:
@@ -770,16 +803,16 @@ int is_type_assignable(Type *lhs, Type *rhs) {
   // int と char の比較は許容
   // void* と他のポインタ型の比較も許容
   if (is_ptr_or_arr(lhs) && is_ptr_or_arr(rhs)) {
-    return TRUE; // ポインタ型同士は常に代入可能
+    return true; // ポインタ型同士は常に代入可能
   } else if (lhs->ty == rhs->ty && lhs->is_unsigned == rhs->is_unsigned) {
     if (lhs->ty == TY_STRUCT || lhs->ty == TY_UNION) {
       return lhs->object == rhs->object;
     }
-    return TRUE;
+    return true;
   } else if ((is_number(lhs) || is_ptr_or_arr(lhs)) && (is_number(rhs) || is_ptr_or_arr(rhs))) {
-    return TRUE;
+    return true;
   } else {
-    return FALSE;
+    return false;
   }
 }
 
@@ -788,20 +821,20 @@ int is_type_compatible(Type *lhs, Type *rhs) {
   // void* と他のポインタ型の比較も許容
   if (is_ptr_or_arr(lhs) && is_ptr_or_arr(rhs)) {
     if (!(lhs->ptr_to->is_const) && (rhs->ptr_to->is_const)) {
-      return FALSE; // const 修飾子が異なる場合は同じ型ではない
+      return false; // const 修飾子が異なる場合は同じ型ではない
     } else if (lhs->ptr_to->ty == TY_VOID || rhs->ptr_to->ty == TY_VOID) {
-      return TRUE;
+      return true;
     }
     return is_type_compatible(lhs->ptr_to, rhs->ptr_to);
   } else if (lhs->ty == rhs->ty && lhs->is_unsigned == rhs->is_unsigned) {
     if (lhs->ty == TY_STRUCT || lhs->ty == TY_UNION) {
       return lhs->object == rhs->object;
     }
-    return TRUE;
+    return true;
   } else if (is_number(lhs) && is_number(rhs)) {
-    return TRUE;
+    return true;
   } else {
-    return FALSE;
+    return false;
   }
 }
 
@@ -813,8 +846,8 @@ int is_type_identical(Type *lhs, Type *rhs) {
     if (lhs->ty == TY_STRUCT || lhs->ty == TY_UNION) {
       return lhs->object == rhs->object;
     }
-    return TRUE;
+    return true;
   } else {
-    return FALSE;
+    return false;
   }
 }

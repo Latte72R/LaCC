@@ -1,7 +1,9 @@
 #include "lacc.h"
 
-extern const int TRUE;
-extern const int FALSE;
+#include <ctype.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 
 // Needed from other preprocess module
 extern char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count);
@@ -133,9 +135,9 @@ char *expand_expression_internal(const char *expr) {
         const char *arg_ptr = ws;
         int arg_cnt = 0;
         char **args = parse_macro_arguments(&arg_ptr, macro, &arg_cnt);
-        macro->is_expanding = TRUE;
+        macro->is_expanding = true;
         char *expanded_body = substitute_macro_body(macro, args, arg_cnt);
-        macro->is_expanding = FALSE;
+        macro->is_expanding = false;
         if (args) {
           for (int i = 0; i < arg_cnt; i++)
             free(args[i]);
@@ -148,10 +150,10 @@ char *expand_expression_internal(const char *expr) {
         p = arg_ptr;
         continue;
       } else {
-        macro->is_expanding = TRUE;
+        macro->is_expanding = true;
         char *body_copy = copy_macro_body_text(macro);
         char *expanded = expand_expression_internal(body_copy);
-        macro->is_expanding = FALSE;
+        macro->is_expanding = false;
         append_text(&buf, &len, &cap, expanded, (int)strlen(expanded));
         free(body_copy);
         free(expanded);

@@ -8,10 +8,6 @@ extern String *strings;
 extern Array *arrays;
 extern StructLiteral *struct_literals;
 
-extern const int TRUE;
-extern const int FALSE;
-extern void *NULL;
-
 static void write_array_data(Array *arr) {
   for (int i = 0; i < arr->len; i++) {
     if (arr->byte == 1) {

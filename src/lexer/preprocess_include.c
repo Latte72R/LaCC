@@ -1,15 +1,15 @@
 #include "lacc.h"
 
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+
 extern char *user_input;
 extern CharPtrList *user_input_list;
 extern Token *token;
 extern Token *token_head;
 extern FileName *filenames;
 extern char *input_file;
-
-extern const int TRUE;
-extern const int FALSE;
-extern void *NULL;
 
 // helpers
 extern char *duplicate_cstring(const char *src);

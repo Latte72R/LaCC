@@ -1,9 +1,12 @@
 #include "lacc.h"
 
+#include <ctype.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 // Common externs used across helpers/table/builtins
-extern const int TRUE;
-extern const int FALSE;
-extern void *NULL;
 extern Macro *macros;
 extern char *input_file;
 
@@ -152,7 +155,7 @@ static void free_macro_contents(Macro *macro) {
   }
   macro->params = NULL;
   macro->param_count = 0;
-  macro->is_function = FALSE;
+  macro->is_function = false;
 }
 
 // internal, but used by sibling modules via extern
@@ -174,7 +177,7 @@ void define_macro(char *name, char *body, char **params, int param_count, int is
   macro->is_function = is_function;
   macro->is_variadic = is_variadic;
   macro->file = input_file;
-  macro->is_expanding = FALSE;
+  macro->is_expanding = false;
 }
 
 void undefine_macro(char *name, int len) {
@@ -204,7 +207,7 @@ static void define_builtin_object_macro(const char *name, const char *value) {
   memcpy(body, value, len);
   body[len] = '\n';
   body[len + 1] = '\0';
-  define_macro(name_copy, body, NULL, 0, FALSE, FALSE);
+  define_macro(name_copy, body, NULL, 0, false, false);
 }
 
 static void define_builtin_function_macro(const char *name, int param_count, const char *value) {
@@ -232,7 +235,7 @@ static void define_builtin_function_macro(const char *name, int param_count, con
       params[i] = pname;
     }
   }
-  define_macro(name_copy, body, params, param_count, TRUE, FALSE);
+  define_macro(name_copy, body, params, param_count, true, false);
 }
 
 void preprocess_initialize_builtins(void) {

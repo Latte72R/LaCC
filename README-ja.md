@@ -11,7 +11,7 @@ LaCC は, C コンパイラの仕様やメモリ構造の理解を目的に開�
 
 ### 1. データ型
 
-- **プリミティブ型**: `int`, `char`, `void`, `unsigned`, `long`, `long long`, `short`
+- **プリミティブ型**: `int`, `char`, `void`, `unsigned`, `long`, `long long`, `short`, `_Bool`
 - **派生型**: ポインタ (`T*`), 配列 (`T[]`)
 - **複合型**: 構造体 (`struct`), 共用体 (`union`), 列挙体 (`enum`)
 

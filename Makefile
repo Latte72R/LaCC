@@ -60,7 +60,7 @@ $(BOOSTSTRAP): $(SRCS) $(EXTENSION) $(HEADERS) | $(BUILD_DIR)
 	@$(CC) $(CC_FLAGS) -o $(BOOSTSTRAP) $(SRCS) $(EXTENSION)
 	@echo "Bootstrap compiler created at '$@'."
 
-$(BUILD_DIR)/%.s: $(SRC_DIR)/%.c | $(BUILD_DIR)
+$(BUILD_DIR)/%.s: $(SRC_DIR)/%.c $(HEADERS) | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	@$(BOOSTSTRAP) $(LACC_FLAGS) $< -o $@
 
@@ -98,8 +98,7 @@ includetest: .includetest-selfhost ## Run include tests with the self-hosted com
 
 .unittest-bootstrap: $(BOOSTSTRAP) | $(BUILD_DIR)
 	@$(call unittest, $(BOOSTSTRAP))
-
-.unittest-selfhost: private LACC_FLAGS += -I $(TEST_DIR)/inc2 -I $(TEST_DIR)/inc1
+	
 .unittest-selfhost: $(SELFHOST) | $(BUILD_DIR)
 	@$(call unittest, $(SELFHOST))
 

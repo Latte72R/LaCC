@@ -1,5 +1,7 @@
 // 基本演算・フロー・配列/文字/構造体の導入
 
+#include <stdlib.h>
+
 // 4倍にするヘルパー関数
 int foo_test11(int n) { return n * 4; }
 

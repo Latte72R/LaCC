@@ -1,6 +1,0 @@
-#ifndef TESTS_INC2_SHADOW_H
-#define TESTS_INC2_SHADOW_H
-
-#define SHADOW2 200
-
-#endif /* TESTS_INC2_SHADOW_H */

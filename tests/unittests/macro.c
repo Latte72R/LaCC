@@ -14,8 +14,8 @@ int strcmp(const char *s1, const char *s2);
 #define INC(x) ((x) + 1)
 #define DOUBLE(x) ((x) * 2)
 #define APPLY(fn, arg) fn(arg)
-#define FLAG_TRUE 1
-#define FLAG_FALSE 0
+#define FLAG_true 1
+#define FLAG_false 0
 #define VAL 1 + 2
 #define TO_REMOVE 13
 #define TEST14_BASE 0
@@ -36,13 +36,13 @@ int macro_test4() {
 
 int macro_test5() { return DOUBLE(APPLY(INC, 9)); }
 
-#if FLAG_TRUE
+#if FLAG_true
 int macro_test6() { return 123; }
 #else
 int macro_test6() { return -1; }
 #endif
 
-#if FLAG_FALSE
+#if FLAG_false
 int macro_test7() { return -1; }
 #elif defined(CONST42)
 int macro_test7() { return CONST42; }
@@ -106,12 +106,6 @@ int macro_test15() { return -15; }
 
 int macro_test16() { return MULTI_LINE_MACRO(5); }
 
-#ifdef __LACC__
-int macro_test17() { return __LACC__; }
-#else
-int macro_test17() { return -17; }
-#endif
-
 #ifdef __x86_64__
 int macro_test18() { return __x86_64__; }
 #else
@@ -140,8 +134,8 @@ int macro_test20() { return WITH_BLOCK_COMMENT == 0x20000000; }
 #undef INC
 #undef DOUBLE
 #undef APPLY
-#undef FLAG_TRUE
-#undef FLAG_FALSE
+#undef FLAG_true
+#undef FLAG_false
 #undef VAL
 #undef TO_REMOVE
 #undef TEST14_BASE

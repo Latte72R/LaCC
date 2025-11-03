@@ -1,5 +1,8 @@
 // lacc.h
 
+#ifndef __LACC_H__
+#define __LACC_H__
+
 //
 // Main
 //
@@ -82,6 +85,8 @@ struct Array {
   Array *next;
   int *val;
   String **str;
+  int val_cap;
+  int str_cap;
   int byte;
   int len;        // 配列の要素数
   int init;       // 初期化されている数
@@ -100,6 +105,7 @@ struct StructLiteral {
 
 typedef enum {
   TY_NONE,
+  TY_BOOL,
   TY_INT,
   TY_CHAR,
   TY_SHORT,
@@ -315,7 +321,8 @@ typedef enum {
   ND_STRUCT_LITERAL, // 構造体リテラル
   ND_TYPEDEF,  // typedef
   ND_TYPE,     // 型
-  ND_TYPECAST  // 型キャスト
+  ND_TYPECAST, // 型キャスト
+  ND_COMMA     // コンマ演算子
 } NodeKind;
 
 // 抽象構文木のノード
@@ -502,6 +509,8 @@ void free_all_types();
 void register_char_ptr(char *str);
 void update_char_ptr(char *old_ptr, char *new_ptr);
 void free_all_char_ptrs();
+void register_location(Location *loc);
+void free_all_locations();
 void register_object(Object *object);
 void free_all_objects();
 void free_all_functions();
@@ -522,39 +531,4 @@ extern void error_at(Location *loc, char *fmt, ...);
 extern void warning(char *fmt, ...);
 extern void warning_at(Location *loc, char *fmt, ...);
 
-//
-// Standard library functions
-//
-
-// stdio.h
-extern int printf(char *fmt, ...);
-extern int sprintf(char *fmt, ...);
-extern int snprintf();
-typedef struct _IO_FILE FILE;
-extern FILE *fopen(const char *filename, const char *mode);
-extern int fprintf();
-extern int fclose();
-extern int fseek();
-extern int ftell();
-extern int fread();
-
-// ctype.h
-extern int isspace();
-extern int isdigit();
-
-// string.h
-extern int strcmp();
-extern int strncmp();
-extern int strncpy();
-extern int memcpy();
-extern int strlen();
-extern int strtol();
-extern char *strstr();
-extern char *strchr();
-extern char *strrchr();
-
-// stdlib.h
-extern void *malloc();
-extern void *realloc();
-extern void *calloc();
-extern void free();
+#endif // __LACC_H__
