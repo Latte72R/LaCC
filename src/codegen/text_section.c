@@ -912,6 +912,7 @@ void gen(Node *node) {
   case ND_UNION:
   case ND_STRUCT:
   case ND_NONE:
+  case ND_ASM:
     break;
   default:
     gen_expression(node);

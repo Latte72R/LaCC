@@ -20,6 +20,22 @@ extern Object *enums;
 extern TypeTag *type_tags;
 extern Location *consumed_loc;
 
+static int token_equals(Token *tok, const char *str) {
+  if (!tok)
+    return false;
+  if (tok->len != (int)strlen(str))
+    return false;
+  return strncmp(tok->str, str, tok->len) == 0;
+}
+
+static int is_inline_asm_keyword(Token *tok) {
+  if (!tok)
+    return false;
+  if (tok->kind != TK_IDENT && tok->kind != TK_RESERVED)
+    return false;
+  return token_equals(tok, "__asm") || token_equals(tok, "__asm__");
+}
+
 Node *block_stmt() {
   Node *node = new_node(ND_BLOCK);
   LVar *locals_prev = locals;
@@ -330,6 +346,38 @@ Node *expression_stmt() {
   return node;
 }
 
+static void skip_parenthesized_sequence(Location *loc, const char *context) {
+  int depth = 1;
+  while (depth > 0) {
+    if (!token || token->kind == TK_EOF) {
+      error_at(loc, "unterminated parenthesized sequence [in %s]", context);
+    }
+    if (token->kind == TK_RESERVED && token->len == 1) {
+      if (token->str[0] == '(')
+        depth++;
+      else if (token->str[0] == ')')
+        depth--;
+    }
+    token = token->next;
+  }
+}
+
+static Node *inline_asm_stmt() {
+  Location *loc = token->loc;
+  token = token->next;
+  while (
+      token && token->kind == TK_IDENT &&
+      (token_equals(token, "__volatile__") || token_equals(token, "volatile") || token_equals(token, "__volatile"))) {
+    token = token->next;
+  }
+  expect("(", "after inline assembly keyword", "asm statement");
+  skip_parenthesized_sequence(loc, "asm statement");
+  expect(";", "after inline assembly", "asm statement");
+  Node *node = new_node(ND_ASM);
+  node->endline = true;
+  return node;
+}
+
 Node *stmt() {
   Node *node;
   if (consume("{")) {
@@ -368,6 +416,8 @@ Node *stmt() {
     node = continue_stmt();
   } else if (token->kind == TK_RETURN) {
     node = return_stmt();
+  } else if (is_inline_asm_keyword(token)) {
+    node = inline_asm_stmt();
   } else {
     node = expression_stmt();
   }

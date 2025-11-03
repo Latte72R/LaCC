@@ -337,6 +337,7 @@ typedef enum {
   ND_GOTO,           // goto
   ND_LABEL,          // ラベル
   ND_RETURN,         // return
+  ND_ASM,            // inline asm statement (ignored)
   ND_FUNCDEF,        // 関数定義
   ND_FUNCALL,        // 関数呼び出し
   ND_FUNCNAME,       // 関数名

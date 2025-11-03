@@ -2,7 +2,7 @@
 
 typedef int (* _Nullable mac_writer_t)(void *, char *, int);
 typedef int (* _Nonnull mac_nonnull_cb_t)(int);
-typedef int (* __restrict mac_restrict_cb_t)(int);
+typedef int * __restrict mac_restrict_ptr_t;
 
 extern int mac_like_funopen(const void *, int (* _Nullable)(void *, char *, int),
                             int (* _Nullable)(void *, const char *, int),
@@ -33,8 +33,10 @@ int nullable_fp_test2(void) {
 }
 
 int nullable_fp_test3(void) {
-  mac_restrict_cb_t fn = simple_cb;
-  return fn(10);
+  int value = 10;
+  mac_restrict_ptr_t ptr = &value;
+  *ptr += 1;
+  return value;
 }
 
 int nullable_fp_test4(void) {

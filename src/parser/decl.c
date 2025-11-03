@@ -23,6 +23,46 @@ extern Location *consumed_loc;
 extern Type *parse_function_suffix(Type *type, char *stmt);
 extern Node *assign();
 
+static int token_equals(Token *tok, const char *str) {
+  if (!tok)
+    return false;
+  if (tok->len != (int)strlen(str))
+    return false;
+  return strncmp(tok->str, str, tok->len) == 0;
+}
+
+static int is_inline_asm_keyword(Token *tok) {
+  if (!tok)
+    return false;
+  if (tok->kind != TK_IDENT && tok->kind != TK_RESERVED)
+    return false;
+  return token_equals(tok, "__asm") || token_equals(tok, "__asm__");
+}
+
+static void skip_parenthesized_sequence(Location *loc, const char *context) {
+  int depth = 1;
+  while (depth > 0) {
+    if (!token || token->kind == TK_EOF)
+      error_at(loc, "unterminated parenthesized sequence [in %s]", context);
+    if (token->kind == TK_RESERVED && token->len == 1) {
+      if (token->str[0] == '(')
+        depth++;
+      else if (token->str[0] == ')')
+        depth--;
+    }
+    token = token->next;
+  }
+}
+
+static void skip_gnu_asm_specifier(const char *context) {
+  while (is_inline_asm_keyword(token)) {
+    Location *loc = token->loc;
+    token = token->next;
+    expect("(", "after asm specifier", "asm specifier");
+    skip_parenthesized_sequence(loc, context);
+  }
+}
+
 static int has_return_stmt(Node *n) {
   if (!n)
     return false;
@@ -342,6 +382,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
     Location *loc = token ? token->loc : consumed_loc;
     error_at(loc, "expected an identifier [in variable declaration statement]");
   }
+  skip_gnu_asm_specifier("asm specifier");
 
   if (type->ty == TY_FUNC) {
     // 関数型の宣言/定義
@@ -402,6 +443,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
       Location *loc = token ? token->loc : consumed_loc;
       error_at(loc, "expected an identifier [in variable declaration statement]");
     }
+    skip_gnu_asm_specifier("asm specifier");
   }
 
   node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1, &cap);
@@ -508,6 +550,7 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
     }
     for (;;) {
       Type *type = parse_declarator(base_type, &member_tok, "object member declaration");
+      skip_gnu_asm_specifier("asm specifier");
       int bit_width = -1;
       int is_bitfield = 0;
       if (consume(":")) {
@@ -551,7 +594,8 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
             member_var->offset = offset;
           } else {
             int storage_bits = single_size * 8;
-            if (!active_bitfield_type || active_bitfield_type != type || active_bit_offset_bits + bit_width > storage_bits) {
+            if (!active_bitfield_type || active_bitfield_type != type ||
+                active_bit_offset_bits + bit_width > storage_bits) {
               if (active_bitfield_type && active_bit_offset_bits > 0)
                 offset += get_sizeof(active_bitfield_type);
               if (offset % single_size != 0)
@@ -701,6 +745,7 @@ Node *typedef_stmt() {
   node = new_node(ND_TYPEDEF);
   Token *tok;
   type = parse_declarator(type, &tok, "typedef");
+  skip_gnu_asm_specifier("asm specifier");
   if (!tok) {
     Location *loc = token ? token->loc : consumed_loc;
     error_at(loc, "expected an identifier [in typedef statement]");

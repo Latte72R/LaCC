@@ -13,6 +13,7 @@ void check_with_name(int result, const char *name, int ans) {
 }
 
 // Split test units (order matters for helper references)
+#include "unittests/asm_compat.c"
 #include "unittests/basic.c"
 #include "unittests/bool.c"
 #include "unittests/comma.c"
@@ -20,9 +21,9 @@ void check_with_name(int result, const char *name, int ans) {
 #include "unittests/funcptrs_ternary_sizeof.c"
 #include "unittests/literals_and_switch.c"
 #include "unittests/loops_strings_arrays.c"
+#include "unittests/macos_compat.c"
 #include "unittests/macro.c"
 #include "unittests/nullable_funcptrs.c"
-#include "unittests/macos_compat.c"
 #include "unittests/struct_arrays_bits.c"
 #include "unittests/struct_initializers.c"
 #include "unittests/switch_goto_casts.c"
@@ -191,6 +192,10 @@ int main() {
   CHECK(nullable_fp_test2(), 31);
   CHECK(nullable_fp_test3(), 11);
   CHECK(nullable_fp_test4(), 8);
+  CHECK(asm_compat_test1(), 0x01020304);
+  CHECK(asm_compat_test2(), 10);
+  CHECK(asm_compat_test3(), 21);
+  CHECK(asm_compat_test4(), 40);
   CHECK(mac_bitfield_test1(), 2);
 
   CHECK(comma_basic(), 2);

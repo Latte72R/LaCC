@@ -301,8 +301,6 @@ void preprocess_initialize_builtins(void) {
   // Drop C99 qualifiers for our simple type system
   define_builtin_function_macro("__attribute__", 1, "");
   define_builtin_function_macro("__nonnull", 1, "");
-  define_builtin_function_macro("__asm", 1, "");
-  define_builtin_function_macro("__asm__", 1, "");
   define_builtin_object_macro("__volatile__", "");
   define_builtin_object_macro("__restrict", "");
   define_builtin_object_macro("__restrict__", "");
