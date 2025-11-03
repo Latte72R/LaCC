@@ -14,6 +14,7 @@ void check_with_name(int result, const char *name, int ans) {
 
 // Split test units (order matters for helper references)
 #include "unittests/asm_compat.c"
+#include "unittests/atomic_enum.c"
 #include "unittests/basic.c"
 #include "unittests/bool.c"
 #include "unittests/comma.c"
@@ -192,6 +193,7 @@ int main() {
   CHECK(nullable_fp_test2(), 31);
   CHECK(nullable_fp_test3(), 11);
   CHECK(nullable_fp_test4(), 8);
+  CHECK(atomic_enum_test1(), MO_RELEASE + MO_RELAXED + MO_SEQ_CST);
   CHECK(asm_compat_test1(), 0x01020304);
   CHECK(asm_compat_test2(), 10);
   CHECK(asm_compat_test3(), 21);
