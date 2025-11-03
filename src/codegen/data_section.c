@@ -56,12 +56,12 @@ void gen_global_variables() {
       continue;
     }
     if (var->is_static) {
-      write_file("  .local %.*s\n", var->len, var->name);
+      write_file("  .local " ASM_SYM_FMT "\n", ASM_SYM_ARGS(var->len, var->name));
     } else {
-      write_file("  .globl %.*s\n", var->len, var->name);
+      write_file("  .globl " ASM_SYM_FMT "\n", ASM_SYM_ARGS(var->len, var->name));
     }
     write_file("  .p2align 3\n");
-    write_file("%.*s:\n", var->len, var->name);
+    write_file(ASM_SYM_FMT ":\n", ASM_SYM_ARGS(var->len, var->name));
     if (var->init_array) {
       write_array_data(var->init_array);
     } else if (var->init_struct) {
@@ -87,9 +87,9 @@ void gen_global_variables() {
 // staticな変数の生成
 void gen_static_variables() {
   for (LVar *var = statics; var; var = var->next) {
-    write_file("  .local %.*s.%d\n", var->len, var->name, var->block);
+    write_file("  .local %s%.*s.%d\n", ASM_PREFIX, var->len, var->name, var->block);
     write_file("  .p2align 3\n");
-    write_file("%.*s.%d:\n", var->len, var->name, var->block);
+    write_file("%s%.*s.%d:\n", ASM_PREFIX, var->len, var->name, var->block);
     if (var->init_array) {
       write_array_data(var->init_array);
     } else if (var->init_struct) {

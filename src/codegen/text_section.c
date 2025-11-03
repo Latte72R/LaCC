@@ -84,7 +84,7 @@ void gen_lval(Node *node) {
   case ND_LVAR:
   case ND_VARDEC:
     if (node->var->is_static) {
-      write_file("  lea rax, %.*s.%d[rip]\n", node->var->len, node->var->name, node->var->block);
+      write_file("  lea rax, %s%.*s.%d[rip]\n", ASM_PREFIX, node->var->len, node->var->name, node->var->block);
     } else {
       write_file("  mov rax, rbp\n");
       write_file("  sub rax, %d\n", node->var->offset);
@@ -93,7 +93,7 @@ void gen_lval(Node *node) {
     break;
   case ND_GVAR:
   case ND_GLBDEC:
-    write_file("  lea rax, %.*s[rip]\n", node->var->len, node->var->name);
+    write_file("  lea rax, " ASM_SYM_FMT "[rip]\n", ASM_SYM_ARGS(node->var->len, node->var->name));
     write_file("  push rax\n");
     break;
   case ND_DEREF:
@@ -309,7 +309,7 @@ void gen(Node *node) {
       write_file("  push rax\n");
     break;
   case ND_FUNCNAME:
-    write_file("  lea rax, %.*s[rip]\n", node->fn->len, node->fn->name);
+    write_file("  lea rax, " ASM_SYM_FMT "[rip]\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
     if (!node->endline)
       write_file("  push rax\n");
     break;
@@ -744,12 +744,12 @@ void gen(Node *node) {
     break;
   case ND_FUNCDEF:
     if (node->fn->is_static) {
-      write_file("  .local %.*s\n", node->fn->len, node->fn->name);
+      write_file("  .local " ASM_SYM_FMT "\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
     } else {
-      write_file("  .globl %.*s\n", node->fn->len, node->fn->name);
+      write_file("  .globl " ASM_SYM_FMT "\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
     }
     write_file("  .p2align 4\n");
-    write_file("%.*s:\n", node->fn->len, node->fn->name);
+    write_file(ASM_SYM_FMT ":\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
     write_file("  push rbp\n");
     write_file("  mov rbp, rsp\n");
     int offset;
@@ -845,10 +845,10 @@ void gen(Node *node) {
       write_file("  jmp .Lfixup%d\n", node->id);
       write_file(".Laligned%d:\n", node->id);
       write_file("  mov rax, 0\n");
-      write_file("  call %.*s\n", node->fn->len, node->fn->name);
+      write_file("  call " ASM_SYM_FMT "\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
       write_file("  jmp .Lend%d\n", node->id);
       write_file(".Lfixup%d:\n", node->id);
-      write_file("  call %.*s\n", node->fn->len, node->fn->name);
+      write_file("  call " ASM_SYM_FMT "\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
       write_file("  add rsp, 8\n");
       write_file(".Lend%d:\n", node->id);
     } else {

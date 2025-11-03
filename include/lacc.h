@@ -4,6 +4,30 @@
 #define __LACC_H__
 
 //
+// Platform flags and assembly symbol helpers
+//
+
+// Platform detection flag (1 on Apple/Darwin, 0 otherwise)
+#if defined(__APPLE__)
+#define LACC_PLATFORM_APPLE 1
+#else
+#define LACC_PLATFORM_APPLE 0
+#endif
+
+// Assembly symbol prefix: Mach-O requires leading underscore for C symbols
+#if defined(__APPLE__)
+#define ASM_PREFIX "_"
+#else
+#define ASM_PREFIX ""
+#endif
+
+// Compose an assembly symbol from (len, name) pair used in this codebase
+// Usage example:
+//   write_file("  .globl " ASM_SYM_FMT "\n", ASM_SYM_ARGS(len, name));
+#define ASM_SYM_FMT "%s%.*s"
+#define ASM_SYM_ARGS(len, name) ASM_PREFIX, (len), (name)
+
+//
 // Main
 //
 
@@ -146,15 +170,15 @@ typedef struct Type Type;
 
 typedef struct LVar LVar;
 struct LVar {
-  LVar *next;        // 次の変数かNULL
-  char *name;        // 変数の名前
-  int len;           // 名前の長さ
-  int offset;        // RBPからのオフセット
-  int is_extern;     // externかどうか
-  Type *type;        // 変数の型
-  int is_static;     // staticかどうか
-  int block;         // ブロックのID
-  Array *init_array; // 静的記憶域期間の配列初期化データ
+  LVar *next;                 // 次の変数かNULL
+  char *name;                 // 変数の名前
+  int len;                    // 名前の長さ
+  int offset;                 // RBPからのオフセット
+  int is_extern;              // externかどうか
+  Type *type;                 // 変数の型
+  int is_static;              // staticかどうか
+  int block;                  // ブロックのID
+  Array *init_array;          // 静的記憶域期間の配列初期化データ
   StructLiteral *init_struct; // 静的記憶域期間の構造体初期化データ
 };
 
@@ -266,63 +290,63 @@ void tokenize();
 //
 
 typedef enum {
-  ND_NONE,     // 空のノード
-  ND_ADD,      // +
-  ND_SUB,      // -
-  ND_MUL,      // *
-  ND_DIV,      // /
-  ND_MOD,      // %
-  ND_EQ,       // ==
-  ND_NE,       // !=
-  ND_LT,       // <
-  ND_LE,       // <=
-  ND_AND,      // &&
-  ND_OR,       // ||
-  ND_NOT,      // !
-  ND_BITNOT,   // ~
-  ND_BITAND,   // &
-  ND_BITOR,    // |
-  ND_BITXOR,   // ^
-  ND_SHL,      // <<
-  ND_SHR,      // >>
-  ND_ASSIGN,   // =
-  ND_POSTINC,  // ++ or --
-  ND_LVAR,     // ローカル変数
-  ND_VARDEC,   // 変数宣言
-  ND_GVAR,     // グローバル変数
-  ND_GLBDEC,   // グローバル変数宣言
-  ND_NUM,      // 整数
-  ND_STRING,   // 文字列
-  ND_ARRAY,    // 配列
-  ND_ADDR,     // &
-  ND_DEREF,    // *
-  ND_SWITCH,   // switch
-  ND_CASE,     // case
-  ND_DEFAULT,  // default
-  ND_IF,       // if
-  ND_ELSE,     // else
-  ND_WHILE,    // while
-  ND_FOR,      // for
-  ND_BREAK,    // break
-  ND_CONTINUE, // continue
-  ND_DOWHILE,  // do-while
-  ND_TERNARY,  // 三項演算子
-  ND_GOTO,     // goto
-  ND_LABEL,    // ラベル
-  ND_RETURN,   // return
-  ND_FUNCDEF,  // 関数定義
-  ND_FUNCALL,  // 関数呼び出し
-  ND_FUNCNAME, // 関数名
-  ND_EXTERN,   // extern
-  ND_BLOCK,    // { ... }
-  ND_ENUM,     // 列挙体
-  ND_UNION,    // union
-  ND_STRUCT,   // 構造体
+  ND_NONE,           // 空のノード
+  ND_ADD,            // +
+  ND_SUB,            // -
+  ND_MUL,            // *
+  ND_DIV,            // /
+  ND_MOD,            // %
+  ND_EQ,             // ==
+  ND_NE,             // !=
+  ND_LT,             // <
+  ND_LE,             // <=
+  ND_AND,            // &&
+  ND_OR,             // ||
+  ND_NOT,            // !
+  ND_BITNOT,         // ~
+  ND_BITAND,         // &
+  ND_BITOR,          // |
+  ND_BITXOR,         // ^
+  ND_SHL,            // <<
+  ND_SHR,            // >>
+  ND_ASSIGN,         // =
+  ND_POSTINC,        // ++ or --
+  ND_LVAR,           // ローカル変数
+  ND_VARDEC,         // 変数宣言
+  ND_GVAR,           // グローバル変数
+  ND_GLBDEC,         // グローバル変数宣言
+  ND_NUM,            // 整数
+  ND_STRING,         // 文字列
+  ND_ARRAY,          // 配列
+  ND_ADDR,           // &
+  ND_DEREF,          // *
+  ND_SWITCH,         // switch
+  ND_CASE,           // case
+  ND_DEFAULT,        // default
+  ND_IF,             // if
+  ND_ELSE,           // else
+  ND_WHILE,          // while
+  ND_FOR,            // for
+  ND_BREAK,          // break
+  ND_CONTINUE,       // continue
+  ND_DOWHILE,        // do-while
+  ND_TERNARY,        // 三項演算子
+  ND_GOTO,           // goto
+  ND_LABEL,          // ラベル
+  ND_RETURN,         // return
+  ND_FUNCDEF,        // 関数定義
+  ND_FUNCALL,        // 関数呼び出し
+  ND_FUNCNAME,       // 関数名
+  ND_EXTERN,         // extern
+  ND_BLOCK,          // { ... }
+  ND_ENUM,           // 列挙体
+  ND_UNION,          // union
+  ND_STRUCT,         // 構造体
   ND_STRUCT_LITERAL, // 構造体リテラル
-  ND_TYPEDEF,  // typedef
-  ND_TYPE,     // 型
-  ND_TYPECAST, // 型キャスト
-  ND_COMMA     // コンマ演算子
+  ND_TYPEDEF,        // typedef
+  ND_TYPE,           // 型
+  ND_TYPECAST,       // 型キャスト
+  ND_COMMA           // コンマ演算子
 } NodeKind;
 
 // 抽象構文木のノード

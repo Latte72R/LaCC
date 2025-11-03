@@ -149,9 +149,15 @@ int main(int argc, char **argv) {
     }
   }
 
+  // Add default system include paths depending on platform
+#if LACC_PLATFORM_APPLE
+  append_include_path_if_absent(
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
+#else
   append_include_path_if_absent("/usr/lib/gcc/x86_64-linux-gnu/13/include");
   append_include_path_if_absent("/usr/include/x86_64-linux-gnu");
   append_include_path_if_absent("/usr/include");
+#endif
 
   preprocess_initialize_builtins();
 

@@ -247,10 +247,17 @@ void preprocess_initialize_builtins(void) {
   define_builtin_object_macro("__STDC_VERSION__", "199901L");
   define_builtin_object_macro("__STDC_HOSTED__", "1");
 
-  // ターゲット識別マクロ
+  // ターゲット識別マクロ（OS/ABI）
+#if LACC_PLATFORM_APPLE
+  // macOS / Darwin (Mach-O)
+  define_builtin_object_macro("__APPLE__", "1");
+  define_builtin_object_macro("__MACH__", "1");
+#else
+  // Linux (ELF)
   define_builtin_object_macro("__linux__", "1");
   define_builtin_object_macro("__gnu_linux__", "1");
   define_builtin_object_macro("__ELF__", "1");
+#endif
   define_builtin_object_macro("__x86_64__", "1");
   define_builtin_object_macro("__unix__", "1");
 
