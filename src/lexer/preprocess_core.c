@@ -1,14 +1,15 @@
-#include "lacc.h"
+#include "diagnostics.h"
+#include "runtime.h"
+#include "lexer.h"
+#include "platform.h"
+
+#include "lexer_internal.h"
 
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-// Common externs used across helpers/table/builtins
-extern Macro *macros;
-extern char *input_file;
 
 // ============================
 // Helpers (exported)

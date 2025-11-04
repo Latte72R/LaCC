@@ -1,19 +1,13 @@
-#include "lacc.h"
+#include "diagnostics.h"
+#include "runtime.h"
+#include "lexer.h"
+
+#include "lexer_internal.h"
 
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-extern char *user_input;
-extern CharPtrList *user_input_list;
-extern Token *token;
-extern char *input_file;
-extern char *expand_expression_internal(const char *expr);
-
-// Local helpers duplicated from original implementation
-static int is_ident_start_char(char c) { return (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_'); }
-static int is_ident_char(char c) { return is_ident_start_char(c) || ('0' <= c && c <= '9'); }
 
 static void append_text(char **buf, int *len, int *cap, const char *text, int text_len) {
   if (*len + text_len >= *cap) {

@@ -1,21 +1,12 @@
-#include "lacc.h"
+#include "diagnostics.h"
+#include "lexer.h"
+
+#include "lexer_internal.h"
 
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-// from preprocess_table.c
-extern Macro *find_macro(char *name, int len);
-
-// helpers
-extern char *skip_trailing_spaces_and_comments(char *cur);
-extern int is_ident_start_char(char c);
-extern int is_ident_char(char c);
-extern char *copy_trim_directive_expr(const char *start, const char *end);
-
-// evaluator
-int preprocess_evaluate_if_expression(char *expr_start, char *expr_end, int *result);
 
 typedef struct IfState IfState;
 struct IfState {

@@ -1,18 +1,12 @@
-#include "lacc.h"
+#include "diagnostics.h"
+#include "lexer.h"
+
+#include "lexer_internal.h"
 
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-// table
-extern void define_macro(char *name, char *body, char **params, int param_count, int is_function, int is_variadic);
-extern void undefine_macro(char *name, int len);
-
-// helpers
-extern int is_ident_start_char(char c);
-extern int is_ident_char(char c);
-extern char *skip_trailing_spaces_and_comments(char *cur);
 
 int parse_define_directive(char **p) {
   char *cur = *p;

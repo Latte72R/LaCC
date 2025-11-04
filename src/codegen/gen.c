@@ -1,5 +1,9 @@
 
-#include "lacc.h"
+#include "codegen.h"
+#include "diagnostics.h"
+#include "platform.h"
+
+#include "codegen_internal.h"
 
 extern void *NULL;
 

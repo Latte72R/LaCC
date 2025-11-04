@@ -1,13 +1,13 @@
 // builtin.c
 // FORTIFY 系組み込み関数の宣言とフォールバック先登録
 
-#include "lacc.h"
+#include "diagnostics.h"
+#include "runtime.h"
+#include "parser.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-extern Function *functions;
 
 static Function *find_function_by_name(const char *name) {
   int len = (int)strlen(name);

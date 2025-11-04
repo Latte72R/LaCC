@@ -1,32 +1,16 @@
 
-#include "lacc.h"
+#include "codegen.h"
+#include "diagnostics.h"
+#include "runtime.h"
+#include "lexer.h"
+#include "parser.h"
+#include "platform.h"
+#include "source.h"
 
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-extern int show_warning;
-extern int warning_cnt;
-extern char *user_input;
-extern CharPtrList *user_input_list;
-extern Token *token;
-extern Token *token_head;
-extern FileName *filenames;
-extern char *input_file;
-extern char *output_file;
-extern IncludePath *include_paths;
-extern FILE *fp;
-extern Function *functions;
-extern LVar *globals;
-extern LVar *statics;
-extern LVar *locals;
-extern Object *structs;
-extern Object *unions;
-extern Object *enums;
-extern TypeTag *type_tags;
-extern String *strings;
-extern Array *arrays;
 
 static char *duplicate_cstring(const char *src) {
   int len = strlen(src);

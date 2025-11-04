@@ -1,12 +1,11 @@
 
-#include "lacc.h"
+#include "diagnostics.h"
+#include "source.h"
+#include "runtime.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-extern FILE *fp;
-extern IncludePath *include_paths;
 
 // 指定されたファイルの内容を返す
 char *read_file(char *path) {

@@ -1,23 +1,13 @@
-#include "lacc.h"
+#include "diagnostics.h"
+#include "source.h"
+#include "runtime.h"
+#include "lexer.h"
+
+#include "lexer_internal.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-extern char *user_input;
-extern CharPtrList *user_input_list;
-extern Token *token;
-extern Token *token_head;
-extern FileName *filenames;
-extern char *input_file;
-
-// helpers
-extern char *duplicate_cstring(const char *src);
-extern char *skip_trailing_spaces_and_comments(char *cur);
-
-// Read file API
-char *read_include_file(char *name, const char *including_file, int is_system, char **resolved_name);
-char *read_include_next_file(char *name, const char *including_file, char **resolved_name);
 
 static void handle_include_directive(char *name, char *p, int is_system_header) {
   char *including_file = input_file;

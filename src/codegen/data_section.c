@@ -1,12 +1,10 @@
 
-#include "lacc.h"
+#include "diagnostics.h"
+#include "runtime.h"
+#include "parser.h"
+#include "platform.h"
 
-extern Node **code;
-extern LVar *globals;
-extern LVar *statics;
-extern String *strings;
-extern Array *arrays;
-extern StructLiteral *struct_literals;
+#include "codegen_internal.h"
 
 static void write_array_data(Array *arr) {
   for (int i = 0; i < arr->len; i++) {

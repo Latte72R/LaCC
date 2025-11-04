@@ -1,12 +1,13 @@
 
-#include "lacc.h"
+#include "diagnostics.h"
+#include "runtime.h"
+#include "lexer.h"
+
+#include "lexer_internal.h"
 
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-
-extern char *user_input;
-extern Token *token;
 
 static int tokenize_depth = 0;
 

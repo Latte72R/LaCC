@@ -1,25 +1,6 @@
-#include "lacc.h"
+#include "runtime.h"
 
 #include <stdlib.h>
-
-extern CharPtrList *user_input_list;
-extern Token *token_head;
-extern Token *token;
-extern Function *functions;
-extern LVar *locals;
-extern LVar *globals;
-extern LVar *statics;
-extern Object *structs;
-extern Object *unions;
-extern Object *enums;
-extern TypeTag *type_tags;
-extern String *strings;
-extern FileName *filenames;
-extern Array *arrays;
-extern StructLiteral *struct_literals;
-extern IncludePath *include_paths;
-extern Node **code;
-extern Macro *macros;
 
 void free_user_input_list() {
   CharPtrList *cl = user_input_list;
@@ -43,8 +24,13 @@ void free_all_tokens() {
   token = NULL;
 }
 
-static NodeList *node_list = 0;
+typedef struct NodeList NodeList;
+struct NodeList {
+  NodeList *next;
+  Node *node;
+};
 
+static NodeList *node_list = 0;
 void register_node(Node *node) {
   NodeList *nl = malloc(sizeof(NodeList));
   nl->node = node;
@@ -143,6 +129,12 @@ void free_all_lvars() {
   }
   lvar_list = NULL;
 }
+
+typedef struct TypeList TypeList;
+struct TypeList {
+  TypeList *next;
+  Type *type;
+};
 
 static TypeList *type_list = 0;
 

@@ -1,15 +1,13 @@
 
-#include "lacc.h"
+#include "diagnostics.h"
+#include "runtime.h"
+#include "parser.h"
+
+#include "../parser/parser_internal.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-extern Token *token;
-extern Location *consumed_loc;
-
-// 前方宣言: 式パーサ
-extern Node *expr();
 
 static int token_matches(Token *tok, const char *str) {
   if (!tok || tok->len != (int)strlen(str))

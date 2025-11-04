@@ -1,15 +1,11 @@
-#include "lacc.h"
+#include "diagnostics.h"
+#include "lexer.h"
+
+#include "lexer_internal.h"
 
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdlib.h>
-
-// dependencies
-extern Macro *find_macro(char *name, int len);
-extern char *expand_expression_internal(const char *expr);
-extern char *copy_trim_directive_expr(const char *start, const char *end);
-extern int is_ident_char(char c);
-extern int is_ident_start_char(char c);
 
 typedef struct {
   const char *p;

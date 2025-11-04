@@ -1,19 +1,13 @@
 
-#include "lacc.h"
+#include "diagnostics.h"
+#include "runtime.h"
+#include "parser.h"
+
+#include "parser_internal.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-extern Token *token;
-extern Node **code;
-extern Location *consumed_loc;
-extern int label_cnt;
-extern int array_cnt;
-extern int struct_literal_cnt;
-extern String *strings;
-extern Array *arrays;
-extern StructLiteral *struct_literals;
 
 static void zero_bytes(unsigned char *buffer, int size) {
   for (int i = 0; i < size; i++)
@@ -90,21 +84,6 @@ int expect_signed_number() {
 
 void error_duplicate_name(Token *tok, const char *type) {
   error_at(tok->loc, "duplicated %s name: %.*s", type, tok->len, tok->str);
-}
-
-void *safe_realloc_array(void *ptr, int elem_size, int need, int *cap) {
-  int old_cap = *cap;
-  *cap = (*cap > 0) ? *cap : 8;
-  while (need > *cap) {
-    *cap = *cap * 2;
-  }
-  if (old_cap != *cap) {
-    void *new_ptr = realloc(ptr, elem_size * *cap);
-    if (!new_ptr)
-      error("realloc failed");
-    ptr = new_ptr;
-  }
-  return ptr;
 }
 
 void program() {

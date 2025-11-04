@@ -1,13 +1,12 @@
 
-#include "lacc.h"
+#include "diagnostics.h"
+#include "runtime.h"
+#include "parser.h"
+
+#include "parser_internal.h"
 
 #include <stdbool.h>
 #include <stddef.h>
-
-extern Token *token;
-extern int label_cnt;
-extern int label_cnt;
-extern Location *consumed_loc;
 
 static Node *comma_expr();
 
@@ -798,7 +797,7 @@ int compile_time_number() {
     }
     result = member->offset;
   } else {
-    result = expect_signed_number("compile time number");
+    result = expect_signed_number();
   }
   return result;
 }

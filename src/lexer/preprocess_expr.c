@@ -1,17 +1,12 @@
-#include "lacc.h"
+#include "diagnostics.h"
+#include "lexer.h"
+
+#include "lexer_internal.h"
 
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-// Needed from other preprocess module
-extern char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count);
-extern char *substitute_macro_body(Macro *macro, char **args, int arg_count);
-
-// Local helpers duplicated from original implementation
-static int is_ident_start_char(char c) { return (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_'); }
-static int is_ident_char(char c) { return is_ident_start_char(c) || ('0' <= c && c <= '9'); }
 
 static void append_text(char **buf, int *len, int *cap, const char *text, int text_len) {
   if (*len + text_len >= *cap) {

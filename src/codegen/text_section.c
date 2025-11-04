@@ -1,17 +1,19 @@
 
-#include "lacc.h"
+#include "diagnostics.h"
+#include "runtime.h"
+#include "parser.h"
+#include "platform.h"
+
+#include "codegen_internal.h"
 
 #include <string.h>
-
-extern Node **code;
-extern LVar *globals;
-extern LVar *statics;
-extern String *strings;
 
 char *regs1[] = {"dil", "sil", "dl", "cl", "r8b", "r9b"};
 char *regs2[] = {"di", "si", "dx", "cx", "r8w", "r9w"};
 char *regs4[] = {"edi", "esi", "edx", "ecx", "r8d", "r9d"};
 char *regs8[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+
+static void gen(Node *node);
 
 // 64bitへゼロ拡張
 void zext_rax_to_64(Type *t) {
@@ -79,7 +81,7 @@ void sext_rdi_to_64(Type *t) {
   }
 }
 
-void gen_lval(Node *node) {
+static void gen_lval(Node *node) {
   switch (node->kind) {
   case ND_LVAR:
   case ND_VARDEC:
@@ -109,7 +111,7 @@ void gen_lval(Node *node) {
   }
 }
 
-void asm_memcpy(Node *lhs, Node *rhs) {
+static void asm_memcpy(Node *lhs, Node *rhs) {
   write_file("  pop rdi\n");
   write_file("  pop rsi\n");
   int size = get_sizeof(lhs->type);
@@ -271,7 +273,7 @@ void gen_expression(Node *node) {
     write_file("  push rax\n");
 }
 
-void gen(Node *node) {
+static void gen(Node *node) {
   switch (node->kind) {
   case ND_NUM:
     if (!node->endline) {

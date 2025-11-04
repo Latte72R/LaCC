@@ -1,16 +1,12 @@
 // extension.c
 // 可変長引数を扱う関数群を定義
 
-#include "lacc.h"
+#include "diagnostics.h"
+#include "runtime.h"
 
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-extern int show_warning;
-extern int warning_cnt;
-extern char *output_file;
-extern FILE *fp;
 
 // Write formatted output to the output file.
 void write_file(char *fmt, ...) {

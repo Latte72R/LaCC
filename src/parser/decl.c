@@ -1,27 +1,13 @@
 
-#include "lacc.h"
+#include "diagnostics.h"
+#include "runtime.h"
+#include "parser.h"
+
+#include "parser_internal.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-extern Token *token;
-extern int array_cnt;
-extern int block_id;
-extern Function *functions;
-extern Function *current_fn;
-extern LVar *locals;
-extern LVar *globals;
-extern LVar *statics;
-extern Object *structs;
-extern Object *unions;
-extern Object *enums;
-extern Object *current_enum_scope;
-extern TypeTag *type_tags;
-extern Location *consumed_loc;
-// from types/type.c
-extern Type *parse_function_suffix(Type *type, char *stmt);
-extern Node *assign();
 
 static int token_equals(Token *tok, const char *str) {
   if (!tok)

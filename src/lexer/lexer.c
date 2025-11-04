@@ -1,15 +1,20 @@
 
-#include "lacc.h"
+#include "diagnostics.h"
+#include "runtime.h"
+#include "lexer.h"
+
+#include "lexer_internal.h"
 
 #include <stdlib.h>
 #include <string.h>
 
-extern char *user_input;
-extern CharPtrList *user_input_list;
-extern Token *token;
-extern Token *token_head;
-extern FileName *filenames;
-extern char *input_file;
+typedef struct InputContext InputContext;
+struct InputContext {
+  InputContext *prev;
+  char *input;
+  char *path;
+  int line_offset;
+};
 
 static InputContext *current_input_context = 0;
 

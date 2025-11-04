@@ -1,19 +1,10 @@
 
-#include "lacc.h"
+#include "runtime.h"
+#include "parser.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-
-extern Function *functions;
-extern Function *current_fn;
-extern LVar *locals;
-extern LVar *globals;
-extern Object *structs;
-extern Object *unions;
-extern Object *enums;
-extern Object *current_enum_scope;
-extern TypeTag *type_tags;
 
 Node *new_node(NodeKind kind) {
   Node *node = malloc(sizeof(Node));
