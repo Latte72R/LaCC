@@ -706,15 +706,25 @@ Type *consume_type(const int should_record) {
 }
 
 int is_type(Token *tok) {
+  // Built-in basic types and qualifiers
   if (tok->kind == TK_TYPE)
     return true;
   if (tok->kind == TK_CONST)
     return true;
-  if (token->kind == TK_STRUCT || token->kind == TK_UNION || token->kind == TK_ENUM) {
+  if (tok->kind == TK_STRUCT || tok->kind == TK_UNION || tok->kind == TK_ENUM)
     return true;
-  }
+
+  // Typedef names recorded in the current scope
   if (tok->kind == TK_IDENT) {
-    TypeTag *type_tag = find_type_tag(token);
+    // Recognize common typedef-like builtins even before their typedefs are seen
+    // to match parse_base_type() behavior (e.g., size_t, wchar_t, __builtin_va_list).
+    if ((tok->len == (int)strlen("size_t") && strncmp(tok->str, "size_t", tok->len) == 0) ||
+        (tok->len == (int)strlen("wchar_t") && strncmp(tok->str, "wchar_t", tok->len) == 0) ||
+        (tok->len == (int)strlen("__builtin_va_list") && strncmp(tok->str, "__builtin_va_list", tok->len) == 0)) {
+      return true;
+    }
+
+    TypeTag *type_tag = find_type_tag(tok);
     if (type_tag)
       return true;
   }

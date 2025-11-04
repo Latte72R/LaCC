@@ -1,7 +1,7 @@
 
 #include "diagnostics.h"
-#include "runtime.h"
 #include "parser.h"
+#include "runtime.h"
 
 #include "parser_internal.h"
 
@@ -286,7 +286,9 @@ Node *case_stmt() {
   }
   token = token->next;
   Node *node = new_node(ND_CASE);
-  node->id = loop_id;
+  // Case labels must always bind to the surrounding switch, even inside nested loops.
+  // Using loop_id here is wrong when macros like do { ... } while (0) appear between cases.
+  node->id = current_switch->id;
   node->val = compile_time_number();
   for (int i = 0; i < current_switch->case_cnt; i++) {
     if (current_switch->cases[i] == node->val) {
@@ -310,7 +312,8 @@ Node *default_stmt() {
   token = token->next;
   current_switch->has_default = true;
   Node *node = new_node(ND_DEFAULT);
-  node->id = loop_id;
+  // Default label also binds to the surrounding switch, not the innermost loop.
+  node->id = current_switch->id;
   expect(":", "after default", "default");
   node->endline = true;
   return node;
@@ -419,6 +422,10 @@ Node *stmt() {
     node = return_stmt();
   } else if (is_inline_asm_keyword(token)) {
     node = inline_asm_stmt();
+  } else if (consume(";")) {
+    // Empty statement (null statement)
+    node = new_node(ND_NONE);
+    node->endline = true;
   } else {
     node = expression_stmt();
   }

@@ -1,7 +1,7 @@
 
 #include "diagnostics.h"
-#include "runtime.h"
 #include "lexer.h"
+#include "runtime.h"
 
 #include "lexer_internal.h"
 
@@ -262,10 +262,19 @@ static int parse_punctuator(char **p) {
     return 1;
   }
 
+  // 3-character punctuators
+  if (startswith(cur, "<<=") || startswith(cur, ">>=")) {
+    new_token(TK_RESERVED, cur, cur, 3);
+    cur += 3;
+    *p = cur;
+    return 1;
+  }
+
   if (startswith(cur, "==") || startswith(cur, "!=") || startswith(cur, "<=") || startswith(cur, ">=") ||
       startswith(cur, "&&") || startswith(cur, "||") || startswith(cur, "++") || startswith(cur, "--") ||
       startswith(cur, "+=") || startswith(cur, "-=") || startswith(cur, "*=") || startswith(cur, "/=") ||
-      startswith(cur, "%=") || startswith(cur, "->") || startswith(cur, "<<") || startswith(cur, ">>")) {
+      startswith(cur, "%=") || startswith(cur, "^=") || startswith(cur, "&=") || startswith(cur, "|=") ||
+      startswith(cur, "->") || startswith(cur, "<<") || startswith(cur, ">>")) {
     new_token(TK_RESERVED, cur, cur, 2);
     cur += 2;
     *p = cur;
@@ -551,6 +560,80 @@ static int parse_identifier(char **p) {
     }
 
     int name_len = after_name - start;
+
+    // Built-in magic macros: __FILE__, __LINE__, __ASSERT_FUNCTION
+    if (name_len == 8 && !strncmp(start, "__FILE__", 8)) {
+      int invocation_line = get_line_number(start);
+      (void)invocation_line;
+      const char *fname = input_file ? input_file : "";
+      int flen = (int)strlen(fname);
+      int cap = flen + 4;
+      char *body = malloc(cap);
+      if (!body)
+        error("memory allocation failed");
+      body[0] = '"';
+      memcpy(body + 1, fname, flen);
+      body[1 + flen] = '"';
+      body[2 + flen] = '\n';
+      body[3 + flen] = '\0';
+      Macro mm = {0};
+      mm.name = "__FILE__";
+      mm.body = body;
+      expand_macro(&mm, NULL, 0, invocation_line);
+      *p = cur;
+      return 1;
+    }
+    if (name_len == 8 && !strncmp(start, "__LINE__", 8)) {
+      int invocation_line = get_line_number(start);
+      char buf[32];
+      int n = snprintf(buf, sizeof(buf), "%d\n", invocation_line);
+      char *body = malloc(n + 1);
+      if (!body)
+        error("memory allocation failed");
+      memcpy(body, buf, n + 1);
+      Macro mm;
+      memset(&mm, 0, sizeof(mm));
+      mm.name = "__LINE__";
+      mm.body = body;
+      expand_macro(&mm, NULL, 0, invocation_line);
+      *p = cur;
+      return 1;
+    }
+    if (name_len == 16 && !strncmp(start, "__ASSERT_FUNCTION", 16)) {
+      int invocation_line = get_line_number(start);
+      (void)invocation_line;
+      const char *rep = "((const char*)0)\n";
+      int n = (int)strlen(rep);
+      char *body = malloc(n + 1);
+      if (!body)
+        error("memory allocation failed");
+      memcpy(body, rep, n + 1);
+      Macro mm;
+      memset(&mm, 0, sizeof(mm));
+      mm.name = "__ASSERT_FUNCTION";
+      mm.body = body;
+      expand_macro(&mm, NULL, 0, invocation_line);
+      *p = cur;
+      return 1;
+    }
+    if (name_len == 8 && !strncmp(start, "__func__", 8)) {
+      int invocation_line = get_line_number(start);
+      (void)invocation_line;
+      const char *rep = "\"\"\n"; // empty string literal
+      int n = (int)strlen(rep);
+      char *body = malloc(n + 1);
+      if (!body)
+        error("memory allocation failed");
+      memcpy(body, rep, n + 1);
+      Macro mm;
+      memset(&mm, 0, sizeof(mm));
+      mm.name = "__func__";
+      mm.body = body;
+      expand_macro(&mm, NULL, 0, invocation_line);
+      *p = cur;
+      return 1;
+    }
+
     Macro *macro = find_macro(start, name_len);
     if (macro && macro->is_function && !macro->is_expanding) {
       if (*cur == '(') {

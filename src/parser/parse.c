@@ -1,7 +1,7 @@
 
 #include "diagnostics.h"
-#include "runtime.h"
 #include "parser.h"
+#include "runtime.h"
 
 #include "parser_internal.h"
 
@@ -290,18 +290,81 @@ static void parse_struct_or_union_initializer(Type *type, unsigned char *buffer)
     token = token->next;
     return;
   }
+
+  // Two modes:
+  // 1) Designated: .member = value, ...
+  // 2) Positional: { value, value, ... } (first member first). For union,
+  //    { value } initializes the first declared member.
+  if (peek(".")) {
+    // Designated initializers
+    for (;;) {
+      expect(".", "before member designator", "struct initializer");
+      Token *member_tok = expect_ident("struct initializer");
+      if (!type->object) {
+        error_at(member_tok->loc, "incomplete type cannot be initialized [in struct initializer]");
+      }
+      LVar *member = find_object_member(type->object, member_tok);
+      if (!member) {
+        error_at(member_tok->loc, "unknown member '%.*s' in initializer [in struct initializer]", member_tok->len,
+                 member_tok->str);
+      }
+      expect("=", "after member designator", "struct initializer");
+      parse_member_initializer(member->type, buffer + member->offset);
+      if (!consume(","))
+        break;
+      if (peek("}"))
+        break;
+    }
+    expect("}", "after struct initializer", "struct initializer");
+    return;
+  }
+
+  // Positional initializers
+  if (type->ty == TY_UNION) {
+    // Initialize first-declared member
+    if (!type->object || !type->object->var) {
+      error_at(token->loc, "incomplete type cannot be initialized [in union initializer]");
+    }
+    // object->var is stored in reverse declaration order; find the tail
+    LVar *it = type->object->var;
+    LVar *first_decl = it;
+    while (it) {
+      first_decl = it;
+      it = it->next;
+    }
+    parse_member_initializer(first_decl->type, buffer + first_decl->offset);
+    if (consume(",")) {
+      // Standard的には余剰要素はエラーとする
+      error_at(token->loc, "excess elements in union initializer [in struct initializer]");
+    }
+    expect("}", "after struct initializer", "struct initializer");
+    return;
+  }
+
+  // Struct positional: initialize members in declaration order
+  if (!type->object) {
+    error_at(token->loc, "incomplete type cannot be initialized [in struct initializer]");
+  }
+  // Count members and build array in declaration order
+  int count = 0;
+  for (LVar *m = type->object->var; m; m = m->next)
+    count++;
+  if (count == 0) {
+    // Empty struct: allow { } only
+    expect("}", "after struct initializer", "struct initializer");
+    return;
+  }
+  LVar **members = malloc(sizeof(LVar *) * count);
+  int idx = count - 1;
+  for (LVar *m = type->object->var; m; m = m->next)
+    members[idx--] = m; // reverse to declaration order
+
+  int pos = 0;
   for (;;) {
-    expect(".", "before member designator", "struct initializer");
-    Token *member_tok = expect_ident("struct initializer");
-    if (!type->object) {
-      error_at(member_tok->loc, "incomplete type cannot be initialized [in struct initializer]");
+    if (pos >= count) {
+      error_at(token->loc, "excess elements in struct initializer [in struct initializer]");
     }
-    LVar *member = find_object_member(type->object, member_tok);
-    if (!member) {
-      error_at(member_tok->loc, "unknown member '%.*s' in initializer [in struct initializer]", member_tok->len,
-               member_tok->str);
-    }
-    expect("=", "after member designator", "struct initializer");
+    LVar *member = members[pos++];
     parse_member_initializer(member->type, buffer + member->offset);
     if (!consume(","))
       break;
@@ -309,6 +372,7 @@ static void parse_struct_or_union_initializer(Type *type, unsigned char *buffer)
       break;
   }
   expect("}", "after struct initializer", "struct initializer");
+  free(members);
 }
 
 StructLiteral *struct_literal(Type *type) {

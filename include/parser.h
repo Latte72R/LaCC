@@ -210,7 +210,8 @@ typedef enum {
   ND_TYPEDEF,        // typedef
   ND_TYPE,           // 型
   ND_TYPECAST,       // 型キャスト
-  ND_COMMA           // コンマ演算子
+  ND_COMMA,          // コンマ演算子
+  ND_STMTEXPR        // GNU statement expression ({ ... })
 } NodeKind;
 
 typedef struct Node Node;

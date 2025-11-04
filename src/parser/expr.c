@@ -7,6 +7,8 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
 
 static Node *comma_expr();
 
@@ -93,6 +95,46 @@ Node *assign() {
                type_name(rhs->type));
     }
     node = assign_sub(node, new_binary(ND_MOD, node, rhs), loc, true);
+  } else if (consume("&=")) {
+    loc = consumed_loc;
+    rhs = assign();
+    if (!is_number(node->type) || !is_number(rhs->type)) {
+      error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
+               type_name(rhs->type));
+    }
+    node = assign_sub(node, new_binary(ND_BITAND, node, rhs), loc, true);
+  } else if (consume("|=")) {
+    loc = consumed_loc;
+    rhs = assign();
+    if (!is_number(node->type) || !is_number(rhs->type)) {
+      error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
+               type_name(rhs->type));
+    }
+    node = assign_sub(node, new_binary(ND_BITOR, node, rhs), loc, true);
+  } else if (consume("^=")) {
+    loc = consumed_loc;
+    rhs = assign();
+    if (!is_number(node->type) || !is_number(rhs->type)) {
+      error_at(loc, "invalid operands to binary expression ('%s' and '%s') [in assign]", type_name(node->type),
+               type_name(rhs->type));
+    }
+    node = assign_sub(node, new_binary(ND_BITXOR, node, rhs), loc, true);
+  } else if (consume("<<=")) {
+    loc = consumed_loc;
+    rhs = assign();
+    if (!is_number(node->type) || !is_number(rhs->type)) {
+      error_at(loc, "invalid operands to shift expression ('%s' and '%s') [in assign]", type_name(node->type),
+               type_name(rhs->type));
+    }
+    node = assign_sub(node, new_binary(ND_SHL, node, rhs), loc, true);
+  } else if (consume(">>=")) {
+    loc = consumed_loc;
+    rhs = assign();
+    if (!is_number(node->type) || !is_number(rhs->type)) {
+      error_at(loc, "invalid operands to shift expression ('%s' and '%s') [in assign]", type_name(node->type),
+               type_name(rhs->type));
+    }
+    node = assign_sub(node, new_binary(ND_SHR, node, rhs), loc, true);
   }
   return node;
 }
@@ -712,6 +754,31 @@ Node *primary() {
 
   // 括弧
   if (consume("(")) {
+    // GNU statement expression: ({ ... })
+    if (consume("{")) {
+      // Parse a compound statement as an expression and take the value of the
+      // last expression statement inside the block.
+      Node *blk = block_stmt(); // assumes '{' already consumed
+      expect(")", "after statement expression body", "statement expression");
+
+      // Determine the last non-ND_NONE statement in the block
+      int last = -1;
+      for (int i = 0; blk->body[i]->kind != ND_NONE; i++)
+        last = i;
+      if (last < 0) {
+        error_at(consumed_loc, "empty statement expression [in primary]");
+      }
+      Node *last_stmt = blk->body[last];
+      // Ensure the last statement leaves a value on the stack when used as an expression.
+      // If it's an expression statement, it has endline=true; flip it so gen() keeps the value.
+      // If it's not an expression, we still allow it but set type to int.
+      last_stmt->endline = false;
+
+      Node *se = new_node(ND_STMTEXPR);
+      se->then = blk; // reuse 'then' to point to body block
+      se->type = last_stmt->type ? last_stmt->type : new_type(TY_INT);
+      return se;
+    }
     node = expr();
     expect(")", "after expression", "primary");
     return node;
@@ -757,6 +824,23 @@ Node *primary() {
     error_at(token->loc, "expected expression [in primary]");
   }
   tok = expect_ident("primary");
+
+  // Support C99 __func__: expand to a string literal of the current function name
+  if (tok->len == 8 && !strncmp(tok->str, "__func__", 8)) {
+    if (!current_fn) {
+      error_at(tok->loc, "__func__ used outside of function [in primary]");
+    }
+    String *s = malloc(sizeof(String));
+    s->text = current_fn->name;
+    s->len = current_fn->len;
+    s->id = label_cnt++;
+    s->next = strings;
+    strings = s;
+    node = new_node(ND_STRING);
+    node->id = s->id;
+    node->type = new_type_ptr(new_type(TY_CHAR));
+    return node;
+  }
 
   // enumのメンバー
   LVar *member = find_enum_member(tok);

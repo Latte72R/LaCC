@@ -1,11 +1,12 @@
 
 #include "diagnostics.h"
-#include "runtime.h"
 #include "parser.h"
 #include "platform.h"
+#include "runtime.h"
 
 #include "codegen_internal.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 char *regs1[] = {"dil", "sil", "dl", "cl", "r8b", "r9b"};
@@ -14,6 +15,67 @@ char *regs4[] = {"edi", "esi", "edx", "ecx", "r8d", "r9d"};
 char *regs8[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 
 static void gen(Node *node);
+
+// Collect case labels actually present in the AST subtree for a given switch id.
+static void collect_defined_cases(Node *n, int switch_id, int **out_vals, int *cnt, int *cap) {
+  if (!n)
+    return;
+  if (n->kind == ND_CASE && n->id == switch_id) {
+    // Check duplicate
+    for (int i = 0; i < *cnt; i++) {
+      if ((*out_vals)[i] == n->val)
+        return;
+    }
+    // Append
+    if (*cap == 0) {
+      *cap = 16;
+      *out_vals = malloc(sizeof(int) * (*cap));
+    } else if (*cnt >= *cap) {
+      *cap *= 2;
+      *out_vals = realloc(*out_vals, sizeof(int) * (*cap));
+    }
+    (*out_vals)[(*cnt)++] = n->val;
+    return;
+  }
+  // Recurse into children
+  switch (n->kind) {
+  case ND_BLOCK:
+    for (int i = 0; n->body && n->body[i] && n->body[i]->kind != ND_NONE; i++)
+      collect_defined_cases(n->body[i], switch_id, out_vals, cnt, cap);
+    break;
+  case ND_IF:
+  case ND_TERNARY:
+    collect_defined_cases(n->cond, switch_id, out_vals, cnt, cap);
+    collect_defined_cases(n->then, switch_id, out_vals, cnt, cap);
+    collect_defined_cases(n->els, switch_id, out_vals, cnt, cap);
+    break;
+  case ND_WHILE:
+  case ND_DOWHILE:
+  case ND_FOR:
+    collect_defined_cases(n->init, switch_id, out_vals, cnt, cap);
+    collect_defined_cases(n->cond, switch_id, out_vals, cnt, cap);
+    collect_defined_cases(n->then, switch_id, out_vals, cnt, cap);
+    collect_defined_cases(n->step, switch_id, out_vals, cnt, cap);
+    break;
+  case ND_SWITCH:
+    collect_defined_cases(n->cond, switch_id, out_vals, cnt, cap);
+    collect_defined_cases(n->then, switch_id, out_vals, cnt, cap);
+    break;
+  case ND_TYPECAST:
+    collect_defined_cases(n->lhs, switch_id, out_vals, cnt, cap);
+    break;
+  case ND_FUNCALL:
+    collect_defined_cases(n->lhs, switch_id, out_vals, cnt, cap);
+    for (int i = 0; i < MAX_FUNC_PARAMS && n->args[i]; i++)
+      collect_defined_cases(n->args[i], switch_id, out_vals, cnt, cap);
+    break;
+  default:
+    // Generic binary/unary nodes
+    collect_defined_cases(n->lhs, switch_id, out_vals, cnt, cap);
+    collect_defined_cases(n->rhs, switch_id, out_vals, cnt, cap);
+    break;
+  }
+}
 
 // 64bitへゼロ拡張
 void zext_rax_to_64(Type *t) {
@@ -430,6 +492,19 @@ static void gen(Node *node) {
       write_file("  pop rax\n");
     gen(node->rhs);
     break;
+  case ND_STMTEXPR:
+    // Generate the inner block. The last expression inside the block was
+    // marked to keep its value on the stack. If this statement expression is
+    // used as a full statement (endline=true), pop the value; otherwise, keep
+    // it as the value of the expression.
+    if (!node->then)
+      error("invalid ND_STMTEXPR: missing body");
+    gen(node->then);
+    if (node->endline) {
+      // Discard the value if present
+      write_file("  pop rax\n");
+    }
+    break;
   case ND_ASSIGN:
     if (node->val) {
       gen_lval(node->lhs);
@@ -676,17 +751,22 @@ static void gen(Node *node) {
   case ND_LABEL:
     write_file(".Llabel%d:\n", node->label->id);
     break;
-  case ND_SWITCH:
+  case ND_SWITCH: {
     gen(node->cond);
     write_file("  pop rax\n");
-    for (int i = 0; i < node->case_cnt; i++) {
-      int n = node->cases[i];
+    // Prefer the actually defined case labels in the subtree to avoid jumping
+    // to undefined labels when macros/loops reorder parsing.
+    int *defined = NULL;
+    int dcnt = 0;
+    int dcap = 0;
+    collect_defined_cases(node->then, node->id, &defined, &dcnt, &dcap);
+    for (int i = 0; i < dcnt; i++) {
+      int n = defined[i];
       write_file("  cmp rax, %d\n", n);
-      if (n < 0) {
+      if (n < 0)
         write_file("  je .Lcase%d__%d\n", node->id, -n);
-      } else {
+      else
         write_file("  je .Lcase%d_%d\n", node->id, n);
-      }
     }
     if (node->has_default) {
       write_file("  jmp .Ldefault%d\n", node->id);
@@ -695,7 +775,11 @@ static void gen(Node *node) {
     }
     gen(node->then);
     write_file(".Lend%d:\n", node->id);
+    // Free temporary array
+    if (defined)
+      free(defined);
     break;
+  }
   case ND_CASE: {
     int n = node->val;
     if (n < 0) {
