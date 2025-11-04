@@ -1,7 +1,7 @@
 
 #include "diagnostics.h"
-#include "runtime.h"
 #include "parser.h"
+#include "runtime.h"
 
 #include "../parser/parser_internal.h"
 
@@ -50,6 +50,29 @@ Type *new_type(TypeKind ty) {
   type->param_count = 0;
   type->is_variadic = false;
   return type;
+}
+
+// Deep-copy a Type tree. Object pointers (struct/union/enum descriptors) and
+// Token pointers are shared; only Type nodes are duplicated so qualifiers and
+// declarator decorations applied after lookup won't mutate typedef canonicals.
+static Type *copy_type_internal(const Type *src) {
+  if (!src)
+    return NULL;
+  Type *dst = new_type(src->ty);
+  dst->is_const = src->is_const;
+  dst->is_unsigned = src->is_unsigned;
+  dst->array_size = src->array_size;
+  dst->object = src->object; // share object metadata
+  // Recursively copy pointer target and function return/params
+  dst->ptr_to = copy_type_internal(src->ptr_to);
+  dst->return_type = copy_type_internal(src->return_type);
+  dst->param_count = src->param_count;
+  dst->is_variadic = src->is_variadic;
+  for (int i = 0; i < src->param_count && i < MAX_FUNC_PARAMS; i++) {
+    dst->param_types[i] = copy_type_internal(src->param_types[i]);
+    dst->param_names[i] = src->param_names[i]; // share Token*
+  }
+  return dst;
 }
 
 Type *new_type_ptr(Type *ptr_to) {
@@ -129,8 +152,12 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
     } else {
       TypeTag *type_tag = find_type_tag(token);
       if (type_tag) {
-        type_tag->type->is_const = type->is_const;
-        type = type_tag->type;
+        // Do not mutate the canonical typedef Type object. Create a copy and
+        // apply qualifiers to the copy so that uses like 'const typedef_name'
+        // don't leak const into the global typedef.
+        Type *tt = copy_type_internal(type_tag->type);
+        tt->is_const = type->is_const;
+        type = tt;
         token = token->next;
       } else {
         return NULL;

@@ -1,7 +1,7 @@
 
 #include "diagnostics.h"
-#include "runtime.h"
 #include "parser.h"
+#include "runtime.h"
 
 #include "parser_internal.h"
 
@@ -100,9 +100,13 @@ Node *assign() {
 Node *ternary_operator() {
   Node *node = logical_or();
   if (consume("?")) {
-    Node *then_branch = expr();
+    // Inside conditional operator, both branches should be parsed as
+    // assignment-expressions (not full comma-expressions). Using expr()
+    // here would swallow argument separators (',') in contexts like
+    // function-call arguments.
+    Node *then_branch = assign();
     expect(":", "after then branch", "ternary operator");
-    Node *else_branch = expr();
+    Node *else_branch = assign();
     Node *ternary = new_node(ND_TERNARY);
     ternary->cond = node;
     ternary->then = then_branch;
