@@ -93,15 +93,12 @@ void gen_lval(Node *node) {
     break;
   case ND_GVAR:
   case ND_GLBDEC:
-#if LACC_PLATFORM_APPLE
     if (node->var->is_static) {
       write_file("  lea rax, " ASM_SYM_FMT "[rip]\n", ASM_SYM_ARGS(node->var->len, node->var->name));
     } else {
-      write_file("  mov rax, QWORD PTR [rip + " ASM_SYM_FMT "@GOTPCREL]\n", ASM_SYM_ARGS(node->var->len, node->var->name));
+      write_file("  mov rax, QWORD PTR [rip + " ASM_SYM_FMT "@GOTPCREL]\n",
+                 ASM_SYM_ARGS(node->var->len, node->var->name));
     }
-#else
-    write_file("  lea rax, " ASM_SYM_FMT "[rip]\n", ASM_SYM_ARGS(node->var->len, node->var->name));
-#endif
     write_file("  push rax\n");
     break;
   case ND_DEREF:
@@ -808,8 +805,7 @@ void gen(Node *node) {
       write_file("  pop rbp\n");
       write_file("  ret\n");
     }
-    }
-    break;
+  } break;
   case ND_FUNCALL:
     if (!node->fn) {
       // 関数ポインタの場合は先にポインタを評価してスタックに保持
