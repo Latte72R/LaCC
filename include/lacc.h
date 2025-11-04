@@ -228,7 +228,7 @@ struct TypeTag {
   int len;    // 名前の長さ
 };
 
-#define MAX_FUNC_PARAMS 6
+#define MAX_FUNC_PARAMS 16
 
 struct Type {
   TypeKind ty;
