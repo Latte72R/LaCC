@@ -298,17 +298,25 @@ void preprocess_initialize_builtins(void) {
   define_builtin_object_macro("__UINTPTR_MAX__", "18446744073709551615UL");
   define_builtin_object_macro("__WCHAR_MAX__", "2147483647");
 
-  // Drop C99 qualifiers for our simple type system
+  /* 機能検出は未対応なら 0 に落とす */
+  define_builtin_function_macro("__has_attribute", 1, "0");
+  define_builtin_function_macro("__has_builtin", 1, "0");
+
+  /* 属性は関数形式で空展開 */
   define_builtin_function_macro("__attribute__", 1, "");
   define_builtin_function_macro("__nonnull", 1, "");
-  define_builtin_object_macro("__volatile__", "");
-  define_builtin_object_macro("__restrict", "");
-  define_builtin_object_macro("__restrict__", "");
-  define_builtin_object_macro("restrict", "");
-  define_builtin_object_macro("__inline", "inline");
-  define_builtin_object_macro("__inline__", "inline");
-  define_builtin_object_macro("inline", "");
-  define_builtin_object_macro("__extension__", "");
   define_builtin_object_macro("__wur", "");
-  define_builtin_object_macro("register", "");
+
+  /* GNU 同義語は本体キーワードに写す */
+  define_builtin_object_macro("__restrict__", "restrict");
+  define_builtin_object_macro("__restrict", "restrict");
+  define_builtin_object_macro("__volatile__", "volatile");
+  define_builtin_object_macro("__inline__", "inline");
+  define_builtin_object_macro("__inline", "inline");
+  define_builtin_object_macro("__signed__", "signed");
+  define_builtin_object_macro("__const", "const");
+
+  /* GCC の “構文緩和” */
+  define_builtin_object_macro("__extension__", "");
+  define_builtin_object_macro("inline", "");
 }

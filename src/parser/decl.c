@@ -235,6 +235,8 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   fn->is_defined = false;
   fn->type_check = !type->is_variadic;
   fn->labels = NULL;
+  fn->builtin_kind = BUILTIN_FN_NONE;
+  fn->builtin_alias = NULL;
   locals = NULL;
   Function *prev_fn = current_fn;
   current_fn = fn;
@@ -403,6 +405,8 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
       functions = fn;
       fn->name = tok->str;
       fn->len = tok->len;
+      fn->builtin_kind = BUILTIN_FN_NONE;
+      fn->builtin_alias = NULL;
     }
     fn->offset = 0;
     fn->is_static = is_static;

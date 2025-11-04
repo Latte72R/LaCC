@@ -259,18 +259,32 @@ struct Label {
   int id;      // ラベルのID
 };
 
+// 組み込み関数の種類
+typedef enum {
+  BUILTIN_FN_NONE = 0,
+  BUILTIN_FN_MEMCPY_CHK,
+  BUILTIN_FN_MEMMOVE_CHK,
+  BUILTIN_FN_MEMSET_CHK,
+  BUILTIN_FN_STRCPY_CHK,
+  BUILTIN_FN_STRNCPY_CHK,
+  BUILTIN_FN_STPCPY_CHK,
+  BUILTIN_FN_OBJECT_SIZE
+} BuiltinFunctionKind;
+
 // 関数の型
 typedef struct Function Function;
 struct Function {
-  Function *next; // 次の関数かNULL
-  char *name;     // 変数の名前
-  int len;        // 名前の長さ
-  int offset;     // RBPからのオフセット
-  int is_static;  // staticかどうか
-  Label *labels;  // ラベルのリスト
-  Type *type;     // 戻り値と引数の型
-  int type_check; // 型チェックするかどうか
-  int is_defined; // 定義済みかどうか
+  Function *next;                // 次の関数かNULL
+  char *name;                    // 変数の名前
+  int len;                       // 名前の長さ
+  int offset;                    // RBPからのオフセット
+  int is_static;                 // staticかどうか
+  Label *labels;                 // ラベルのリスト
+  Type *type;                    // 戻り値と引数の型
+  int type_check;                // 型チェックするかどうか
+  int is_defined;                // 定義済みかどうか
+  BuiltinFunctionKind builtin_kind; // 組み込み関数の種類
+  Function *builtin_alias;          // 下位実装として呼び出す関数
 };
 
 // lexer.c からエクスポートする関数
@@ -460,6 +474,10 @@ int is_type_compatible(Type *lhs, Type *rhs);
 int is_type_identical(Type *lhs, Type *rhs);
 int is_type_assignable(Type *lhs, Type *rhs);
 int eval_const_expr(Node *node, int *ok);
+
+// Builtin helpers
+void initialize_builtin_functions(void);
+Node *lower_builtin_function_call(Node *call);
 
 // decl.c
 Node *function_definition(Token *tok, Type *type, int is_static);

@@ -17,6 +17,7 @@ void check_with_name(int result, const char *name, int ans) {
 #include "unittests/atomic_enum.c"
 #include "unittests/basic.c"
 #include "unittests/bool.c"
+#include "unittests/builtins_fortify.c"
 #include "unittests/comma.c"
 #include "unittests/enum_init.c"
 #include "unittests/funcptrs_ternary_sizeof.c"
@@ -302,6 +303,14 @@ int main() {
   CHECK(macro_test18(), 1);
   CHECK(macro_test19(), 1);
   CHECK(macro_test20(), 1);
+
+  CHECK(builtin_object_size_test(), 1);
+  CHECK(builtin_memcpy_chk_test(), 1);
+  CHECK(builtin_memmove_chk_test(), 1);
+  CHECK(builtin_memset_chk_test(), 1);
+  CHECK(builtin_strcpy_chk_test(), 1);
+  CHECK(builtin_strncpy_chk_test(), 1);
+  CHECK(builtin_stpcpy_chk_test(), 1);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

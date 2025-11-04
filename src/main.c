@@ -162,6 +162,7 @@ int main(int argc, char **argv) {
 #endif
 
   preprocess_initialize_builtins();
+  initialize_builtin_functions();
 
   // トークナイズしてパースする
   // 結果はcodeに保存される

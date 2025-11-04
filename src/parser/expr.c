@@ -653,7 +653,11 @@ Node *access_member() {
           }
         }
       }
-      node = call;
+      if (call->fn) {
+        node = lower_builtin_function_call(call);
+      } else {
+        node = call;
+      }
     } else if (consume(".")) {
       if (node->type->ty != TY_STRUCT && node->type->ty != TY_UNION) {
         error_at(prev_tok->loc, "%.*s is not an object [in object reference]", prev_tok->len, prev_tok->str);
