@@ -319,4 +319,10 @@ void preprocess_initialize_builtins(void) {
   /* GCC の “構文緩和” */
   define_builtin_object_macro("__extension__", "");
   define_builtin_object_macro("inline", "");
+
+  /* Clang系の機能プローブを未対応なら 0 に落とす */
+  define_builtin_function_macro("__has_include", 1, "0");
+  define_builtin_function_macro("__has_include_next", 1, "0");
+  define_builtin_function_macro("__has_feature", 1, "0");
+  define_builtin_function_macro("__has_extension", 1, "0");
 }
