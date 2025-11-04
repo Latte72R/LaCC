@@ -46,3 +46,9 @@ int builtin_stpcpy_chk_test(void) {
   char *ret = __builtin___stpcpy_chk(dst, "ko", sizeof(dst));
   return (ret == dst + 2) && dst[0] == 'k' && dst[1] == 'o' && dst[2] == '\0';
 }
+
+int builtin_snprintf_chk_test(void) {
+  char buf[16];
+  int ret = __builtin___snprintf_chk(buf, sizeof(buf), 0, sizeof(buf), "%s", "hi");
+  return (ret == 2) && buf[0] == 'h' && buf[1] == 'i' && buf[2] == '\0';
+}
