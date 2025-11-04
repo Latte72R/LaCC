@@ -55,10 +55,14 @@ void gen_global_variables() {
     if (var->is_extern) {
       continue;
     }
+#if !LACC_PLATFORM_APPLE
     if (var->is_static) {
       write_file("  .local " ASM_SYM_FMT "\n", ASM_SYM_ARGS(var->len, var->name));
-    } else {
-      write_file("  .globl " ASM_SYM_FMT "\n", ASM_SYM_ARGS(var->len, var->name));
+    } else
+#endif
+    {
+      if (!var->is_static)
+        write_file("  .globl " ASM_SYM_FMT "\n", ASM_SYM_ARGS(var->len, var->name));
     }
     write_file("  .p2align 3\n");
     write_file(ASM_SYM_FMT ":\n", ASM_SYM_ARGS(var->len, var->name));
@@ -87,7 +91,9 @@ void gen_global_variables() {
 // staticな変数の生成
 void gen_static_variables() {
   for (LVar *var = statics; var; var = var->next) {
+#if !LACC_PLATFORM_APPLE
     write_file("  .local %s%.*s.%d\n", ASM_PREFIX, var->len, var->name, var->block);
+#endif
     write_file("  .p2align 3\n");
     write_file("%s%.*s.%d:\n", ASM_PREFIX, var->len, var->name, var->block);
     if (var->init_array) {
@@ -130,12 +136,20 @@ static void gen_struct_literals() {
 }
 
 void gen_rodata_section() {
+#if LACC_PLATFORM_APPLE
+  write_file("  .section __TEXT,__cstring,cstring_literals\n");
+#else
   write_file("  .section .rodata\n");
+#endif
   gen_string_literal();
 }
 
 void gen_data_section() {
+#if LACC_PLATFORM_APPLE
+  write_file("  .section __DATA,__data\n");
+#else
   write_file("  .data\n");
+#endif
   gen_global_variables();
   gen_static_variables();
   gen_array_literals();

@@ -743,10 +743,14 @@ void gen(Node *node) {
       write_file("  push rax\n");
     break;
   case ND_FUNCDEF:
+#if !LACC_PLATFORM_APPLE
     if (node->fn->is_static) {
       write_file("  .local " ASM_SYM_FMT "\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
-    } else {
-      write_file("  .globl " ASM_SYM_FMT "\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
+    } else
+#endif
+    {
+      if (!node->fn->is_static)
+        write_file("  .globl " ASM_SYM_FMT "\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
     }
     write_file("  .p2align 4\n");
     write_file(ASM_SYM_FMT ":\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
@@ -920,7 +924,11 @@ void gen(Node *node) {
 }
 
 void gen_text_section() {
+#if LACC_PLATFORM_APPLE
+  write_file("  .section __TEXT,__text,regular,pure_instructions\n");
+#else
   write_file("  .text\n");
+#endif
   for (int i = 0; code[i]->kind != ND_NONE; i++)
     gen(code[i]);
 }
