@@ -69,6 +69,7 @@ typedef enum {
   TK_CONST,    // const
   TK_STATIC,   // static
   TK_EXTERN,   // extern
+  TK_INLINE,   // inline
   TK_SWITCH,   // switch
   TK_CASE,     // case
   TK_DEFAULT,  // default
@@ -287,6 +288,7 @@ struct Function {
   int is_defined;                // 定義済みかどうか
   BuiltinFunctionKind builtin_kind; // 組み込み関数の種類
   Function *builtin_alias;          // 下位実装として呼び出す関数
+  int is_inline;                 // inline指定かどうか
 };
 
 // lexer.c からエクスポートする関数
@@ -482,11 +484,11 @@ void initialize_builtin_functions(void);
 Node *lower_builtin_function_call(Node *call);
 
 // decl.c
-Node *function_definition(Token *tok, Type *type, int is_static);
+Node *function_definition(Token *tok, Type *type, int is_static, int is_inline);
 Node *local_variable_declaration(Token *tok, Type *type, int is_static);
 Node *global_variable_declaration(Token *tok, Type *type, int is_static);
 Node *extern_variable_declaration(Token *tok, Type *type);
-Node *vardec_and_funcdef_stmt(int is_static, int is_extern);
+Node *vardec_and_funcdef_stmt(int is_static, int is_extern, int is_inline);
 Object *struct_and_union_declaration(const int is_struct, const int is_union, const int should_record);
 Object *enum_declaration(const int should_record);
 Node *typedef_stmt();

@@ -79,6 +79,9 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
   Token *tok = token;
   Type *type = new_type(TY_NONE);
 
+  while (token->kind == TK_INLINE)
+    token = token->next;
+
   // GCC 拡張: __extension__ は警告抑制用キーワード。型文脈では無視する。
   while (token->kind == TK_IDENT && token->len == (int)strlen("__extension__") &&
          strncmp(token->str, "__extension__", token->len) == 0) {
@@ -93,6 +96,9 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
   } else {
     type->is_const = false;
   }
+
+  while (token->kind == TK_INLINE)
+    token = token->next;
 
   // 基本型の処理
   if (token->kind == TK_STRUCT) {
@@ -200,6 +206,10 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
         seen_void = true;
         seen_any = true;
         break; // void は他の整数型指定子と組み合わせ不可
+      }
+      if (token->kind == TK_INLINE) {
+        token = token->next;
+        continue;
       }
       break; // 型指定子の並びが終了
     }

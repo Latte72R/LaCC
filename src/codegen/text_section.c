@@ -742,16 +742,18 @@ void gen(Node *node) {
     if (!node->endline)
       write_file("  push rax\n");
     break;
-  case ND_FUNCDEF:
+  case ND_FUNCDEF: {
+    int is_local_symbol = node->fn->is_static || node->fn->is_inline;
 #if !LACC_PLATFORM_APPLE
-    if (node->fn->is_static) {
+    if (is_local_symbol) {
       write_file("  .local " ASM_SYM_FMT "\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
-    } else
-#endif
-    {
-      if (!node->fn->is_static)
-        write_file("  .globl " ASM_SYM_FMT "\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
+    } else {
+      write_file("  .globl " ASM_SYM_FMT "\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
     }
+#else
+    if (!is_local_symbol)
+      write_file("  .globl " ASM_SYM_FMT "\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
+#endif
     write_file("  .p2align 4\n");
     write_file(ASM_SYM_FMT ":\n", ASM_SYM_ARGS(node->fn->len, node->fn->name));
     write_file("  push rbp\n");
@@ -797,6 +799,7 @@ void gen(Node *node) {
       write_file("  mov rsp, rbp\n");
       write_file("  pop rbp\n");
       write_file("  ret\n");
+    }
     }
     break;
   case ND_FUNCALL:

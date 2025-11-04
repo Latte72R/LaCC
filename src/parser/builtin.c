@@ -34,6 +34,7 @@ static Function *create_function_entry(const char *name) {
   fn->is_defined = false;
   fn->builtin_kind = BUILTIN_FN_NONE;
   fn->builtin_alias = NULL;
+  fn->is_inline = false;
   return fn;
 }
 
@@ -90,6 +91,7 @@ static Function *define_plain_function(const char *name, Type *type) {
   configure_common_fields(fn, type);
   fn->builtin_kind = BUILTIN_FN_NONE;
   fn->builtin_alias = NULL;
+  fn->is_inline = false;
   return fn;
 }
 
@@ -98,6 +100,7 @@ static Function *define_builtin_function(const char *name, Type *type, BuiltinFu
   configure_common_fields(fn, type);
   fn->builtin_kind = kind;
   fn->builtin_alias = alias;
+  fn->is_inline = false;
   return fn;
 }
 

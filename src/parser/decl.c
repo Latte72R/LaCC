@@ -218,7 +218,7 @@ Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int set
   return node;
 }
 
-Node *function_definition(Token *tok, Type *type, int is_static) {
+Node *function_definition(Token *tok, Type *type, int is_static, int is_inline) {
   Function *fn = find_fn(tok);
   if (fn && fn->is_defined) {
     error_at(consumed_loc, "duplicated function definition: %.*s [in function definition]", tok->len, tok->str);
@@ -231,6 +231,7 @@ Node *function_definition(Token *tok, Type *type, int is_static) {
   fn->len = tok->len;
   fn->offset = 0;
   fn->is_static = is_static;
+  fn->is_inline = is_inline;
   fn->type = type;
   fn->is_defined = false;
   fn->type_check = !type->is_variadic;
@@ -356,7 +357,7 @@ Node *extern_variable_declaration(Token *tok, Type *type) {
   return node;
 }
 
-Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
+Node *vardec_and_funcdef_stmt(int is_static, int is_extern, int is_inline) {
   // 変数宣言または関数定義
   Token *prev_tok = token;
   Type *type = consume_type(false);
@@ -393,7 +394,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
     if (peek("{")) {
       if (current_fn)
         error_at(token->loc, "nested function is not supported [in function definition]");
-      return function_definition(tok, type, is_static);
+      return function_definition(tok, type, is_static, is_inline);
     }
 
     // ここはプロトタイプ宣言。外側の関数のローカル情報(locals/current_fn)を
@@ -410,6 +411,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern) {
     }
     fn->offset = 0;
     fn->is_static = is_static;
+    fn->is_inline = is_inline;
     fn->type = type;
     fn->is_defined = false;
     // パラメータ未指定(例: f();) は型チェックしない

@@ -411,6 +411,13 @@ static int parse_declaration_specifier(char **p) {
     return 1;
   }
 
+  if (startswith(cur, "inline") && !is_alnum(cur[6])) {
+    new_token(TK_INLINE, cur, cur, 6);
+    cur += 6;
+    *p = cur;
+    return 1;
+  }
+
   if (startswith(cur, "volatile") && !is_alnum(cur[8])) {
     // "volatile" is not supported yet
     // Because not performing any optimizations, special handling for volatile isn't necessary.

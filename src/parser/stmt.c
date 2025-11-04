@@ -386,14 +386,26 @@ Node *stmt() {
     node = goto_stmt();
   } else if (check_label()) {
     node = label_stmt();
-  } else if (token->kind == TK_EXTERN) {
-    token = token->next;
-    node = vardec_and_funcdef_stmt(false, true);
-  } else if (token->kind == TK_STATIC) {
-    token = token->next;
-    node = vardec_and_funcdef_stmt(true, false);
-  } else if (is_type(token)) {
-    node = vardec_and_funcdef_stmt(false, false);
+  } else if (token->kind == TK_EXTERN || token->kind == TK_STATIC || token->kind == TK_INLINE || is_type(token)) {
+    int is_static = 0;
+    int is_extern = 0;
+    int is_inline = 0;
+    Token *saved = token;
+    while (token->kind == TK_EXTERN || token->kind == TK_STATIC || token->kind == TK_INLINE) {
+      if (token->kind == TK_EXTERN)
+        is_extern = 1;
+      else if (token->kind == TK_STATIC)
+        is_static = 1;
+      else if (token->kind == TK_INLINE)
+        is_inline = 1;
+      token = token->next;
+    }
+    if (!is_type(token)) {
+      token = saved;
+      node = expression_stmt();
+    } else {
+      node = vardec_and_funcdef_stmt(is_static, is_extern, is_inline);
+    }
   } else if (token->kind == TK_TYPEDEF) {
     node = typedef_stmt();
   } else if (token->kind == TK_SWITCH) {

@@ -313,12 +313,12 @@ void preprocess_initialize_builtins(void) {
   define_builtin_object_macro("__volatile__", "volatile");
   define_builtin_object_macro("__inline__", "inline");
   define_builtin_object_macro("__inline", "inline");
+  define_builtin_object_macro("__header_inline", "inline");
   define_builtin_object_macro("__signed__", "signed");
   define_builtin_object_macro("__const", "const");
 
   /* GCC の “構文緩和” */
   define_builtin_object_macro("__extension__", "");
-  define_builtin_object_macro("inline", "");
 
   /* Clang系の機能プローブを未対応なら 0 に落とす */
   define_builtin_function_macro("__has_include", 1, "0");
