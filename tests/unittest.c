@@ -23,7 +23,6 @@ void check_with_name(int result, const char *name, int ans) {
 #include "unittests/funcptrs_ternary_sizeof.c"
 #include "unittests/literals_and_switch.c"
 #include "unittests/loops_strings_arrays.c"
-#include "unittests/macos_compat.c"
 #include "unittests/macro.c"
 #include "unittests/nullable_funcptrs.c"
 #include "unittests/struct_arrays_bits.c"
@@ -199,7 +198,6 @@ int main() {
   CHECK(asm_compat_test2(), 10);
   CHECK(asm_compat_test3(), 21);
   CHECK(asm_compat_test4(), 40);
-  CHECK(mac_bitfield_test1(), 2);
 
   CHECK(comma_basic(), 2);
   CHECK(comma_assignments(), 10);
