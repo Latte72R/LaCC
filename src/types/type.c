@@ -824,18 +824,48 @@ static int type_rank(Type *type) {
   }
 }
 
+static Type *clone_integer_type(Type *type) {
+  Type *t = new_type(type->ty);
+  t->is_unsigned = type->is_unsigned;
+  return t;
+}
+
 Type *max_type(Type *lhs, Type *rhs) {
+  if (!lhs)
+    return rhs;
+  if (!rhs)
+    return lhs;
+
   int size_l = type_size(lhs);
   int size_r = type_size(rhs);
-  TypeKind ty;
-  if (size_l > size_r)
-    ty = lhs->ty;
-  else if (size_r > size_l)
-    ty = rhs->ty;
-  else
-    ty = type_rank(lhs) >= type_rank(rhs) ? lhs->ty : rhs->ty;
-  Type *t = new_type(ty);
-  t->is_unsigned = lhs->is_unsigned || rhs->is_unsigned;
+
+  // 同符号であれば、より大きい（またはランクが高い）型を選ぶ
+  if (lhs->is_unsigned == rhs->is_unsigned) {
+    Type *base;
+    if (size_l > size_r)
+      base = lhs;
+    else if (size_r > size_l)
+      base = rhs;
+    else
+      base = type_rank(lhs) >= type_rank(rhs) ? lhs : rhs;
+    return clone_integer_type(base);
+  }
+
+  // 片方のみ unsigned の場合は、C の通常算術変換規則に従う
+  Type *signed_type = lhs->is_unsigned ? rhs : lhs;
+  Type *unsigned_type = lhs->is_unsigned ? lhs : rhs;
+  int signed_rank = type_rank(signed_type);
+  int unsigned_rank = type_rank(unsigned_type);
+
+  if (unsigned_rank >= signed_rank)
+    return clone_integer_type(unsigned_type);
+
+  // signed 側の方がランクは高いが、全ての値を表現できるかはサイズで判定する
+  if (type_size(signed_type) > type_size(unsigned_type))
+    return clone_integer_type(signed_type);
+
+  Type *t = new_type(signed_type->ty);
+  t->is_unsigned = true;
   return t;
 }
 

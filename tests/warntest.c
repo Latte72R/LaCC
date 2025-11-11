@@ -16,7 +16,7 @@ void test4() {
 void test6() {
   char *str = "hello";
   int v = (int)str; // ポインタ→整数の狭い変換
-  () v;
+  (void)v;
 }
 
 // 14. ポインタと整数の比較

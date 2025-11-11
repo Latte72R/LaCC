@@ -249,6 +249,19 @@ static Type *make_object_size_type() {
   return make_function_type(make_size_t_type(), params, 2);
 }
 
+static Type *extract_array_type(Node *expr) {
+  if (!expr || !expr->type)
+    return NULL;
+  Type *type = expr->type;
+  if (type->ty == TY_ARR)
+    return type;
+  if (type->ty == TY_PTR && type->ptr_to && type->ptr_to->ty == TY_ARR)
+    return type->ptr_to;
+  if (expr->kind == ND_ADDR)
+    return extract_array_type(expr->lhs);
+  return NULL;
+}
+
 void initialize_builtin_functions() {
   Function *memcpy_fn = define_plain_function("memcpy", make_memcpy_type());
   Function *memmove_fn = define_plain_function("memmove", make_memmove_type());
@@ -335,7 +348,13 @@ Node *lower_builtin_function_call(Node *call) {
   case BUILTIN_FN_NONE:
     return call;
   case BUILTIN_FN_OBJECT_SIZE: {
-    Node *val = new_num(-1);
+    long size_val = -1;
+    if (call->val >= 1) {
+      Type *array_type = extract_array_type(call->args[0]);
+      if (array_type)
+        size_val = get_sizeof(array_type);
+    }
+    Node *val = new_num((int)size_val);
     val->type = make_size_t_type();
     return val;
   }

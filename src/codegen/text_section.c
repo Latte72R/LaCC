@@ -271,31 +271,46 @@ void gen_expression(Node *node) {
     write_file("  setne al\n");
     write_file("  movzx rax, al\n");
     break;
-  case ND_LT:
-    if (node->lhs->type->is_unsigned || node->rhs->type->is_unsigned) {
-      // 非符号比較では両辺ともビット幅に応じてゼロ拡張して比較
+  case ND_LT: {
+    int use_unsigned = 0;
+    if (is_number(node->lhs->type) && is_number(node->rhs->type)) {
+      Type *cmp_type = max_type(node->lhs->type, node->rhs->type);
+      use_unsigned = cmp_type->is_unsigned;
+    } else {
+      use_unsigned = node->lhs->type->is_unsigned || node->rhs->type->is_unsigned;
+    }
+    if (use_unsigned) {
       zext_rax_to_64(node->lhs->type);
       zext_rdi_to_64(node->rhs->type);
     }
     write_file("  cmp rax, rdi\n");
-    if (node->lhs->type->is_unsigned || node->rhs->type->is_unsigned)
+    if (use_unsigned)
       write_file("  setb al\n");
     else
       write_file("  setl al\n");
     write_file("  movzx rax, al\n");
     break;
-  case ND_LE:
-    if (node->lhs->type->is_unsigned || node->rhs->type->is_unsigned) {
+  }
+  case ND_LE: {
+    int use_unsigned = 0;
+    if (is_number(node->lhs->type) && is_number(node->rhs->type)) {
+      Type *cmp_type = max_type(node->lhs->type, node->rhs->type);
+      use_unsigned = cmp_type->is_unsigned;
+    } else {
+      use_unsigned = node->lhs->type->is_unsigned || node->rhs->type->is_unsigned;
+    }
+    if (use_unsigned) {
       zext_rax_to_64(node->lhs->type);
       zext_rdi_to_64(node->rhs->type);
     }
     write_file("  cmp rax, rdi\n");
-    if (node->lhs->type->is_unsigned || node->rhs->type->is_unsigned)
+    if (use_unsigned)
       write_file("  setbe al\n");
     else
       write_file("  setle al\n");
     write_file("  movzx rax, al\n");
     break;
+  }
   case ND_BITAND:
     write_file("  and rax, rdi\n");
     break;
