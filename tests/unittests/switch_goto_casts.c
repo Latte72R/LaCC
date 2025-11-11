@@ -1,7 +1,7 @@
 // switch/goto/キャストまわり
 
 /* goto の基本とラベルの組み合わせ（moved from literals_and_switch.inc） */
-int switch_casts_test1(void) {
+int switch_casts_test1() {
   int i = 0;
 start:
   i++;
@@ -11,7 +11,7 @@ start:
   return i;
 }
 
-int switch_casts_test2(void) {
+int switch_casts_test2() {
   int n = 0;
   goto ahead;
   n += 10;
@@ -233,7 +233,7 @@ int switch_casts_test20() {
 }
 
 // switch文内でのgoto
-int switch_casts_test21(void) {
+int switch_casts_test21() {
   int r = 0, x = 2;
   switch (x) {
   case 2:
@@ -249,7 +249,7 @@ c3:
 }
 
 // ネストしたブロック間でのgoto
-int switch_casts_test22(void) {
+int switch_casts_test22() {
   int r = 0;
   { /* 外側 */
     r += 10;
@@ -270,7 +270,7 @@ sib:
 }
 
 // ラベルの前方参照・後方参照の混在
-int switch_casts_test23(void) {
+int switch_casts_test23() {
   int r = 0, i = 0;
 start:
   r += 20;
@@ -348,9 +348,9 @@ int switch_casts_test28() { // 代入
   char *cp = vp;       // CではOK（void* → T* 暗黙変換）
 
   // 関数ポインタ
-  int f(void);
-  int (*fp)(void) = 0;
-  int (*fp2)(void) = (void *)0; // NULLが((void*)0)でもOKにできる
+  int f();
+  int (*fp)() = 0;
+  int (*fp2)() = (void *)0; // NULLが((void*)0)でもOKにできる
 
   // 比較
   if (p == 0) {
@@ -360,6 +360,6 @@ int switch_casts_test28() { // 代入
 
   // 条件演算子
   int *q = (1 ? p : 0);
-  int (*fq)(void) = (0 ? 0 : fp);
+  int (*fq)() = (0 ? 0 : fp);
   return 0;
 }

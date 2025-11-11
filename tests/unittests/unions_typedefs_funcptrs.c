@@ -165,14 +165,14 @@ int unions_funcptrs_test16() {
 }
 
 /* 1) 基本的な別名 */
-static int unions_funcptrs_test17(void) {
+static int unions_funcptrs_test17() {
   typedef int I;
   I x = 5;
   return x;
 }
 
 /* 2) ポインタ別名 */
-static int unions_funcptrs_test18(void) {
+static int unions_funcptrs_test18() {
   typedef int *IP;
   int x = 0;
   IP p = &x;
@@ -181,13 +181,13 @@ static int unions_funcptrs_test18(void) {
 }
 
 /* 3) sizeof(別名) の確認 */
-static int unions_funcptrs_test19(void) {
+static int unions_funcptrs_test19() {
   typedef int I;
   return (int)sizeof(I); /* 想定: 4 */
 }
 
 /* 4) 無名 struct の typedef */
-static int unions_funcptrs_test20(void) {
+static int unions_funcptrs_test20() {
   typedef struct {
     int w;
     char c;
@@ -199,7 +199,7 @@ static int unions_funcptrs_test20(void) {
 }
 
 /* 8) 連鎖 typedef */
-static int unions_funcptrs_test21(void) {
+static int unions_funcptrs_test21() {
   typedef int I;
   typedef I J;
   typedef J K;

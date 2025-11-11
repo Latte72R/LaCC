@@ -121,7 +121,9 @@ void sext_rax_to_64(Type *t) {
     break;
   case 4:
     write_file("  cdqe\n");
-    break; // EAX→RAX sign-extend
+    // write_file("  movsxd rax, eax\n"); と同義
+    // EAX→RAX sign-extend
+    break;
   case 8:
     break; // no-op
   }

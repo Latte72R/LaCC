@@ -1,5 +1,7 @@
 // 非符号の挙動・通常算術変換・sizeof・リテラル接尾辞
 
+int f_uc_ret_int(unsigned char x) { return x; }
+
 int unsigned_test1() {
   // 引数のゼロ拡張（unsigned char -> int）
   return f_uc_ret_int(255); // 255
@@ -187,4 +189,13 @@ int unsigned_test32() {
 int unsigned_test33() {
   // ULL 接尾辞: long long として扱うので 8 (LP64)
   return sizeof(1ULL); // 8
+}
+
+int unsigned_test34() {
+  // int64_t と uint32_t の比較は signed 64bit で行う
+  // 正解は「-1 < 0x80000000u は true」。もし「どちらかが unsigned なら unsigned」
+  // という単純規則で実装していると、false になる
+  long long v_i64_m1 = -1;
+  unsigned int v_u32_8000 = 0x80000000u;
+  return v_i64_m1 < v_u32_8000;
 }

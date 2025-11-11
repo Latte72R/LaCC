@@ -1,7 +1,7 @@
 
+#include "lexer.h"
 #include "diagnostics.h"
 #include "runtime.h"
-#include "lexer.h"
 
 #include "lexer_internal.h"
 
@@ -29,7 +29,7 @@ void push_input_context(char *input, char *path, int line_offset) {
   current_input_context = ctx;
 }
 
-void pop_input_context(void) {
+void pop_input_context() {
   if (!current_input_context)
     return;
   InputContext *prev = current_input_context->prev;

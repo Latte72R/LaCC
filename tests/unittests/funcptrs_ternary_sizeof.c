@@ -159,5 +159,3 @@ int fptr_ternary_sizeof_test24() {
   int r = u++;
   return r; // 255
 }
-
-int f_uc_ret_int(unsigned char x) { return x; }

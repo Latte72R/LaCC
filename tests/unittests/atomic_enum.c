@@ -16,7 +16,7 @@ typedef enum {
   memory_order_seq_cst = MO_SEQ_CST
 } memory_order;
 
-int atomic_enum_test1(void) {
+int atomic_enum_test1() {
   memory_order ord = memory_order_release;
   return ord + memory_order_relaxed + memory_order_seq_cst;
 }

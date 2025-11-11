@@ -262,6 +262,7 @@ int main() {
   CHECK(unsigned_test31(), 4);
   CHECK(unsigned_test32(), 0);
   CHECK(unsigned_test33(), 8);
+  CHECK(unsigned_test34(), 1);
 
   // bool / _Bool tests
   CHECK(bool_test1(), 2);

@@ -239,11 +239,11 @@ struct Node {
   Label *label;
 };
 
-void program(void);
-Node *expr(void);
+void program();
+Node *expr();
 
 // Builtin lowering
-void initialize_builtin_functions(void);
+void initialize_builtin_functions();
 
 // Symbol helpers
 Node *new_node(NodeKind kind);
@@ -263,7 +263,7 @@ Function *find_fn(Token *tok);
 
 // Type system helpers
 Type *parse_base_type_internal(int should_consume, int should_record);
-Type *peek_base_type(void);
+Type *peek_base_type();
 Type *parse_pointer_qualifiers(Type *base_type);
 Type *parse_declarator(Type *base_type, Token **tok, char *stmt);
 Type *parse_declarator_suffix(Type *type, char *stmt);

@@ -41,30 +41,30 @@ extern IncludePath *include_paths;
 extern FILE *fp;
 extern Macro *macros;
 
-void init_global_variables(void);
+void init_global_variables();
 
-void free_user_input_list(void);
-void free_all_tokens(void);
-void free_all_macros(void);
+void free_user_input_list();
+void free_all_tokens();
+void free_all_macros();
 void register_node(Node *node);
-void free_all_nodes(void);
+void free_all_nodes();
 void register_lvar(LVar *var);
-void free_all_lvars(void);
+void free_all_lvars();
 void register_type(Type *type);
-void free_all_types(void);
+void free_all_types();
 void register_char_ptr(char *str);
 void update_char_ptr(char *old_ptr, char *new_ptr);
-void free_all_char_ptrs(void);
+void free_all_char_ptrs();
 void register_location(Location *loc);
-void free_all_locations(void);
+void free_all_locations();
 void register_object(Object *object);
-void free_all_objects(void);
-void free_all_functions(void);
-void free_all_type_tags(void);
-void free_all_strings(void);
-void free_all_filenames(void);
-void free_all_arrays(void);
-void free_all_include_paths(void);
+void free_all_objects();
+void free_all_functions();
+void free_all_type_tags();
+void free_all_strings();
+void free_all_filenames();
+void free_all_arrays();
+void free_all_include_paths();
 
 void *safe_realloc_array(void *ptr, int elem_size, int need, int *cap);
 

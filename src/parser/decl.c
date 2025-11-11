@@ -1,7 +1,7 @@
 
 #include "diagnostics.h"
-#include "runtime.h"
 #include "parser.h"
+#include "runtime.h"
 
 #include "parser_internal.h"
 
@@ -375,7 +375,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern, int is_inline) {
 
   if (type->ty == TY_FUNC) {
     // 関数型の宣言/定義
-    // ブロック内でも関数プロトタイプ宣言は合法 (int f(void);)。
+    // ブロック内でも関数プロトタイプ宣言は合法 (int f();)。
     // 一方、関数本体を伴う定義 ( { ... } ) はネストした関数となり未対応。
     if (peek("{")) {
       if (current_fn)

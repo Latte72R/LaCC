@@ -1,7 +1,7 @@
 #include "diagnostics.h"
-#include "runtime.h"
 #include "lexer.h"
 #include "platform.h"
+#include "runtime.h"
 
 #include "lexer_internal.h"
 
@@ -239,7 +239,7 @@ static void define_builtin_function_macro(const char *name, int param_count, con
   define_macro(name_copy, body, params, param_count, true, false);
 }
 
-void preprocess_initialize_builtins(void) {
+void preprocess_initialize_builtins() {
   // コンパイラ識別マクロ
   define_builtin_object_macro("__LACC__", "1");
 

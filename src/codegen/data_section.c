@@ -1,8 +1,8 @@
 
 #include "diagnostics.h"
-#include "runtime.h"
 #include "parser.h"
 #include "platform.h"
+#include "runtime.h"
 
 #include "codegen_internal.h"
 
@@ -56,12 +56,14 @@ void gen_global_variables() {
 #if !LACC_PLATFORM_APPLE
     if (var->is_static) {
       write_file("  .local " ASM_SYM_FMT "\n", ASM_SYM_ARGS(var->len, var->name));
-    } else
-#endif
-    {
-      if (!var->is_static)
-        write_file("  .globl " ASM_SYM_FMT "\n", ASM_SYM_ARGS(var->len, var->name));
+    } else {
+      write_file("  .globl " ASM_SYM_FMT "\n", ASM_SYM_ARGS(var->len, var->name));
     }
+#else
+    if (!var->is_static) {
+      write_file("  .globl " ASM_SYM_FMT "\n", ASM_SYM_ARGS(var->len, var->name));
+    }
+#endif
     write_file("  .p2align 3\n");
     write_file(ASM_SYM_FMT ":\n", ASM_SYM_ARGS(var->len, var->name));
     if (var->init_array) {

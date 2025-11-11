@@ -21,9 +21,9 @@ struct IfState {
 static IfState *if_stack = 0;
 static int skip_depth = 0;
 
-int preprocess_is_skipping(void) { return skip_depth > 0; }
+int preprocess_is_skipping() { return skip_depth > 0; }
 
-void preprocess_check_unterminated_ifs(void) {
+void preprocess_check_unterminated_ifs() {
   if (if_stack) {
     error_at(new_location(if_stack->start), "unterminated #if directive");
   }

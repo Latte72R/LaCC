@@ -20,8 +20,8 @@ int parse_error_directive(char **p);
 int parse_warning_directive(char **p);
 int parse_pragma_directive(char **p);
 
-int preprocess_is_skipping(void);
-void preprocess_check_unterminated_ifs(void);
+int preprocess_is_skipping();
+void preprocess_check_unterminated_ifs();
 
 Macro *find_macro(char *name, int len);
 void expand_macro(Macro *macro, char **args, int arg_count, int invocation_line);

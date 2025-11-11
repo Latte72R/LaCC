@@ -58,10 +58,10 @@ struct Macro {
 };
 
 void push_input_context(char *input, char *path, int line_offset);
-void pop_input_context(void);
+void pop_input_context();
 Location *new_location(char *loc);
 void new_token(TokenKind kind, char *loc, char *str, int len);
-void tokenize(void);
-void preprocess_initialize_builtins(void);
+void tokenize();
+void preprocess_initialize_builtins();
 
 #endif // LEXER_H
