@@ -1,7 +1,7 @@
 #include "diagnostics.h"
-#include "source.h"
-#include "runtime.h"
 #include "lexer.h"
+#include "runtime.h"
+#include "source.h"
 
 #include "lexer_internal.h"
 
@@ -35,7 +35,7 @@ static void handle_include_directive(char *name, char *p, int is_system_header) 
   char *input_file_prev = input_file;
   input_file = resolved_path;
   FileName *filename = malloc(sizeof(FileName));
-  filename->name = input_file;
+  filename->name = resolved_path;
   filename->next = filenames;
   filenames = filename;
 

@@ -1,7 +1,7 @@
 
 #include "diagnostics.h"
-#include "source.h"
 #include "runtime.h"
+#include "source.h"
 
 #include <stdio.h>
 #include <stdlib.h>
