@@ -237,20 +237,30 @@ Node *return_stmt() {
   Location *loc = token->loc;
   Node *node = new_node(ND_RETURN);
   if (consume(";")) {
+    if (current_fn->type->return_type->ty != TY_VOID) {
+      error_at(loc, "returning void from non-void function [in return statement]");
+    }
     node->rhs = new_num(0);
   } else {
     if (current_fn->type->return_type->ty == TY_VOID) {
-      warning_at(loc, "returning value from void function [in return statement]");
+      error_at(loc, "returning value from void function [in return statement]");
     }
     node->rhs = expr();
     expect(";", "after line", "return");
   }
   // 戻り値の期待型を保持しておく（コード生成での変換に利用）
   node->type = current_fn->type->return_type;
-  if (current_fn->type->return_type->ty != TY_VOID &&
-      !is_type_compatible(current_fn->type->return_type, node->rhs->type)) {
-    warning_at(loc, "incompatible %s to %s conversion [in return statement]", type_name(node->rhs->type),
-               type_name(current_fn->type->return_type));
+  if (current_fn->type->return_type->ty != TY_VOID) {
+    if (!is_type_assignable(current_fn->type->return_type, node->rhs->type)) {
+      error_at(loc, "incompatible operand types ('%s' and '%s') [in return statement]",
+               type_name(current_fn->type->return_type), type_name(node->rhs->type));
+    } else if (!is_type_compatible(current_fn->type->return_type, node->rhs->type)) {
+      // 例外: 整数定数 0 のポインタ代入は互換として扱う
+      if (!(is_ptr_or_arr(current_fn->type->return_type) && node->rhs->kind == ND_NUM && node->rhs->val == 0)) {
+        error_at(loc, "incompatible operand types ('%s' and '%s') [in return statement]",
+                 type_name(current_fn->type->return_type), type_name(node->rhs->type));
+      }
+    }
   }
   node->endline = true;
   return node;
