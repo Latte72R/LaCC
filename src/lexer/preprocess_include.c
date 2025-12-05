@@ -21,17 +21,6 @@ static void handle_include_directive(char *name, char *p, int is_system_header) 
     resolved_path = duplicate_cstring(raw_name);
   free(raw_name);
 
-  if (!resolved_path)
-    resolved_path = duplicate_cstring("");
-
-  for (FileName *s = filenames; s; s = s->next) {
-    if (!strcmp(s->name, resolved_path)) {
-      free(resolved_path);
-      free(new_input);
-      return;
-    }
-  }
-
   char *input_file_prev = input_file;
   input_file = resolved_path;
   FileName *filename = malloc(sizeof(FileName));
@@ -67,17 +56,6 @@ static void handle_include_next_directive(char *name, char *p) {
   if (!resolved_path)
     resolved_path = duplicate_cstring(raw_name);
   free(raw_name);
-
-  if (!resolved_path)
-    resolved_path = duplicate_cstring("");
-
-  for (FileName *s = filenames; s; s = s->next) {
-    if (!strcmp(s->name, resolved_path)) {
-      free(resolved_path);
-      free(new_input);
-      return;
-    }
-  }
 
   char *input_file_prev = input_file;
   input_file = resolved_path;
