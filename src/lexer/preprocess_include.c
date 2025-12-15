@@ -92,35 +92,59 @@ int parse_include_directive(char **pcur) {
     return 0;
   }
 
+  // Capture and preprocess the remainder of the directive (handles line splices)
+  char *body_start = cur;
+  char *scan = body_start;
+  while (*scan) {
+    if (*scan == '\n') {
+      char *prev = scan - 1;
+      while (prev >= body_start && *prev == '\r')
+        prev--;
+      if (prev >= body_start && *prev == '\\') {
+        scan++;
+        continue;
+      }
+      break;
+    }
+    scan++;
+  }
+
+  char *trimmed = copy_trim_directive_expr(body_start, scan);
+  if (!trimmed[0])
+    error_at(new_location(body_start), "expected header name after #include");
+  char *expanded = expand_expression_internal(trimmed);
+  char *p = (char *)skip_spaces(expanded);
+
   char close;
-  if (*cur == '"') {
+  if (*p == '"') {
     close = '"';
-  } else if (*cur == '<') {
+  } else if (*p == '<') {
     close = '>';
   } else {
-    error_at(new_location(cur), "expected '\"' or '<' after #include");
+    free(trimmed);
+    free(expanded);
+    error_at(new_location(body_start), "expected '\"' or '<' after #include");
   }
 
-  cur++;
-  char *name_start = cur;
-  while (*cur && *cur != close) {
-    if (close == '"' && *cur == '\\') {
-      cur++;
-      if (!*cur)
-        error_at(new_location(name_start), "unclosed string literal [in tokenize]");
-      cur++;
+  p++;
+  char *name_start = p;
+  while (*p && *p != close) {
+    if (close == '"' && *p == '\\' && *(p + 1)) {
+      p += 2;
       continue;
     }
-    if (*cur == '\n')
-      error_at(new_location(cur), "unexpected newline in #include directive");
-    cur++;
+    if (*p == '\n')
+      error_at(new_location(body_start), "unexpected newline in #include directive");
+    p++;
   }
 
-  if (*cur != close) {
-    error_at(new_location(name_start - 1), "unterminated include filename");
+  if (*p != close) {
+    free(trimmed);
+    free(expanded);
+    error_at(new_location(body_start), "unterminated include filename");
   }
 
-  int len = (int)(cur - name_start);
+  size_t len = p - name_start;
   char *name = malloc(len + 1);
   if (!name)
     error("memory allocation failed");
@@ -128,19 +152,25 @@ int parse_include_directive(char **pcur) {
     memcpy(name, name_start, len);
   name[len] = '\0';
 
-  cur++; // skip closing delimiter
-  char *rest = skip_trailing_spaces_and_comments(cur);
-  if (*rest && *rest != '\n') {
-    error_at(new_location(rest), "unexpected tokens after #include filename");
+  p++; // skip closing delimiter
+  p = (char *)skip_spaces(p);
+  if (*p) {
+    free(trimmed);
+    free(expanded);
+    error_at(new_location(body_start), "unexpected tokens after #include filename");
   }
+
+  free(trimmed);
+  free(expanded);
 
   if (is_next) {
-    handle_include_next_directive(name, name_start);
+    handle_include_next_directive(name, body_start);
   } else {
     int is_system_header = (close == '>');
-    handle_include_directive(name, name_start, is_system_header);
+    handle_include_directive(name, body_start, is_system_header);
   }
 
+  char *rest = scan;
   if (*rest == '\n')
     rest++;
   *pcur = rest;

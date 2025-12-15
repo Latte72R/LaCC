@@ -108,14 +108,48 @@ char *copy_trim_directive_expr(const char *start, const char *end) {
 }
 
 const char *skip_spaces(const char *cur) {
-  while (isspace(*cur))
-    cur++;
+  while (1) {
+    const char *start = cur;
+    while (isspace(*cur))
+      cur++;
+    if (cur[0] == '/' && cur[1] == '/') {
+      cur += 2;
+      while (*cur && *cur != '\n')
+        cur++;
+      continue;
+    }
+    if (cur[0] == '/' && cur[1] == '*') {
+      const char *end = strstr(cur + 2, "*/");
+      if (!end)
+        error_at(new_location((char *)cur), "unclosed block comment");
+      cur = end + 2;
+      continue;
+    }
+    if (cur == start)
+      break;
+  }
   return cur;
 }
 
 char *skip_directive_spaces(char *cur) {
-  while (*cur == ' ' || *cur == '\t')
-    cur++;
+  while (1) {
+    while (*cur == ' ' || *cur == '\t')
+      cur++;
+    if (cur[0] == '/' && cur[1] == '*') {
+      char *end = strstr(cur + 2, "*/");
+      if (!end)
+        error_at(new_location(cur), "unclosed block comment in directive");
+      cur = end + 2;
+      continue;
+    }
+    if (cur[0] == '/' && cur[1] == '/') {
+      cur += 2;
+      while (*cur && *cur != '\n')
+        cur++;
+      break; // keep newline for outer scanners
+    }
+    break;
+  }
   return cur;
 }
 
@@ -225,7 +259,7 @@ void undefine_macro(char *name, int len) {
 
 static void define_builtin_object_macro(const char *name, const char *value) {
   char *name_copy = duplicate_cstring(name);
-  int len = (int)strlen(value);
+  size_t len = strlen(value);
   char *body = malloc(len + 2);
   if (!body)
     error("memory allocation failed");
@@ -237,7 +271,7 @@ static void define_builtin_object_macro(const char *name, const char *value) {
 
 static void define_builtin_function_macro(const char *name, int param_count, const char *value) {
   char *name_copy = duplicate_cstring(name);
-  int vlen = (int)strlen(value);
+  size_t vlen = strlen(value);
   char *body = malloc(vlen + 2);
   if (!body)
     error("memory allocation failed");

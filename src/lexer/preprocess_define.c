@@ -20,7 +20,7 @@ int parse_define_directive(char **p) {
   char *name_start = cur;
   while (is_ident_char(*cur))
     cur++;
-  int name_len = (int)(cur - name_start);
+  size_t name_len = cur - name_start;
   char *name = malloc(name_len + 1);
   if (!name)
     error("memory allocation failed");
@@ -71,7 +71,7 @@ int parse_define_directive(char **p) {
         cur++;
         while (is_ident_char(*cur))
           cur++;
-        int param_len = (int)(cur - param_start);
+        size_t param_len = cur - param_start;
         char *param_name = malloc(param_len + 1);
         if (!param_name)
           error("memory allocation failed");
