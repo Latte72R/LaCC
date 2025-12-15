@@ -7,6 +7,23 @@ TMP_C=$3
 TMP_S=$4
 TMP_OUT=$5
 
+total_cases=0
+expected_error_cases=0
+missing_errors=()
+
+run_expect_error() {
+  total_cases=$((total_cases + 1))
+  local case_no=$1
+  shift
+  "$@"
+  local status=$?
+  if [ $status -ne 0 ]; then
+    expected_error_cases=$((expected_error_cases + 1))
+  else
+    missing_errors+=("$case_no")
+  fi
+}
+
 printf "\e[1;36mTest case 1:\e[0m\n"
 cat <<EOF > "$TMP_C"
 int main() {
@@ -16,7 +33,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C
+run_expect_error 1 $CC $TMP_C
 printf "\n"
 
 printf "\e[1;36mTest case 2:\e[0m\n"
@@ -28,29 +45,29 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C
+run_expect_error 2 $CC $TMP_C
 printf "\n"
 
 printf "\e[1;36mTest case 3:\e[0m\n"
 cat <<EOF > "$TMP_C"
 int main() {
   int x;
-  const int * p3 = &x;  // ポインタ先の値を変更不可
+  const int *p3 = &x;  // ポインタ先の値を変更不可
   *p3 = 7;
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C
+run_expect_error 3 $CC $TMP_C
 printf "\n"
 
 printf "\e[1;36mTest case 4:\e[0m\n"
 cat <<EOF > "$TMP_C"
 int main() {
-    var = 5;  // 「未定義の識別子」エラー
+  var = 5;  // 「未定義の識別子」エラー
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C
+run_expect_error 4 $CC $TMP_C
 printf "\n"
 
 printf "\e[1;36mTest case 5:\e[0m\n"
@@ -60,7 +77,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C
+run_expect_error 5 $CC $TMP_C
 printf "\n"
 
 printf "\e[1;36mTest case 6:\e[0m\n"
@@ -71,7 +88,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C
+run_expect_error 6 $CC $TMP_C
 printf "\n"
 
 printf "\e[1;36mTest case 7:\e[0m\n"
@@ -87,7 +104,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 7 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;36mTest case 8:\e[0m\n"
@@ -105,7 +122,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 8 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;36mTest case 9:\e[0m\n"
@@ -124,7 +141,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 9 $CC $TMP_C -S -o $TMP_S
 printf "\n" 
 
 printf "\e[1;36mTest case 10:\e[0m\n"
@@ -142,7 +159,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 10 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;36mTest case 11:\e[0m\n"
@@ -156,7 +173,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 11 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;36mTest case 12:\e[0m\n"
@@ -170,7 +187,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 12 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;36mTest case 13:\e[0m\n"
@@ -181,7 +198,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 13 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;36mTest case 14:\e[0m\n"
@@ -192,7 +209,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 14 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;36mTest case 15:\e[0m\n"
@@ -209,7 +226,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 15 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;36mTest case 16:\e[0m\n"
@@ -222,7 +239,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 16 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;36mTest case 17:\e[0m\n"
@@ -234,7 +251,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 17 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;36mTest case 18:\e[0m\n"
@@ -246,7 +263,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 18 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;36mTest case 19:\e[0m\n"
@@ -259,7 +276,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 19 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;36mTest case 20:\e[0m\n"
@@ -271,7 +288,7 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 20 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;36mTest case 21:\e[0m\n"
@@ -283,5 +300,64 @@ int main() {
 }
 EOF
 cat "$TMP_C"
-$CC $TMP_C -S -o $TMP_S
+run_expect_error 21 $CC $TMP_C -S -o $TMP_S
 printf "\n"
+
+printf "\e[1;36mTest case 22:\e[0m\n"
+cat <<EOF > "$TMP_C"
+int main() {
+  int x = 42;
+  int *p;
+  p = x;  // 整数からポインタへの暗黙変換はエラー
+  return 0;
+}
+EOF
+cat "$TMP_C"
+run_expect_error 22 $CC $TMP_C -S -o $TMP_S
+printf "\n"
+
+printf "\e[1;36mTest case 23:\e[0m\n"
+cat <<EOF > "$TMP_C"
+void f() {
+  return 1;  // void 関数で値を返している
+}
+int main() {
+  f();
+  return 0;
+}
+EOF
+cat "$TMP_C"
+run_expect_error 23 $CC $TMP_C -S -o $TMP_S
+printf "\n"
+
+printf "\e[1;36mTest case 24:\e[0m\n"
+cat <<EOF > "$TMP_C"
+int g() {
+  return;  // 非void関数で値を返していない
+}
+int main() {
+  return g();
+}
+EOF
+cat "$TMP_C"
+run_expect_error 24 $CC $TMP_C -S -o $TMP_S
+printf "\n"
+
+printf "\e[1;36mTest case 25:\e[0m\n"
+cat <<EOF > "$TMP_C"
+int *h() {
+  return 1;  // ポインタ戻り値に整数 1 を返している
+}
+int main() {
+  return h() != 0;
+}
+EOF
+cat "$TMP_C"
+run_expect_error 25 $CC $TMP_C -S -o $TMP_S
+printf "\n"
+
+printf "\e[1;35mSummary:\e[0m Expected errors %d / %d\n" "$expected_error_cases" "$total_cases"
+if [ "${#missing_errors[@]}" -ne 0 ]; then
+  printf "\e[1;31mNo error produced in test case: %s\e[0m\n" "${missing_errors[*]}"
+  exit 1
+fi

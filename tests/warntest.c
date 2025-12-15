@@ -1,21 +1,30 @@
-// すでにある宣言はそのまま利用
-int printf();
-void *malloc();
 
-int test(int x) { return x; }
-
-// 既存: 2,3,4,6,7 はそのまま
+// 2. 配列初期化の警告
 void test2() { char str[5] = "Hello, World!"; } // 初期化子過多
-void test3() { int arr[3] = {2, 4, 6, 5, 7}; }  // 要素過多
+
+// 3. 配列要素数の警告
+void test3() { int arr[3] = {2, 4, 6, 5, 7}; } // 要素過多
+
+// 4. const修飾子の無視
 void test4() {
   int y = 11;
   const int *x = &y;
   int *z;
-  z = x; // const 破棄
+  z = x;
 }
+
+// 5. 整数→ポインタの変換
+void test5() {
+  int y = 11;
+  int *x = &y;
+  char *z;
+  z = x;
+}
+
+// 6. ポインタ→整数の変換
 void test6() {
   char *str = "hello";
-  int v = (int)str; // ポインタ→整数の狭い変換
+  int v = (int)str;
   (void)v;
 }
 
@@ -44,6 +53,7 @@ int main() {
   test2();
   test3();
   test4();
+  test5();
   test6();
   test14();
   test23();

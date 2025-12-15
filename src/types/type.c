@@ -943,7 +943,8 @@ int is_type_compatible(Type *lhs, Type *rhs) {
     } else if (lhs->ptr_to->ty == TY_VOID || rhs->ptr_to->ty == TY_VOID) {
       return true;
     }
-    return is_type_compatible(lhs->ptr_to, rhs->ptr_to);
+    // ポインタ同士は、const/voidの特例を除き「先の型が同一」場合のみ互換とする
+    return is_type_identical(lhs->ptr_to, rhs->ptr_to);
   } else if (lhs->ty == rhs->ty && lhs->is_unsigned == rhs->is_unsigned) {
     if (lhs->ty == TY_STRUCT || lhs->ty == TY_UNION) {
       return lhs->object == rhs->object;

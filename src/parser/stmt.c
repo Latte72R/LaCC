@@ -257,8 +257,13 @@ Node *return_stmt() {
     } else if (!is_type_compatible(current_fn->type->return_type, node->rhs->type)) {
       // 例外: 整数定数 0 のポインタ代入は互換として扱う
       if (!(is_ptr_or_arr(current_fn->type->return_type) && node->rhs->kind == ND_NUM && node->rhs->val == 0)) {
-        error_at(loc, "incompatible operand types ('%s' and '%s') [in return statement]",
-                 type_name(current_fn->type->return_type), type_name(node->rhs->type));
+        if (is_ptr_or_arr(current_fn->type->return_type) && is_ptr_or_arr(node->rhs->type)) {
+          warning_at(loc, "incompatible operand types ('%s' and '%s') [in return statement]",
+                     type_name(current_fn->type->return_type), type_name(node->rhs->type));
+        } else {
+          error_at(loc, "incompatible operand types ('%s' and '%s') [in return statement]",
+                   type_name(current_fn->type->return_type), type_name(node->rhs->type));
+        }
       }
     }
   }

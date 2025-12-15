@@ -614,24 +614,6 @@ static int parse_identifier(char **p) {
       *p = cur;
       return 1;
     }
-    if (name_len == 8 && !strncmp(start, "__func__", 8)) {
-      int invocation_line = get_line_number(start);
-      (void)invocation_line;
-      const char *rep = "\"\"\n"; // empty string literal
-      int n = (int)strlen(rep);
-      char *body = malloc(n + 1);
-      if (!body)
-        error("memory allocation failed");
-      memcpy(body, rep, n + 1);
-      Macro mm;
-      memset(&mm, 0, sizeof(mm));
-      mm.name = "__func__";
-      mm.body = body;
-      expand_macro(&mm, NULL, 0, invocation_line);
-      *p = cur;
-      return 1;
-    }
-
     Macro *macro = find_macro(start, name_len);
     if (macro && macro->is_function && !macro->is_expanding) {
       if (*cur == '(') {
