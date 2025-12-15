@@ -148,7 +148,7 @@ static int parse_array_initializer_value(Array *array, Type *type, int *idx) {
       for (int i = 0; i < declared; i++) {
         int value = 0;
         if (i < copy_len)
-          value = (unsigned char)tok->str[i];
+          value = tok->str[i];
         append_array_value(array, value, NULL, idx);
       }
       return 1;
@@ -213,7 +213,7 @@ static void store_scalar_bytes(Type *type, unsigned char *buffer, int offset, lo
   int size = get_sizeof(type);
   unsigned long long v = (unsigned long long)value;
   for (int i = 0; i < size; i++)
-    buffer[offset + i] = (unsigned char)((v >> (8 * i)) & 0xFF);
+    buffer[offset + i] = ((v >> (8 * i)) & 0xFF);
 }
 
 static void parse_array_member_initializer(Type *type, unsigned char *buffer) {
@@ -240,7 +240,7 @@ static void parse_array_member_initializer(Type *type, unsigned char *buffer) {
       copy_len = count;
     }
     for (int i = 0; i < copy_len && i < size; i++)
-      buffer[i] = (unsigned char)str->text[i];
+      buffer[i] = str->text[i];
     return;
   }
 

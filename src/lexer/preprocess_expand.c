@@ -1,6 +1,6 @@
 #include "diagnostics.h"
-#include "runtime.h"
 #include "lexer.h"
+#include "runtime.h"
 
 #include "lexer_internal.h"
 
@@ -22,14 +22,14 @@ static void append_text(char **buf, int *len, int *cap, const char *text, int te
 }
 
 static void trim_trailing_whitespace(char *buf, int *len) {
-  while (*len > 0 && isspace((unsigned char)buf[*len - 1]))
+  while (*len > 0 && isspace(buf[*len - 1]))
     (*len)--;
 }
 
 static void append_with_concat(char **buf, int *len, int *cap, const char *text, int text_len, int *pending_concat) {
   if (*pending_concat) {
     trim_trailing_whitespace(*buf, len);
-    while (text_len > 0 && isspace((unsigned char)*text)) {
+    while (text_len > 0 && isspace(*text)) {
       text++;
       text_len--;
     }
@@ -50,7 +50,7 @@ static char *stringize_argument(char *arg) {
     char c = *p;
     if (c == '\n' || c == '\r' || c == '\t' || c == '\f' || c == '\v')
       c = ' ';
-    if (isspace((unsigned char)c)) {
+    if (isspace(c)) {
       if (in_space)
         continue;
       in_space = 1;
@@ -75,7 +75,7 @@ static char *stringize_argument(char *arg) {
 
 // Make this non-static to be used from preprocess expression evaluator
 char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
-  char *body = macro->body;
+  const char *body = macro->body;
   int cap = (int)strlen(body) + 32;
   int len = 0;
   char *buf = malloc(cap);
@@ -99,7 +99,7 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
     }
   }
 
-  for (char *p = body; *p;) {
+  for (const char *p = body; *p;) {
     char ch = *p;
 
     if (in_string) {
@@ -145,18 +145,16 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
     if (ch == '#' && *(p + 1) == '#') {
       pending_concat = true;
       p += 2;
-      while (isspace((unsigned char)*p))
-        p++;
+      p = skip_spaces(p);
       continue;
     }
 
     if (ch == '#') {
       p++;
-      while (isspace((unsigned char)*p))
-        p++;
+      p = skip_spaces(p);
       if (!is_ident_start_char(*p))
         error("expected macro parameter after '#'");
-      char *start = p;
+      const char *start = p;
       while (is_ident_char(*p))
         p++;
       int ident_len = (int)(p - start);
@@ -177,7 +175,7 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
     }
 
     if (is_ident_start_char(ch)) {
-      char *start = p;
+      const char *start = p;
       p++;
       while (is_ident_char(*p))
         p++;
@@ -320,7 +318,7 @@ char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count) 
           }
         } else {
           for (const char *q = arg_start; q < p; q++) {
-            if (!isspace((unsigned char)*q))
+            if (!isspace(*q))
               error("macro %s takes no arguments", macro->name);
           }
         }

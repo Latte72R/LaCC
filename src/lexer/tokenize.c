@@ -16,9 +16,9 @@ static int tokenize_depth = 0;
 static int skip_characters(char **p) {
   char *cur = *p;
 
-  if (isspace(*cur)) {
-    cur++;
-    *p = cur;
+  const char *next = skip_spaces(cur);
+  if (next != cur) {
+    *p = (char *)next;
     return 1;
   }
 
@@ -555,9 +555,7 @@ static int parse_identifier(char **p) {
       cur++;
     }
     char *after_name = cur;
-    while (isspace((unsigned char)*cur)) {
-      cur++;
-    }
+    cur = (char *)skip_spaces(cur);
 
     int name_len = after_name - start;
 
@@ -640,8 +638,7 @@ static int parse_identifier(char **p) {
         const char *pos = cur;
         int arg_cnt = 0;
         char **args = parse_macro_arguments(&pos, macro, &arg_cnt);
-        while (isspace((unsigned char)*pos))
-          pos++;
+        pos = skip_spaces(pos);
         *p = (char *)pos;
         int invocation_line = get_line_number(start);
         expand_macro(macro, args, arg_cnt, invocation_line);

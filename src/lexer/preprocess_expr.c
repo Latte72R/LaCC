@@ -37,7 +37,7 @@ static char *copy_macro_body_text(Macro *macro) {
 }
 
 // Forward: macro lookup
-extern Macro *find_macro(char *name, int len);
+extern Macro *find_macro(const char *name, int len);
 
 static int expr_expansion_depth = 0;
 
@@ -53,7 +53,7 @@ char *expand_expression_internal(const char *expr) {
   const char *p = expr;
 
   while (*p) {
-    if (isspace((unsigned char)*p)) {
+    if (isspace(*p)) {
       append_char(&buf, &len, &cap, *p);
       p++;
       continue;
@@ -69,14 +69,14 @@ char *expand_expression_internal(const char *expr) {
       if (ident_len == 7 && !strncmp(start, "defined", 7) && !is_ident_char(*p)) {
         append_text(&buf, &len, &cap, start, ident_len);
         const char *q = p;
-        while (isspace((unsigned char)*q)) {
+        while (isspace(*q)) {
           append_char(&buf, &len, &cap, *q);
           q++;
         }
         if (*q == '(') {
           append_char(&buf, &len, &cap, *q);
           q++;
-          while (isspace((unsigned char)*q)) {
+          while (isspace(*q)) {
             append_char(&buf, &len, &cap, *q);
             q++;
           }
@@ -86,7 +86,7 @@ char *expand_expression_internal(const char *expr) {
           while (is_ident_char(*q))
             q++;
           append_text(&buf, &len, &cap, ident_start, (int)(q - ident_start));
-          while (isspace((unsigned char)*q)) {
+          while (isspace(*q)) {
             append_char(&buf, &len, &cap, *q);
             q++;
           }
@@ -98,7 +98,7 @@ char *expand_expression_internal(const char *expr) {
           continue;
         } else {
           p = q;
-          while (isspace((unsigned char)*p)) {
+          while (isspace(*p)) {
             append_char(&buf, &len, &cap, *p);
             p++;
           }
@@ -112,7 +112,7 @@ char *expand_expression_internal(const char *expr) {
         }
       }
 
-      Macro *macro = find_macro((char *)start, ident_len);
+      Macro *macro = find_macro(start, ident_len);
       if (!macro || macro->is_expanding) {
         append_text(&buf, &len, &cap, start, ident_len);
         continue;
@@ -120,9 +120,7 @@ char *expand_expression_internal(const char *expr) {
 
       if (macro->is_function) {
         const char *after_name = p;
-        const char *ws = after_name;
-        while (isspace((unsigned char)*ws))
-          ws++;
+        const char *ws = skip_spaces(after_name);
         if (*ws != '(') {
           append_text(&buf, &len, &cap, start, ident_len);
           continue;

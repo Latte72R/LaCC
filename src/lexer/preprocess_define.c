@@ -10,18 +10,8 @@
 
 int parse_define_directive(char **p) {
   char *cur = *p;
-  if (*cur != '#')
+  if (!consume_directive_keyword(&cur, "define"))
     return 0;
-  cur++;
-  while (*cur == ' ' || *cur == '\t')
-    cur++;
-  if (!(startswith(cur, "define") && !is_alnum(cur[6]))) {
-    return 0;
-  }
-
-  cur += 6;
-  while (*cur == ' ' || *cur == '\t')
-    cur++;
 
   if (!is_ident_start_char(*cur)) {
     error_at(new_location(cur), "expected an identifier after #define");
@@ -50,8 +40,7 @@ int parse_define_directive(char **p) {
       cur++;
     } else {
       while (true) {
-        while (*cur == ' ' || *cur == '\t')
-          cur++;
+        cur = skip_directive_spaces(cur);
         // Variadic-only '...' or named variadic 'NAME...'
         if (*cur == '.' && cur[1] == '.' && cur[2] == '.') {
           // Unnamed variadic: use __VA_ARGS__ as the parameter name
@@ -68,8 +57,7 @@ int parse_define_directive(char **p) {
           params[param_count++] = param_name;
           is_variadic = true;
           cur += 3;
-          while (*cur == ' ' || *cur == '\t')
-            cur++;
+          cur = skip_directive_spaces(cur);
           if (*cur != ')')
             error_at(new_location(cur), "expected ')' after '...' in macro parameter list");
           cur++;
@@ -101,8 +89,7 @@ int parse_define_directive(char **p) {
           params[param_count++] = param_name;
           is_variadic = true;
           cur += 3;
-          while (*cur == ' ' || *cur == '\t')
-            cur++;
+          cur = skip_directive_spaces(cur);
           if (*cur != ')')
             error_at(new_location(cur), "expected ')' after variadic parameter");
           cur++;
@@ -117,8 +104,7 @@ int parse_define_directive(char **p) {
         }
         params[param_count++] = param_name;
 
-        while (*cur == ' ' || *cur == '\t')
-          cur++;
+        cur = skip_directive_spaces(cur);
         if (*cur == ',') {
           cur++;
           continue;
@@ -131,8 +117,7 @@ int parse_define_directive(char **p) {
       }
     }
   } else {
-    while (*cur == ' ' || *cur == '\t')
-      cur++;
+    cur = skip_directive_spaces(cur);
   }
 
   int value_cap = 64;
@@ -219,7 +204,7 @@ int parse_define_directive(char **p) {
     }
     value[value_len++] = *cur++;
   }
-  while (value_len > 0 && isspace((unsigned char)value[value_len - 1]))
+  while (value_len > 0 && isspace(value[value_len - 1]))
     value_len--;
   if (value_len + 2 >= value_cap) {
     value_cap = value_len + 2;
@@ -241,18 +226,8 @@ int parse_define_directive(char **p) {
 
 int parse_undef_directive(char **p) {
   char *cur = *p;
-  if (*cur != '#')
+  if (!consume_directive_keyword(&cur, "undef"))
     return 0;
-  cur++;
-  while (*cur == ' ' || *cur == '\t')
-    cur++;
-  if (!(startswith(cur, "undef") && !is_alnum(cur[5]))) {
-    return 0;
-  }
-
-  cur += 5;
-  while (*cur == ' ' || *cur == '\t')
-    cur++;
 
   if (!is_ident_start_char(*cur)) {
     error_at(new_location(cur), "expected identifier after #undef");

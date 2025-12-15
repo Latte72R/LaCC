@@ -11,10 +11,7 @@ typedef struct {
   const char *p;
 } ExprParser;
 
-static void skip_spaces_expr(ExprParser *ctx) {
-  while (isspace((unsigned char)*ctx->p))
-    ctx->p++;
-}
+static void skip_spaces_expr(ExprParser *ctx) { ctx->p = skip_spaces(ctx->p); }
 
 static long long parse_conditional(ExprParser *ctx, int *ok);
 
@@ -105,7 +102,7 @@ static long long parse_char_literal_pp(ExprParser *ctx, int *ok) {
     }
     p++;
   } else {
-    val = (unsigned char)*p;
+    val = *p;
     p++;
   }
   if (*p != '\'') {
@@ -124,7 +121,7 @@ static long long parse_primary(ExprParser *ctx, int *ok) {
     ctx->p++; // consume prefix and delegate to char literal parser
     return parse_char_literal_pp(ctx, ok);
   }
-  if (startswith((char *)ctx->p, "defined") && !is_ident_char(ctx->p[7])) {
+  if (startswith(ctx->p, "defined") && !is_ident_char(ctx->p[7])) {
     ctx->p += 7;
     skip_spaces_expr(ctx);
     int has_paren = false;
@@ -150,7 +147,7 @@ static long long parse_primary(ExprParser *ctx, int *ok) {
       }
       ctx->p++;
     }
-    Macro *macro = find_macro((char *)ident_start, ident_len);
+    Macro *macro = find_macro(ident_start, ident_len);
     return macro ? 1 : 0;
   }
   if (*ctx->p == '(') {
@@ -168,7 +165,7 @@ static long long parse_primary(ExprParser *ctx, int *ok) {
   }
   if (*ctx->p == '\'')
     return parse_char_literal_pp(ctx, ok);
-  if (isdigit((unsigned char)*ctx->p))
+  if (isdigit(*ctx->p))
     return parse_number_literal_pp(ctx, ok);
   if (is_ident_start_char(*ctx->p)) {
     while (is_ident_char(*ctx->p))
@@ -266,13 +263,13 @@ static long long parse_shift(ExprParser *ctx, int *ok) {
     return 0;
   while (true) {
     skip_spaces_expr(ctx);
-    if (startswith((char *)ctx->p, "<<")) {
+    if (startswith(ctx->p, "<<")) {
       ctx->p += 2;
       long long rhs = parse_add(ctx, ok);
       if (!*ok)
         return 0;
       val = val << rhs;
-    } else if (startswith((char *)ctx->p, ">>")) {
+    } else if (startswith(ctx->p, ">>")) {
       ctx->p += 2;
       long long rhs = parse_add(ctx, ok);
       if (!*ok)
@@ -290,13 +287,13 @@ static long long parse_relational(ExprParser *ctx, int *ok) {
     return 0;
   while (true) {
     skip_spaces_expr(ctx);
-    if (startswith((char *)ctx->p, "<=")) {
+    if (startswith(ctx->p, "<=")) {
       ctx->p += 2;
       long long rhs = parse_shift(ctx, ok);
       if (!*ok)
         return 0;
       val = val <= rhs;
-    } else if (startswith((char *)ctx->p, ">=")) {
+    } else if (startswith(ctx->p, ">=")) {
       ctx->p += 2;
       long long rhs = parse_shift(ctx, ok);
       if (!*ok)
@@ -326,13 +323,13 @@ static long long parse_equality(ExprParser *ctx, int *ok) {
     return 0;
   while (true) {
     skip_spaces_expr(ctx);
-    if (startswith((char *)ctx->p, "==")) {
+    if (startswith(ctx->p, "==")) {
       ctx->p += 2;
       long long rhs = parse_relational(ctx, ok);
       if (!*ok)
         return 0;
       val = val == rhs;
-    } else if (startswith((char *)ctx->p, "!=")) {
+    } else if (startswith(ctx->p, "!=")) {
       ctx->p += 2;
       long long rhs = parse_relational(ctx, ok);
       if (!*ok)
@@ -404,7 +401,7 @@ static long long parse_logical_and(ExprParser *ctx, int *ok) {
     return 0;
   while (true) {
     skip_spaces_expr(ctx);
-    if (startswith((char *)ctx->p, "&&")) {
+    if (startswith(ctx->p, "&&")) {
       ctx->p += 2;
       long long rhs = parse_bitor(ctx, ok);
       if (!*ok)
@@ -422,7 +419,7 @@ static long long parse_logical_or(ExprParser *ctx, int *ok) {
     return 0;
   while (true) {
     skip_spaces_expr(ctx);
-    if (startswith((char *)ctx->p, "||")) {
+    if (startswith(ctx->p, "||")) {
       ctx->p += 2;
       long long rhs = parse_logical_and(ctx, ok);
       if (!*ok)

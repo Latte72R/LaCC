@@ -3,9 +3,10 @@
 
 #include "lexer.h"
 
-int startswith(char *p, char *q);
+int startswith(const char *p, const char *q);
 int is_alnum(char c);
 int get_line_number(char *pos);
+const char *skip_spaces(const char *cur);
 
 int parse_define_directive(char **p);
 int parse_include_directive(char **p);
@@ -22,8 +23,10 @@ int parse_pragma_directive(char **p);
 
 int preprocess_is_skipping();
 void preprocess_check_unterminated_ifs();
+int consume_directive_keyword(char **p, const char *keyword);
+char *skip_directive_spaces(char *cur);
 
-Macro *find_macro(char *name, int len);
+Macro *find_macro(const char *name, int len);
 void expand_macro(Macro *macro, char **args, int arg_count, int invocation_line);
 char **parse_macro_arguments(const char **pp, Macro *macro, int *out_arg_count);
 void define_macro(char *name, char *body, char **params, int param_count, int is_function, int is_variadic);
@@ -33,6 +36,7 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count);
 char *duplicate_cstring(const char *src);
 char *skip_trailing_spaces_and_comments(char *cur);
 char *expand_expression_internal(const char *expr);
+char *copy_trim(const char *start, const char *end);
 char *copy_trim_directive_expr(const char *start, const char *end);
 int is_ident_char(char c);
 int is_ident_start_char(char c);

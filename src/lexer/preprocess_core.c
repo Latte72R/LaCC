@@ -20,7 +20,7 @@ int is_ident_start_char(char c) { return (('a' <= c && c <= 'z') || ('A' <= c &&
 int is_ident_char(char c) { return is_ident_start_char(c) || ('0' <= c && c <= '9'); }
 
 char *duplicate_cstring(const char *src) {
-  int len = (int)strlen(src);
+  size_t len = strlen(src);
   char *copy = malloc(len + 1);
   if (!copy)
     error("memory allocation failed");
@@ -29,9 +29,9 @@ char *duplicate_cstring(const char *src) {
 }
 
 char *copy_trim(const char *start, const char *end) {
-  while (start < end && isspace((unsigned char)*start))
+  while (start < end && isspace(*start))
     start++;
-  while (end > start && isspace((unsigned char)*(end - 1)))
+  while (end > start && isspace(*(end - 1)))
     end--;
   int len = (int)(end - start);
   char *result = malloc(len + 1);
@@ -91,10 +91,10 @@ char *copy_trim_directive_expr(const char *start, const char *end) {
     buf[len++] = *p++;
   }
   int front = 0;
-  while (front < len && isspace((unsigned char)buf[front]))
+  while (front < len && isspace(buf[front]))
     front++;
   int back = len;
-  while (back > front && isspace((unsigned char)buf[back - 1]))
+  while (back > front && isspace(buf[back - 1]))
     back--;
   int trimmed_len = back - front;
   char *result = malloc(trimmed_len + 1);
@@ -107,12 +107,21 @@ char *copy_trim_directive_expr(const char *start, const char *end) {
   return result;
 }
 
+const char *skip_spaces(const char *cur) {
+  while (isspace(*cur))
+    cur++;
+  return cur;
+}
+
+char *skip_directive_spaces(char *cur) {
+  while (*cur == ' ' || *cur == '\t')
+    cur++;
+  return cur;
+}
+
 char *skip_trailing_spaces_and_comments(char *cur) {
   while (*cur && *cur != '\n') {
-    if (isspace((unsigned char)*cur)) {
-      cur++;
-      continue;
-    }
+    cur = skip_directive_spaces(cur);
     if (startswith(cur, "//")) {
       while (*cur && *cur != '\n')
         cur++;
@@ -130,12 +139,27 @@ char *skip_trailing_spaces_and_comments(char *cur) {
   return cur;
 }
 
+int consume_directive_keyword(char **p, const char *keyword) {
+  char *cur = *p;
+  if (*cur != '#')
+    return 0;
+  cur++;
+  cur = skip_directive_spaces(cur);
+  size_t len = strlen(keyword);
+  if (!startswith(cur, keyword) || is_alnum(cur[len]))
+    return 0;
+  cur += len;
+  cur = skip_directive_spaces(cur);
+  *p = cur;
+  return 1;
+}
+
 // ============================
 // Macro table (find/define/undef)
 // ============================
 
 // public
-Macro *find_macro(char *name, int len) {
+Macro *find_macro(const char *name, int len) {
   for (Macro *macro = macros; macro; macro = macro->next) {
     if ((int)strlen(macro->name) == len && !strncmp(macro->name, name, len)) {
       return macro;

@@ -83,24 +83,14 @@ static void handle_include_next_directive(char *name, char *p) {
 
 int parse_include_directive(char **pcur) {
   char *cur = *pcur;
-  if (*cur != '#') {
-    return 0;
-  }
-  cur++;
-  while (*cur == ' ' || *cur == '\t')
-    cur++;
-
-  int is_next = 0;
-  if (startswith(cur, "include_next") && !is_alnum(cur[12])) {
+  int is_next;
+  if (consume_directive_keyword(&cur, "include_next")) {
     is_next = 1;
-    cur += 12;
-  } else if (startswith(cur, "include") && !is_alnum(cur[7])) {
-    cur += 7;
+  } else if (consume_directive_keyword(&cur, "include")) {
+    is_next = 0;
   } else {
     return 0;
   }
-  while (*cur == ' ' || *cur == '\t')
-    cur++;
 
   char close;
   if (*cur == '"') {
