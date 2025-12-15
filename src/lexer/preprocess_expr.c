@@ -36,9 +36,6 @@ static char *copy_macro_body_text(Macro *macro) {
   return result;
 }
 
-// Forward: macro lookup
-extern Macro *find_macro(const char *name, int len);
-
 static int expr_expansion_depth = 0;
 
 char *expand_expression_internal(const char *expr) {

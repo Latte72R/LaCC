@@ -173,6 +173,24 @@ char *skip_trailing_spaces_and_comments(char *cur) {
   return cur;
 }
 
+char *find_directive_line_end(char *start) {
+  char *scan = start;
+  while (*scan) {
+    if (*scan == '\n') {
+      char *prev = scan - 1;
+      while (prev >= start && *prev == '\r')
+        prev--;
+      if (prev >= start && *prev == '\\') {
+        scan++;
+        continue;
+      }
+      break;
+    }
+    scan++;
+  }
+  return scan;
+}
+
 int consume_directive_keyword(char **p, const char *keyword) {
   char *cur = *p;
   if (*cur != '#')

@@ -94,20 +94,7 @@ int parse_include_directive(char **pcur) {
 
   // Capture and preprocess the remainder of the directive (handles line splices)
   char *body_start = cur;
-  char *scan = body_start;
-  while (*scan) {
-    if (*scan == '\n') {
-      char *prev = scan - 1;
-      while (prev >= body_start && *prev == '\r')
-        prev--;
-      if (prev >= body_start && *prev == '\\') {
-        scan++;
-        continue;
-      }
-      break;
-    }
-    scan++;
-  }
+  char *scan = find_directive_line_end(body_start);
 
   char *trimmed = copy_trim_directive_expr(body_start, scan);
   if (!trimmed[0])

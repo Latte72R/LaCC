@@ -24,6 +24,7 @@ int preprocess_is_skipping() { return skip_depth > 0; }
 
 static char *read_directive_message(char *body_start, char **out_next) {
   char *p = skip_directive_spaces(body_start);
+  char *line_end = find_directive_line_end(body_start);
 
   int cap = 64;
   int len = 0;
@@ -31,13 +32,13 @@ static char *read_directive_message(char *body_start, char **out_next) {
   if (!buf)
     error("memory allocation failed");
 
-  while (*p) {
+  while (p < line_end) {
     if (*p == '\\') {
-      if (p[1] == '\n') {
+      if (p + 1 < line_end && p[1] == '\n') {
         p += 2;
         continue;
       }
-      if (p[1] == '\r' && p[2] == '\n') {
+      if (p + 2 < line_end && p[1] == '\r' && p[2] == '\n') {
         p += 3;
         continue;
       }
@@ -55,9 +56,9 @@ static char *read_directive_message(char *body_start, char **out_next) {
 
   char *msg = copy_trim(buf, buf + len);
   free(buf);
-  if (*p == '\n')
-    p++;
-  *out_next = p;
+  if (*line_end == '\n')
+    line_end++;
+  *out_next = line_end;
   return msg;
 }
 
@@ -172,20 +173,7 @@ int parse_if_directive(char **p) {
     return 0;
 
   char *expr_start = cur;
-  char *scan = expr_start;
-  while (*scan) {
-    if (*scan == '\n') {
-      char *prev = scan - 1;
-      while (prev >= expr_start && *prev == '\r')
-        prev--;
-      if (prev >= expr_start && *prev == '\\') {
-        scan++;
-        continue;
-      }
-      break;
-    }
-    scan++;
-  }
+  char *scan = find_directive_line_end(expr_start);
 
   int ignoring = skip_depth > 0;
   int cond = false;
@@ -237,20 +225,7 @@ int parse_elif_directive(char **p) {
     error_at(new_location(hash), "#elif after #else");
 
   char *expr_start = cur;
-  char *scan = expr_start;
-  while (*scan) {
-    if (*scan == '\n') {
-      char *prev = scan - 1;
-      while (prev >= expr_start && *prev == '\r')
-        prev--;
-      if (prev >= expr_start && *prev == '\\') {
-        scan++;
-        continue;
-      }
-      break;
-    }
-    scan++;
-  }
+  char *scan = find_directive_line_end(expr_start);
 
   int should_eval = !state->ignoring && !state->branch_taken;
   int cond = false;

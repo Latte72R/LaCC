@@ -25,6 +25,8 @@ int preprocess_is_skipping();
 void preprocess_check_unterminated_ifs();
 int consume_directive_keyword(char **p, const char *keyword);
 char *skip_directive_spaces(char *cur);
+char *skip_trailing_spaces_and_comments(char *cur);
+char *find_directive_line_end(char *start);
 
 Macro *find_macro(const char *name, int len);
 void expand_macro(Macro *macro, char **args, int arg_count, int invocation_line);
@@ -34,7 +36,6 @@ void undefine_macro(char *name, int len);
 char *substitute_macro_body(Macro *macro, char **args, int arg_count);
 
 char *duplicate_cstring(const char *src);
-char *skip_trailing_spaces_and_comments(char *cur);
 char *expand_expression_internal(const char *expr);
 char *copy_trim(const char *start, const char *end);
 char *copy_trim_directive_expr(const char *start, const char *end);
