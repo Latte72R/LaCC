@@ -127,7 +127,7 @@ static int parse_array_initializer_value(Array *array, Type *type, int *idx) {
       }
       expect("}", "after array initializer", "array_literal");
       if (type->array_size == 0)
-        type->array_size = provided;
+      type->array_size = provided;
       else if (provided > type->array_size)
         warning_at(consumed_loc, "excess elements in array initializer [in variable declaration]");
       return 1;
@@ -167,15 +167,19 @@ static int parse_array_initializer_value(Array *array, Type *type, int *idx) {
     return 1;
   }
 
-  int sign = parse_sign();
-  Token *tok = token; // capture location of the numeric token after optional sign
-  int value = expect_number("array_literal");
-  value *= sign;
-  consumed_loc = tok->loc;
-  // For _Bool elements, normalize initializer to 0 or 1 per C rules
-  if (type->ty == TY_BOOL) {
-    value = (value != 0);
+  // General expression initializer: parse an assignment-expression (no comma
+  // operator) and evaluate it as a constant expression. This allows casts and
+  // parentheses like ((void *)0).
+  Location *loc = token ? token->loc : consumed_loc;
+  Node *e = assign();
+  int ok = true;
+  int value = eval_const_expr(e, &ok);
+  if (!ok) {
+    error_at(loc ? loc : consumed_loc, "expected a compile time constant [in array_literal]");
   }
+  consumed_loc = loc;
+  if (type->ty == TY_BOOL)
+    value = (value != 0);
   append_array_value(array, value, NULL, idx);
   return 1;
 }
