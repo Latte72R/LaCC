@@ -281,6 +281,7 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
   Node *node = new_node(ND_VARDEC);
   lvar = new_lvar(tok, type, is_static, false);
   LVar *static_lvar = NULL;
+  int base_offset = 0;
   if (is_static) {
     lvar->block = block_id;
     static_lvar = new_lvar(tok, type, true, false);
@@ -288,12 +289,15 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
     static_lvar->next = statics;
     statics = static_lvar;
   } else {
-    int base = 0;
     if (locals)
-      base = locals->offset;
-    lvar->offset = base + get_sizeof(type);
-    if (current_fn->offset < lvar->offset) {
-      current_fn->offset = lvar->offset;
+      base_offset = locals->offset;
+    if (type->ty == TY_ARR && type->array_size == 0) {
+      lvar->offset = base_offset; // defer until initializer fixes array size
+    } else {
+      lvar->offset = base_offset + get_sizeof(type);
+      if (current_fn->offset < lvar->offset) {
+        current_fn->offset = lvar->offset;
+      }
     }
   }
   node->var = lvar;
@@ -304,6 +308,12 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
 
   // 要修正
   node = handle_variable_initialization(node, lvar, type, is_static);
+  if (!is_static && type->ty == TY_ARR && type->array_size != 0 && lvar->offset == base_offset) {
+    lvar->offset = base_offset + get_sizeof(type);
+    if (current_fn->offset < lvar->offset) {
+      current_fn->offset = lvar->offset;
+    }
+  }
   if (static_lvar)
     static_lvar->offset = lvar->offset;
   node->endline = true;

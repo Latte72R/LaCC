@@ -402,4 +402,5 @@ void preprocess_initialize_builtins() {
   define_builtin_function_macro("__has_include_next", 1, "0");
   define_builtin_function_macro("__has_feature", 1, "0");
   define_builtin_function_macro("__has_extension", 1, "0");
+  define_builtin_function_macro("__building_module", 1, "0");
 }
