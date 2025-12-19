@@ -78,8 +78,14 @@ int parse_sign() {
 
 // 数値の期待値取得（符号付き）
 int expect_signed_number() {
-  int sign = parse_sign();
-  return expect_number("expect signed number") * sign;
+  Token *tok = token;
+  Node *expr_node = assign();
+  int ok = true;
+  int value = eval_const_expr(expr_node, &ok);
+  if (!ok) {
+    error_at(tok->loc, "expected a compile time constant [in expect signed number statement]");
+  }
+  return value;
 }
 
 void error_duplicate_name(Token *tok, const char *type) {
