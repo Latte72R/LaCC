@@ -112,6 +112,34 @@ static void append_array_value(Array *array, int value, String *str, int *idx) {
   (*idx)++;
 }
 
+static String *find_string_by_id(int id) {
+  String *s = strings;
+  while (s) {
+    if (s->id == id)
+      return s;
+    s = s->next;
+  }
+  return NULL;
+}
+
+static String *string_literal_from_node(Node *node) {
+  Node *cur = node;
+  while (cur) {
+    if (cur->kind == ND_STRING)
+      return find_string_by_id(cur->id);
+    if (cur->kind == ND_TYPECAST || cur->kind == ND_ADDR) {
+      cur = cur->lhs;
+      continue;
+    }
+    if (cur->kind == ND_COMMA) {
+      cur = cur->rhs;
+      continue;
+    }
+    return NULL;
+  }
+  return NULL;
+}
+
 static int parse_array_initializer_value(Array *array, Type *type, int *idx) {
   if (type->ty == TY_ARR) {
     if (peek("{")) {
@@ -167,10 +195,21 @@ static int parse_array_initializer_value(Array *array, Type *type, int *idx) {
     return 1;
   }
 
-  int sign = parse_sign();
-  Token *tok = token; // capture location of the numeric token after optional sign
-  int value = expect_number("array_literal");
-  value *= sign;
+  Token *tok = token; // capture location of the first token in the initializer expression
+  Node *expr_node = assign();
+  if (type->ty == TY_PTR) {
+    String *str = string_literal_from_node(expr_node);
+    if (str) {
+      consumed_loc = tok->loc;
+      append_array_value(array, 0, str, idx);
+      return 1;
+    }
+  }
+  int ok = true;
+  int value = eval_const_expr(expr_node, &ok);
+  if (!ok) {
+    error_at(tok->loc, "expected a compile time constant [in array_literal statement]");
+  }
   consumed_loc = tok->loc;
   // For _Bool elements, normalize initializer to 0 or 1 per C rules
   if (type->ty == TY_BOOL) {
@@ -248,9 +287,14 @@ static void parse_array_member_initializer(Type *type, unsigned char *buffer) {
   int idx = 0;
   while (!peek("}")) {
     Location *value_loc = token->loc;
-    long long value = expect_signed_number();
+    Node *expr_node = assign();
+    int ok = true;
+    int value = eval_const_expr(expr_node, &ok);
+    if (!ok) {
+      error_at(value_loc, "expected a compile time constant [in struct initializer]");
+    }
     if (idx < count)
-      store_scalar_bytes(elem, buffer, idx * elem_size, value);
+      store_scalar_bytes(elem, buffer, idx * elem_size, (long long)value);
     else
       warning_at(value_loc, "excess elements in array member initializer [in struct initializer]");
     idx++;
