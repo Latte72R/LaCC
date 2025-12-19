@@ -22,7 +22,14 @@ static void handle_include_directive(char *name, char *p, int is_system_header) 
   free(raw_name);
 
   char *input_file_prev = input_file;
+  int prev_level = hierarchy_level;
+  hierarchy_level++;
   input_file = resolved_path;
+  if (print_include_files) {
+    for (int i = 0; i < hierarchy_level; i++)
+      fprintf(stderr, ".");
+    fprintf(stderr, " %s\n", resolved_path);
+  }
   FileName *filename = malloc(sizeof(FileName));
   filename->name = resolved_path;
   filename->next = filenames;
@@ -43,6 +50,7 @@ static void handle_include_directive(char *name, char *p, int is_system_header) 
 
   user_input = user_input_prev;
   input_file = input_file_prev;
+  hierarchy_level = prev_level;
 }
 
 static void handle_include_next_directive(char *name, char *p) {

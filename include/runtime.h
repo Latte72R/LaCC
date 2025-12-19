@@ -5,7 +5,9 @@
 
 #include "parser.h"
 
-extern int show_warning;
+#include <stdbool.h>
+
+extern bool show_warning;
 extern int warning_cnt;
 extern char *user_input;
 extern CharPtrList *user_input_list;
@@ -37,6 +39,8 @@ extern FileName *filenames;
 extern char *input_file;
 extern char *output_file;
 extern Location *consumed_loc;
+extern int hierarchy_level;
+extern bool print_include_files;
 extern IncludePath *include_paths;
 extern FILE *fp;
 extern Macro *macros;

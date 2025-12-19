@@ -227,6 +227,8 @@ int main(int argc, char **argv) {
     } else if (!strncmp(argv[i], "-S", 2)) {
     } else if (!strncmp(argv[i], "-w", 2)) {
       show_warning = false;
+    } else if (!strncmp(argv[i], "-H", 2)) {
+      print_include_files = true;
     } else if (!strncmp(argv[i], "-o", 2) && i + 1 < argc) {
       if (output_file_specified) {
         error("multiple output files specified.");
@@ -255,6 +257,7 @@ int main(int argc, char **argv) {
       filename->name = input_file;
       filename->next = filenames;
       filenames = filename;
+      hierarchy_level = 0;
       if (strncmp(input_file + length - 2, ".c", 2)) {
         error("source file must have a .c extension.");
       }

@@ -132,22 +132,12 @@ Type *parse_base_type_internal(const int should_consume, const int should_record
     type->ty = TY_INT;
     type->object = enum_declaration(should_record);
   } else if (token->kind == TK_IDENT) {
-    // サポートしていないが、システムヘッダで現れる組込み型に対する最低限の対応
-    // 例: glibc の stdarg.h などで使用される '__builtin_va_list'
-    if (token->len == (int)strlen("__builtin_va_list") && strncmp(token->str, "__builtin_va_list", token->len) == 0) {
+    int bits = 0;
+    int is_unsigned = 0;
+    if (token_matches(token, "__builtin_va_list")) {
       // 内部表現としては void* 相当で十分（実際のレイアウトは不要）
       Type *void_ty = new_type(TY_VOID);
       type = new_type_ptr(void_ty);
-      token = token->next;
-    } else if (token->len == (int)strlen("wchar_t") && strncmp(token->str, "wchar_t", token->len) == 0) {
-      // C では本来 typedef だが、ヘッダ互換性のためビルトイン扱い（LP64 では int 相当）
-      type->ty = TY_INT;
-      type->is_unsigned = false;
-      token = token->next;
-    } else if (token->len == (int)strlen("size_t") && strncmp(token->str, "size_t", token->len) == 0) {
-      // size_t をビルトイン型として扱う（LP64 では unsigned long）
-      type->ty = TY_LONG;
-      type->is_unsigned = true;
       token = token->next;
     } else {
       TypeTag *type_tag = find_type_tag(token);
@@ -718,9 +708,9 @@ int is_type(Token *tok) {
   if (tok->kind == TK_IDENT) {
     // Recognize common typedef-like builtins even before their typedefs are seen
     // to match parse_base_type() behavior (e.g., size_t, wchar_t, __builtin_va_list).
-    if ((tok->len == (int)strlen("size_t") && strncmp(tok->str, "size_t", tok->len) == 0) ||
-        (tok->len == (int)strlen("wchar_t") && strncmp(tok->str, "wchar_t", tok->len) == 0) ||
-        (tok->len == (int)strlen("__builtin_va_list") && strncmp(tok->str, "__builtin_va_list", tok->len) == 0)) {
+    int bits = 0;
+    int is_unsigned = 0;
+    if (tok->len == (int)strlen("__builtin_va_list") && strncmp(tok->str, "__builtin_va_list", tok->len) == 0) {
       return true;
     }
 

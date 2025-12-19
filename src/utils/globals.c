@@ -2,9 +2,10 @@
 #include "parser.h"
 #include "source.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 
-int show_warning = 1;
+bool show_warning = true;
 int warning_cnt = 0;
 char *user_input = 0;
 CharPtrList *user_input_list = 0;
@@ -18,28 +19,30 @@ int loop_id = -1;
 int variable_cnt = 0;
 int block_cnt = 0;
 int block_id = 0;
-Node *current_switch = 0;
-Function *functions = 0;
-Function *current_fn = 0;
-LVar *locals = 0;
-LVar *globals = 0;
-LVar *statics = 0;
-Object *structs = 0;
-Object *unions = 0;
-Object *enums = 0;
-Object *current_enum_scope = 0;
-TypeTag *type_tags = 0;
-String *strings = 0;
-Array *arrays = 0;
-StructLiteral *struct_literals = 0;
-FileName *filenames = 0;
-char *input_file = 0;
-char *output_file = 0;
-Location *consumed_loc = 0;
+Node *current_switch = NULL;
+Function *functions = NULL;
+Function *current_fn = NULL;
+LVar *locals = NULL;
+LVar *globals = NULL;
+LVar *statics = NULL;
+Object *structs = NULL;
+Object *unions = NULL;
+Object *enums = NULL;
+Object *current_enum_scope = NULL;
+TypeTag *type_tags = NULL;
+String *strings = NULL;
+Array *arrays = NULL;
+StructLiteral *struct_literals = NULL;
+FileName *filenames = NULL;
+char *input_file = NULL;
+char *output_file = NULL;
+Location *consumed_loc = NULL;
+int hierarchy_level = -1;
+bool print_include_files = false;
 
-IncludePath *include_paths = 0;
-FILE *fp = 0;
-Macro *macros = 0;
+IncludePath *include_paths = NULL;
+FILE *fp = NULL;
+Macro *macros = NULL;
 
 void init_global_variables() {
   // グローバル変数の初期化

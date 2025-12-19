@@ -748,6 +748,10 @@ Node *typedef_stmt() {
   Token *tok;
   type = parse_declarator(type, &tok, "typedef");
   skip_gnu_asm_specifier("asm specifier");
+  if (!type) {
+    Location *loc = token ? token->loc : consumed_loc;
+    error_at(loc, "expected a type [in typedef]");
+  }
   if (!tok) {
     Location *loc = token ? token->loc : consumed_loc;
     error_at(loc, "expected an identifier [in typedef statement]");
