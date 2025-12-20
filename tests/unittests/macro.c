@@ -21,6 +21,8 @@ int strcmp(const char *s1, const char *s2);
 #define TEST14_BASE 0
 #define MULTILINE_COND 1
 #define MULTI_LINE_MACRO(x) ((x) + 1)
+#define VARARG_FN(a, b) ((a) + (b))
+#define APPLY_VARARG_FN(fn, ctx...) fn(10, 20, ##ctx)
 
 int macro_test1() { return CONST42; }
 int macro_test2() { return SQUARE(5); }
@@ -124,6 +126,7 @@ int macro_test19() { return -19; }
                                           multi-line
                                           comment */
 int macro_test20() { return WITH_BLOCK_COMMENT == 0x20000000; }
+int macro_test21() { return APPLY_VARARG_FN(VARARG_FN); }
 
 /* Cleanup: undef macros so they don't leak into other tests */
 #undef CONST42
@@ -142,3 +145,5 @@ int macro_test20() { return WITH_BLOCK_COMMENT == 0x20000000; }
 #undef MULTILINE_COND
 #undef MULTI_LINE_MACRO
 #undef WITH_BLOCK_COMMENT
+#undef VARARG_FN
+#undef APPLY_VARARG_FN

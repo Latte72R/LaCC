@@ -3,9 +3,9 @@
 #define MEGA_ISO_EXTRA 1
 #define MEGA_POSIX_BASIC 1
 #define MEGA_POSIX_FS 1
-#define MEGA_POSIX_NET 0
-#define MEGA_POSIX_THREADS 0
-#define MEGA_GNU_EXTRAS 0
+#define MEGA_POSIX_NET 1
+#define MEGA_POSIX_THREADS 1
+#define MEGA_GNU_EXTRAS 1
 #define MEGA_LINUX_UAPI 0
 #define MEGA_BSD 0
 

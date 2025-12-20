@@ -302,6 +302,7 @@ int main() {
   CHECK(macro_test18(), 1);
   CHECK(macro_test19(), 1);
   CHECK(macro_test20(), 1);
+  CHECK(macro_test21(), 30);
 
   CHECK(builtin_object_size_test(), 1);
   CHECK(builtin_memcpy_chk_test(), 1);

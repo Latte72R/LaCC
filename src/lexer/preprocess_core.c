@@ -375,7 +375,7 @@ void preprocess_initialize_builtins() {
   define_builtin_object_macro("__UINTPTR_MAX__", "18446744073709551615UL");
   define_builtin_object_macro("__WCHAR_MAX__", "2147483647");
 
-  /* 機能検出は未対応なら 0 に落とす */
+  /* 未対応の機能を 0 に */
   define_builtin_function_macro("__has_attribute", 1, "0");
   define_builtin_function_macro("__has_builtin", 1, "0");
 
@@ -394,12 +394,10 @@ void preprocess_initialize_builtins() {
   define_builtin_object_macro("__signed__", "signed");
   define_builtin_object_macro("__const", "const");
 
-  /* GCC の “構文緩和” */
+  /* 未対応の機能を "" に */
   define_builtin_object_macro("__extension__", "");
 
-  /* Clang系の機能プローブを未対応なら 0 に落とす */
-  define_builtin_function_macro("__has_include", 1, "0");
-  define_builtin_function_macro("__has_include_next", 1, "0");
+  /* 未対応の機能を 0 に */
   define_builtin_function_macro("__has_feature", 1, "0");
   define_builtin_function_macro("__has_extension", 1, "0");
   define_builtin_function_macro("__building_module", 1, "0");

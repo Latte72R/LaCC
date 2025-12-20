@@ -26,6 +26,14 @@ static void trim_trailing_whitespace(char *buf, int *len) {
     (*len)--;
 }
 
+static void trim_trailing_comma_for_empty_vararg(char *buf, int *len) {
+  trim_trailing_whitespace(buf, len);
+  if (*len > 0 && buf[*len - 1] == ',') {
+    (*len)--;
+    trim_trailing_whitespace(buf, len);
+  }
+}
+
 static void append_with_concat(char **buf, int *len, int *cap, const char *text, int text_len, int *pending_concat) {
   if (*pending_concat) {
     trim_trailing_whitespace(*buf, len);
@@ -184,6 +192,7 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
       for (int i = 0; i < macro->param_count; i++) {
         if ((int)strlen(macro->params[i]) == ident_len && !strncmp(macro->params[i], start, ident_len)) {
           const char *arg_text = NULL;
+          bool is_variadic_param = macro->is_variadic && i == (macro->param_count - 1);
           if (pending_concat) {
             arg_text = (args && args[i]) ? args[i] : "";
           } else if (expanded_args && expanded_args[i]) {
@@ -191,7 +200,13 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
           } else {
             arg_text = (args && args[i]) ? args[i] : "";
           }
-          append_with_concat(&buf, &len, &cap, arg_text, (int)strlen(arg_text), &pending_concat);
+          int arg_len = (int)strlen(arg_text);
+          if (pending_concat && is_variadic_param && arg_len == 0) {
+            trim_trailing_comma_for_empty_vararg(buf, &len);
+            pending_concat = false;
+          } else {
+            append_with_concat(&buf, &len, &cap, arg_text, arg_len, &pending_concat);
+          }
           replaced = true;
           break;
         }
@@ -422,7 +437,8 @@ void expand_macro(Macro *macro, char **args, int arg_count, int invocation_line)
 
   if (macro->is_function) {
     if (macro->param_count != arg_count) {
-      error("macro %s expects %d arguments but %d given", macro->name, macro->param_count, arg_count);
+      error_at(new_location(user_input), "macro %s expects %d arguments but %d given", macro->name, macro->param_count,
+               arg_count);
     }
     expanded_input = substitute_macro_body(macro, args, arg_count);
     CharPtrList *node = malloc(sizeof(CharPtrList));
