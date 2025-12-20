@@ -9,29 +9,34 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void handle_include_directive(char *name, char *p, int is_system_header) {
+static void handle_include_common(char *name, char *p, bool is_system_header, bool is_next) {
   char *including_file = input_file;
   char *raw_name = name;
   char *resolved_path = NULL;
-  char *new_input = read_include_file(raw_name, including_file, is_system_header, &resolved_path);
+  char *new_input = NULL;
+  if (is_next) {
+    new_input = read_include_next_file(raw_name, including_file, &resolved_path);
+  } else {
+    new_input = read_include_file(raw_name, including_file, is_system_header, &resolved_path);
+  }
   if (!new_input) {
-    error_at(new_location(p - 1), "Cannot open include file: %s", raw_name);
+    error_at(new_location(p - 1), "Cannot open %s file: %s", is_next ? "include_next" : "include", raw_name);
   }
   if (!resolved_path)
     resolved_path = duplicate_cstring(raw_name);
   free(raw_name);
 
   char *input_file_prev = input_file;
-  int prev_level = hierarchy_level;
-  hierarchy_level++;
   input_file = resolved_path;
+  int prev_level = hierarchy_level++;
   if (print_include_files) {
     for (int i = 0; i < hierarchy_level; i++)
       fprintf(stderr, ".");
     fprintf(stderr, " %s\n", resolved_path);
   }
+
   FileName *filename = malloc(sizeof(FileName));
-  filename->name = resolved_path;
+  filename->name = input_file;
   filename->next = filenames;
   filenames = filename;
 
@@ -53,41 +58,11 @@ static void handle_include_directive(char *name, char *p, int is_system_header) 
   hierarchy_level = prev_level;
 }
 
-static void handle_include_next_directive(char *name, char *p) {
-  char *including_file = input_file;
-  char *raw_name = name;
-  char *resolved_path = NULL;
-  char *new_input = read_include_next_file(raw_name, including_file, &resolved_path);
-  if (!new_input) {
-    error_at(new_location(p - 1), "Cannot open include_next file: %s", raw_name);
-  }
-  if (!resolved_path)
-    resolved_path = duplicate_cstring(raw_name);
-  free(raw_name);
-
-  char *input_file_prev = input_file;
-  input_file = resolved_path;
-  FileName *filename = malloc(sizeof(FileName));
-  filename->name = input_file;
-  filename->next = filenames;
-  filenames = filename;
-
-  char *user_input_prev = user_input;
-  CharPtrList *user_input_list_prev = user_input_list;
-  user_input_list = malloc(sizeof(CharPtrList));
-  if (!user_input_list)
-    error("memory allocation failed");
-  user_input_list->str = new_input;
-  user_input_list->next = user_input_list_prev;
-
-  user_input = new_input;
-  push_input_context(new_input, input_file, 0);
-  tokenize();
-  pop_input_context();
-
-  user_input = user_input_prev;
-  input_file = input_file_prev;
+static void handle_include_directive(char *name, char *p, bool is_system_header) {
+  handle_include_common(name, p, is_system_header, false);
 }
+
+static void handle_include_next_directive(char *name, char *p) { handle_include_common(name, p, false, true); }
 
 int parse_include_directive(char **pcur) {
   char *cur = *pcur;

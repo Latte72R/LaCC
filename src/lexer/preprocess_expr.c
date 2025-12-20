@@ -1,5 +1,7 @@
 #include "diagnostics.h"
 #include "lexer.h"
+#include "runtime.h"
+#include "source.h"
 
 #include "lexer_internal.h"
 
@@ -37,6 +39,90 @@ static char *copy_macro_body_text(Macro *macro) {
 }
 
 static int expr_expansion_depth = 0;
+
+static int parse_header_name(const char *arg, int *is_system, char **out_name) {
+  const char *p = skip_spaces(arg);
+  if (*p == '<') {
+    *is_system = 1;
+    p++;
+    const char *start = p;
+    while (*p && *p != '>') {
+      p++;
+    }
+    if (*p != '>')
+      return 0;
+    size_t len = p - start;
+    char *name = malloc(len + 1);
+    if (!name)
+      error("memory allocation failed");
+    if (len > 0)
+      memcpy(name, start, len);
+    name[len] = '\0';
+    p++;
+    p = skip_spaces(p);
+    if (*p != '\0') {
+      free(name);
+      return 0;
+    }
+    *out_name = name;
+    return 1;
+  }
+  if (*p == '"') {
+    *is_system = 0;
+    p++;
+    const char *start = p;
+    while (*p && *p != '"') {
+      if (*p == '\\' && *(p + 1)) {
+        p += 2;
+        continue;
+      }
+      p++;
+    }
+    if (*p != '"')
+      return 0;
+    size_t len = p - start;
+    char *name = malloc(len + 1);
+    if (!name)
+      error("memory allocation failed");
+    if (len > 0)
+      memcpy(name, start, len);
+    name[len] = '\0';
+    p++;
+    p = skip_spaces(p);
+    if (*p != '\0') {
+      free(name);
+      return 0;
+    }
+    *out_name = name;
+    return 1;
+  }
+  return 0;
+}
+
+static int eval_has_include(const char *arg, int is_next) {
+  char *expanded = expand_expression_internal(arg);
+  int is_system = 0;
+  char *name = NULL;
+  int ok = parse_header_name(expanded, &is_system, &name);
+  free(expanded);
+  if (!ok || !name)
+    return 0;
+  char *resolved = NULL;
+  char *src = NULL;
+  if (is_next) {
+    src = read_include_next_file(name, input_file, &resolved);
+  } else {
+    src = read_include_file(name, input_file, is_system, &resolved);
+  }
+  free(name);
+  if (resolved)
+    free(resolved);
+  if (src) {
+    free(src);
+    return 1;
+  }
+  return 0;
+}
 
 char *expand_expression_internal(const char *expr) {
   expr_expansion_depth++;
@@ -109,6 +195,33 @@ char *expand_expression_internal(const char *expr) {
         }
       }
 
+      int is_has_include = (ident_len == 13 && !strncmp(start, "__has_include", 13));
+      int is_has_include_next = (ident_len == 18 && !strncmp(start, "__has_include_next", 18));
+      if (is_has_include || is_has_include_next) {
+        const char *after_name = p;
+        const char *ws = skip_spaces(after_name);
+        if (*ws == '(') {
+          Macro mm = {0};
+          mm.name = (char *)(is_has_include ? "__has_include" : "__has_include_next");
+          mm.param_count = 1;
+          mm.is_function = 1;
+          mm.is_variadic = 0;
+          const char *arg_ptr = ws;
+          int arg_cnt = 0;
+          char **args = parse_macro_arguments(&arg_ptr, &mm, &arg_cnt);
+          int has = (arg_cnt == 1) ? eval_has_include(args[0], is_has_include_next) : 0;
+          const char *res = has ? "1" : "0";
+          append_text(&buf, &len, &cap, res, 1);
+          if (args) {
+            for (int i = 0; i < arg_cnt; i++)
+              free(args[i]);
+            free(args);
+          }
+          p = arg_ptr;
+          continue;
+        }
+      }
+
       Macro *macro = find_macro(start, ident_len);
       if (!macro || macro->is_expanding) {
         append_text(&buf, &len, &cap, start, ident_len);
@@ -125,6 +238,30 @@ char *expand_expression_internal(const char *expr) {
         const char *arg_ptr = ws;
         int arg_cnt = 0;
         char **args = parse_macro_arguments(&arg_ptr, macro, &arg_cnt);
+        if (macro->param_count == 1 && (ident_len == 13 && !strncmp(start, "__has_include", 13))) {
+          int has = (arg_cnt == 1) ? eval_has_include(args[0], 0) : 0;
+          const char *res = has ? "1" : "0";
+          append_text(&buf, &len, &cap, res, 1);
+          if (args) {
+            for (int i = 0; i < arg_cnt; i++)
+              free(args[i]);
+            free(args);
+          }
+          p = arg_ptr;
+          continue;
+        }
+        if (macro->param_count == 1 && (ident_len == 18 && !strncmp(start, "__has_include_next", 18))) {
+          int has = (arg_cnt == 1) ? eval_has_include(args[0], 1) : 0;
+          const char *res = has ? "1" : "0";
+          append_text(&buf, &len, &cap, res, 1);
+          if (args) {
+            for (int i = 0; i < arg_cnt; i++)
+              free(args[i]);
+            free(args);
+          }
+          p = arg_ptr;
+          continue;
+        }
         macro->is_expanding = true;
         char *expanded_body = substitute_macro_body(macro, args, arg_cnt);
         macro->is_expanding = false;
