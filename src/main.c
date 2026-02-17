@@ -216,6 +216,7 @@ int main(int argc, char **argv) {
   input_file = NULL;
   output_file = NULL;
   int output_file_specified = false;
+  int optimize_level = 0;
 
   if (argc < 2) {
     error("invalid number of arguments.");
@@ -225,6 +226,10 @@ int main(int argc, char **argv) {
     if (!strncmp(argv[i], "-I", 2) && i + 1 < argc) {
       add_include_path_front(argv[++i]);
     } else if (!strncmp(argv[i], "-S", 2)) {
+    } else if (!strncmp(argv[i], "-O0", 3) && argv[i][3] == '\0') {
+      optimize_level = 0;
+    } else if (!strncmp(argv[i], "-O1", 3) && argv[i][3] == '\0') {
+      optimize_level = 1;
     } else if (!strncmp(argv[i], "-w", 2)) {
       show_warning = false;
     } else if (!strncmp(argv[i], "-H", 2)) {
@@ -314,7 +319,10 @@ int main(int argc, char **argv) {
   free_all_macros();
   free_all_locations();
 
-  generate_assembly();
+  if (optimize_level > 0)
+    generate_assembly_optimized();
+  else
+    generate_assembly();
 
   free_all_nodes();
   free_all_functions();
