@@ -9,6 +9,7 @@ typedef int VReg;
 
 enum {
   MIR_INVALID_VREG = -1,
+  MIR_INVALID_LABEL = -1,
 };
 
 typedef enum {
@@ -25,6 +26,14 @@ typedef enum {
   MIR_OP_UDIV,
   MIR_OP_SMOD,
   MIR_OP_UMOD,
+  MIR_OP_EQ,
+  MIR_OP_NE,
+  MIR_OP_LT,
+  MIR_OP_LE,
+  MIR_OP_LABEL,
+  MIR_OP_JMP,
+  MIR_OP_JZ,
+  MIR_OP_CALL,
   MIR_OP_RET
 } MirOp;
 
@@ -37,6 +46,10 @@ struct MirInst {
   VReg src2;
   long imm;
   int offset;
+  int label;
+  Function *call_fn;
+  int argc;
+  VReg args[MAX_FUNC_PARAMS];
   Type *type;
 };
 
@@ -48,10 +61,12 @@ struct MirFunction {
   int inst_len;
   int inst_cap;
   int next_vreg;
+  int next_label;
 };
 
 void mir_init(MirFunction *mf, Function *fn);
 VReg mir_new_vreg(MirFunction *mf);
+int mir_new_label(MirFunction *mf);
 void mir_emit(MirFunction *mf, MirInst inst);
 void mir_dump(FILE *out, const MirFunction *mf);
 void mir_free(MirFunction *mf);

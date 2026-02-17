@@ -48,6 +48,22 @@ static const char *mir_op_name(MirOp op) {
     return "SMOD";
   case MIR_OP_UMOD:
     return "UMOD";
+  case MIR_OP_EQ:
+    return "EQ";
+  case MIR_OP_NE:
+    return "NE";
+  case MIR_OP_LT:
+    return "LT";
+  case MIR_OP_LE:
+    return "LE";
+  case MIR_OP_LABEL:
+    return "LABEL";
+  case MIR_OP_JMP:
+    return "JMP";
+  case MIR_OP_JZ:
+    return "JZ";
+  case MIR_OP_CALL:
+    return "CALL";
   case MIR_OP_RET:
     return "RET";
   default:
@@ -68,6 +84,12 @@ VReg mir_new_vreg(MirFunction *mf) {
   return mf->next_vreg++;
 }
 
+int mir_new_label(MirFunction *mf) {
+  if (!mf)
+    return MIR_INVALID_LABEL;
+  return mf->next_label++;
+}
+
 // MirFunction に命令を追加する
 void mir_emit(MirFunction *mf, MirInst inst) {
   if (!mf)
@@ -82,10 +104,11 @@ void mir_dump(FILE *out, const MirFunction *mf) {
     return;
 
   if (mf->fn) {
-    fprintf(out, "MIR function %.*s (insts=%d, next_vreg=%d)\n", mf->fn->len, mf->fn->name, mf->inst_len,
-            mf->next_vreg);
+    fprintf(out, "MIR function %.*s (insts=%d, next_vreg=%d, next_label=%d)\n", mf->fn->len, mf->fn->name,
+            mf->inst_len, mf->next_vreg, mf->next_label);
   } else {
-    fprintf(out, "MIR function <null> (insts=%d, next_vreg=%d)\n", mf->inst_len, mf->next_vreg);
+    fprintf(out, "MIR function <null> (insts=%d, next_vreg=%d, next_label=%d)\n", mf->inst_len, mf->next_vreg,
+            mf->next_label);
   }
 
   for (int i = 0; i < mf->inst_len; i++) {
@@ -128,6 +151,41 @@ void mir_dump(FILE *out, const MirFunction *mf) {
     case MIR_OP_UMOD:
       fprintf(out, "v%d <- v%d %%u v%d", in->dst, in->src1, in->src2);
       break;
+    case MIR_OP_EQ:
+      fprintf(out, "v%d <- (v%d == v%d)", in->dst, in->src1, in->src2);
+      break;
+    case MIR_OP_NE:
+      fprintf(out, "v%d <- (v%d != v%d)", in->dst, in->src1, in->src2);
+      break;
+    case MIR_OP_LT:
+      fprintf(out, "v%d <- (v%d < v%d)", in->dst, in->src1, in->src2);
+      break;
+    case MIR_OP_LE:
+      fprintf(out, "v%d <- (v%d <= v%d)", in->dst, in->src1, in->src2);
+      break;
+    case MIR_OP_LABEL:
+      fprintf(out, "L%d:", in->label);
+      break;
+    case MIR_OP_JMP:
+      fprintf(out, "jmp L%d", in->label);
+      break;
+    case MIR_OP_JZ:
+      fprintf(out, "jz v%d, L%d", in->src1, in->label);
+      break;
+    case MIR_OP_CALL:
+      if (in->dst != MIR_INVALID_VREG)
+        fprintf(out, "v%d <- ", in->dst);
+      if (in->call_fn)
+        fprintf(out, "call %.*s(", in->call_fn->len, in->call_fn->name);
+      else
+        fprintf(out, "call_indirect v%d(", in->src1);
+      for (int a = 0; a < in->argc; a++) {
+        if (a)
+          fprintf(out, ", ");
+        fprintf(out, "v%d", in->args[a]);
+      }
+      fprintf(out, ")");
+      break;
     case MIR_OP_RET:
       fprintf(out, "ret v%d", in->src1);
       break;
@@ -150,5 +208,6 @@ void mir_free(MirFunction *mf) {
   mf->inst_len = 0;
   mf->inst_cap = 0;
   mf->next_vreg = 0;
+  mf->next_label = 0;
   mf->fn = NULL;
 }
