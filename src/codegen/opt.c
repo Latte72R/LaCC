@@ -14,6 +14,8 @@ static MirInst new_inst(MirOp op) {
   return inst;
 }
 
+static bool is_local_var_node(Node *node) { return node && (node->kind == ND_LVAR || node->kind == ND_VARDEC); }
+
 static bool lower_expr(Node *node, MirFunction *mf, VReg *out) {
   if (!node || !mf || !out)
     return false;
@@ -29,7 +31,8 @@ static bool lower_expr(Node *node, MirFunction *mf, VReg *out) {
     *out = dst;
     return true;
   }
-  case ND_LVAR: {
+  case ND_LVAR:
+  case ND_VARDEC: {
     if (!node->var || node->var->is_static)
       return false;
     VReg dst = mir_new_vreg(mf);
@@ -41,7 +44,11 @@ static bool lower_expr(Node *node, MirFunction *mf, VReg *out) {
     *out = dst;
     return true;
   }
-  case ND_ADD: {
+  case ND_ADD:
+  case ND_SUB:
+  case ND_MUL:
+  case ND_DIV:
+  case ND_MOD: {
     VReg lhs = MIR_INVALID_VREG;
     VReg rhs = MIR_INVALID_VREG;
     if (!lower_expr(node->lhs, mf, &lhs))
@@ -49,10 +56,68 @@ static bool lower_expr(Node *node, MirFunction *mf, VReg *out) {
     if (!lower_expr(node->rhs, mf, &rhs))
       return false;
     VReg dst = mir_new_vreg(mf);
-    MirInst inst = new_inst(MIR_OP_ADD);
+    MirOp op;
+    switch (node->kind) {
+    case ND_ADD:
+      op = MIR_OP_ADD;
+      break;
+    case ND_SUB:
+      op = MIR_OP_SUB;
+      break;
+    case ND_MUL:
+      op = MIR_OP_MUL;
+      break;
+    case ND_DIV:
+      op = (node->type && node->type->is_unsigned) ? MIR_OP_UDIV : MIR_OP_SDIV;
+      break;
+    case ND_MOD:
+      op = (node->type && node->type->is_unsigned) ? MIR_OP_UMOD : MIR_OP_SMOD;
+      break;
+    default:
+      return false;
+    }
+    MirInst inst = new_inst(op);
     inst.dst = dst;
     inst.src1 = lhs;
     inst.src2 = rhs;
+    inst.type = node->type;
+    mir_emit(mf, inst);
+    *out = dst;
+    return true;
+  }
+  case ND_ASSIGN: {
+    if (!is_local_var_node(node->lhs))
+      return false;
+    if (!node->lhs->var || node->lhs->var->is_static)
+      return false;
+
+    VReg rhs = MIR_INVALID_VREG;
+    if (!lower_expr(node->rhs, mf, &rhs))
+      return false;
+
+    MirInst st = new_inst(MIR_OP_STORE_LOCAL);
+    st.src1 = rhs;
+    st.offset = node->lhs->var->offset;
+    st.type = node->lhs->type;
+    mir_emit(mf, st);
+
+    *out = rhs;
+    return true;
+  }
+  case ND_COMMA: {
+    VReg discard = MIR_INVALID_VREG;
+    if (!lower_expr(node->lhs, mf, &discard))
+      return false;
+    return lower_expr(node->rhs, mf, out);
+  }
+  case ND_TYPECAST: {
+    VReg src = MIR_INVALID_VREG;
+    if (!lower_expr(node->lhs, mf, &src))
+      return false;
+    VReg dst = mir_new_vreg(mf);
+    MirInst inst = new_inst(MIR_OP_CAST);
+    inst.dst = dst;
+    inst.src1 = src;
     inst.type = node->type;
     mir_emit(mf, inst);
     *out = dst;
@@ -83,6 +148,21 @@ static bool lower_stmt(Node *node, MirFunction *mf) {
     inst.type = node->type;
     mir_emit(mf, inst);
     return true;
+  }
+  case ND_VARDEC:
+    return true;
+  case ND_NUM:
+  case ND_LVAR:
+  case ND_ADD:
+  case ND_SUB:
+  case ND_MUL:
+  case ND_DIV:
+  case ND_MOD:
+  case ND_ASSIGN:
+  case ND_COMMA:
+  case ND_TYPECAST: {
+    VReg unused = MIR_INVALID_VREG;
+    return lower_expr(node, mf, &unused);
   }
   default:
     return false;
