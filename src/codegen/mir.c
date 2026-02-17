@@ -101,11 +101,11 @@ int mir_new_label(MirFunction *mf) {
 }
 
 // MirFunction に命令を追加する
-void mir_emit(MirFunction *mf, MirInst inst) {
-  if (!mf)
+void mir_emit(MirFunction *mf, const MirInst *inst) {
+  if (!mf || !inst)
     return;
   ensure_inst_capacity(mf, mf->inst_len + 1);
-  mf->insts[mf->inst_len++] = inst;
+  mf->insts[mf->inst_len++] = *inst;
 }
 
 // MirFunction の内容を人間が読める形式で出力する

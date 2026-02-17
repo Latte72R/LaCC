@@ -876,27 +876,55 @@ static void gen(Node *node) {
     for (int i = 0; i < node->val; i++) {
       gen_lval(node->args[i]);
       write_file("  pop rax\n");
-      switch (node->args[i]->type->ty) {
-      case TY_BOOL:
-        write_file("  mov BYTE PTR [rax], %s\n", regs1[i]);
-        break;
-      case TY_INT:
-        write_file("  mov DWORD PTR [rax], %s\n", regs4[i]);
-        break;
-      case TY_CHAR:
-        write_file("  mov BYTE PTR [rax], %s\n", regs1[i]);
-        break;
-      case TY_SHORT:
-        write_file("  mov WORD PTR [rax], %s\n", regs2[i]);
-        break;
-      case TY_LONG:
-      case TY_LONGLONG:
-      case TY_PTR:
-      case TY_ARGARR:
-        write_file("  mov QWORD PTR [rax], %s\n", regs8[i]);
-        break;
-      default:
-        error("invalid type [in ND_FUNCDEF]");
+      if (i < 6) {
+        switch (node->args[i]->type->ty) {
+        case TY_BOOL:
+          write_file("  mov BYTE PTR [rax], %s\n", regs1[i]);
+          break;
+        case TY_INT:
+          write_file("  mov DWORD PTR [rax], %s\n", regs4[i]);
+          break;
+        case TY_CHAR:
+          write_file("  mov BYTE PTR [rax], %s\n", regs1[i]);
+          break;
+        case TY_SHORT:
+          write_file("  mov WORD PTR [rax], %s\n", regs2[i]);
+          break;
+        case TY_LONG:
+        case TY_LONGLONG:
+        case TY_PTR:
+        case TY_ARGARR:
+        case TY_ARR:
+          write_file("  mov QWORD PTR [rax], %s\n", regs8[i]);
+          break;
+        default:
+          error("invalid type [in ND_FUNCDEF]");
+        }
+      } else {
+        // SysV ABI: 7個目以降の整数/ポインタ引数は [rbp+16] から順に積まれる
+        int stack_arg_off = 16 + (i - 6) * 8;
+        write_file("  mov r11, QWORD PTR [rbp + %d]\n", stack_arg_off);
+        switch (node->args[i]->type->ty) {
+        case TY_BOOL:
+        case TY_CHAR:
+          write_file("  mov BYTE PTR [rax], r11b\n");
+          break;
+        case TY_SHORT:
+          write_file("  mov WORD PTR [rax], r11w\n");
+          break;
+        case TY_INT:
+          write_file("  mov DWORD PTR [rax], r11d\n");
+          break;
+        case TY_LONG:
+        case TY_LONGLONG:
+        case TY_PTR:
+        case TY_ARGARR:
+        case TY_ARR:
+          write_file("  mov QWORD PTR [rax], r11\n");
+          break;
+        default:
+          error("invalid type [in ND_FUNCDEF]");
+        }
       }
     }
     gen(node->lhs);
@@ -909,15 +937,23 @@ static void gen(Node *node) {
       write_file("  ret\n");
     }
   } break;
-  case ND_FUNCALL:
-    if (!node->fn) {
-      // 関数ポインタの場合は先にポインタを評価してスタックに保持
-      gen(node->lhs);
-    }
-    for (int i = 0; i < node->val; i++) {
+  case ND_FUNCALL: {
+    int reg_argc = node->val < 6 ? node->val : 6;
+    int stack_argc = node->val - reg_argc;
+    int stack_arg_bytes = stack_argc * 8;
+
+    // 右から評価して積む。先頭6個は後でレジスタへ、残りはそのままスタック引数として使う。
+    for (int i = node->val - 1; i >= 0; i--) {
       gen(node->args[i]);
     }
-    for (int i = node->val - 1; i >= 0; i--) {
+
+    if (!node->fn) {
+      // 関数ポインタは引数評価後に取り出す（引数設定で壊さないため）
+      gen(node->lhs);
+      write_file("  pop r10\n");
+    }
+
+    for (int i = 0; i < reg_argc; i++) {
       write_file("  pop rax\n");
       switch (node->args[i]->type->ty) {
       case TY_BOOL:
@@ -949,6 +985,7 @@ static void gen(Node *node) {
         error("invalid type [in ND_FUNCALL]");
       }
     }
+
     if (node->fn) {
       // Align stack and call by name
       write_file("  mov rax, rsp\n");
@@ -966,8 +1003,6 @@ static void gen(Node *node) {
       write_file("  add rsp, 8\n");
       write_file(".Lend%d:\n", node->id);
     } else {
-      // スタックから関数ポインタを取り出して呼び出す
-      write_file("  pop r10\n");
       write_file("  mov rax, rsp\n");
       write_file("  and rax, 0xF\n");
       write_file("  cmp rax, 0\n");
@@ -982,9 +1017,13 @@ static void gen(Node *node) {
       write_file("  call r10\n");
       write_file(".Lend%d:\n", node->id);
     }
+
+    if (stack_arg_bytes > 0)
+      write_file("  add rsp, %d\n", stack_arg_bytes);
     if (!node->endline)
       write_file("  push rax\n");
     break;
+  }
   case ND_AND:
     gen(node->lhs);
     write_file("  pop rdi\n");

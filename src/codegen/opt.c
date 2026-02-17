@@ -57,40 +57,44 @@ static void lower_error_node(const char *msg, Node *node) {
   error("%s", msg);
 }
 
-static MirInst new_inst(MirOp op) {
-  MirInst inst = {0};
-  inst.op = op;
-  inst.dst = MIR_INVALID_VREG;
-  inst.src1 = MIR_INVALID_VREG;
-  inst.src2 = MIR_INVALID_VREG;
-  inst.label = MIR_INVALID_LABEL;
-  inst.var = NULL;
-  inst.call_fn = NULL;
-  inst.argc = 0;
+static void init_inst(MirInst *inst, MirOp op) {
+  if (!inst)
+    error("invalid MirInst pointer [in init_inst]");
+  memset(inst, 0, sizeof(*inst));
+  inst->op = op;
+  inst->dst = MIR_INVALID_VREG;
+  inst->src1 = MIR_INVALID_VREG;
+  inst->src2 = MIR_INVALID_VREG;
+  inst->label = MIR_INVALID_LABEL;
+  inst->var = NULL;
+  inst->call_fn = NULL;
+  inst->argc = 0;
   for (int i = 0; i < MAX_FUNC_PARAMS; i++)
-    inst.args[i] = MIR_INVALID_VREG;
-  return inst;
+    inst->args[i] = MIR_INVALID_VREG;
 }
 
 static int new_label(LowerCtx *ctx) { return mir_new_label(ctx->mf); }
 
 static void emit_label(LowerCtx *ctx, int label) {
-  MirInst inst = new_inst(MIR_OP_LABEL);
+  MirInst inst;
+  init_inst(&inst, MIR_OP_LABEL);
   inst.label = label;
-  mir_emit(ctx->mf, inst);
+  mir_emit(ctx->mf, &inst);
 }
 
 static void emit_jmp(LowerCtx *ctx, int label) {
-  MirInst inst = new_inst(MIR_OP_JMP);
+  MirInst inst;
+  init_inst(&inst, MIR_OP_JMP);
   inst.label = label;
-  mir_emit(ctx->mf, inst);
+  mir_emit(ctx->mf, &inst);
 }
 
 static void emit_jz(LowerCtx *ctx, VReg cond, int label) {
-  MirInst inst = new_inst(MIR_OP_JZ);
+  MirInst inst;
+  init_inst(&inst, MIR_OP_JZ);
   inst.src1 = cond;
   inst.label = label;
-  mir_emit(ctx->mf, inst);
+  mir_emit(ctx->mf, &inst);
 }
 
 static VReg lower_expr(LowerCtx *ctx, Node *node);
@@ -281,32 +285,35 @@ static void collect_switch_cases(Node *node, int switch_id, int **cases, int *ca
 
 static VReg lower_imm(LowerCtx *ctx, long imm, Type *type) {
   VReg dst = mir_new_vreg(ctx->mf);
-  MirInst inst = new_inst(MIR_OP_IMM);
+  MirInst inst;
+  init_inst(&inst, MIR_OP_IMM);
   inst.dst = dst;
   inst.imm = imm;
   inst.type = type;
-  mir_emit(ctx->mf, inst);
+  mir_emit(ctx->mf, &inst);
   return dst;
 }
 
 static void emit_mov(LowerCtx *ctx, VReg dst, VReg src, Type *type) {
-  MirInst inst = new_inst(MIR_OP_MOV);
+  MirInst inst;
+  init_inst(&inst, MIR_OP_MOV);
   inst.dst = dst;
   inst.src1 = src;
   inst.type = type;
-  mir_emit(ctx->mf, inst);
+  mir_emit(ctx->mf, &inst);
 }
 
 static VReg lower_not(LowerCtx *ctx, Node *node) {
   VReg src = lower_expr(ctx, node->lhs);
   VReg zero = lower_imm(ctx, 0, node->type);
   VReg dst = mir_new_vreg(ctx->mf);
-  MirInst eq = new_inst(MIR_OP_EQ);
+  MirInst eq;
+  init_inst(&eq, MIR_OP_EQ);
   eq.dst = dst;
   eq.src1 = src;
   eq.src2 = zero;
   eq.type = node->type;
-  mir_emit(ctx->mf, eq);
+  mir_emit(ctx->mf, &eq);
   return dst;
 }
 
@@ -404,7 +411,8 @@ static VReg lower_addr(LowerCtx *ctx, Node *node) {
   }
 
   VReg dst = mir_new_vreg(ctx->mf);
-  MirInst inst = new_inst(MIR_OP_ADDR_SYMBOL);
+  MirInst inst;
+  init_inst(&inst, MIR_OP_ADDR_SYMBOL);
   inst.dst = dst;
   inst.type = node->type;
   inst.var = node->var;
@@ -415,7 +423,7 @@ static VReg lower_addr(LowerCtx *ctx, Node *node) {
       inst.var = NULL;
     }
   }
-  mir_emit(ctx->mf, inst);
+  mir_emit(ctx->mf, &inst);
   return dst;
 }
 
@@ -424,20 +432,22 @@ static VReg lower_load_from_addr(LowerCtx *ctx, VReg addr, Type *type) {
     return addr;
 
   VReg dst = mir_new_vreg(ctx->mf);
-  MirInst load = new_inst(MIR_OP_LOAD);
+  MirInst load;
+  init_inst(&load, MIR_OP_LOAD);
   load.dst = dst;
   load.src1 = addr;
   load.type = type;
-  mir_emit(ctx->mf, load);
+  mir_emit(ctx->mf, &load);
   return dst;
 }
 
 static void lower_store_to_addr(LowerCtx *ctx, VReg addr, VReg value, Type *type) {
-  MirInst store = new_inst(MIR_OP_STORE);
+  MirInst store;
+  init_inst(&store, MIR_OP_STORE);
   store.src1 = addr;
   store.src2 = value;
   store.type = type;
-  mir_emit(ctx->mf, store);
+  mir_emit(ctx->mf, &store);
 }
 
 static VReg lower_postinc(LowerCtx *ctx, Node *node) {
@@ -456,17 +466,19 @@ static VReg lower_binary(LowerCtx *ctx, Node *node, MirOp op) {
   VReg rhs = lower_expr(ctx, node->rhs);
   VReg dst = mir_new_vreg(ctx->mf);
 
-  MirInst inst = new_inst(op);
+  MirInst inst;
+  init_inst(&inst, op);
   inst.dst = dst;
   inst.src1 = lhs;
   inst.src2 = rhs;
   inst.type = node->type;
-  mir_emit(ctx->mf, inst);
+  mir_emit(ctx->mf, &inst);
   return dst;
 }
 
 static VReg lower_call(LowerCtx *ctx, Node *node) {
-  MirInst call = new_inst(MIR_OP_CALL);
+  MirInst call;
+  init_inst(&call, MIR_OP_CALL);
 
   if (node->val > MAX_FUNC_PARAMS)
     lower_error_node("too many function arguments in lowering", node);
@@ -488,18 +500,19 @@ static VReg lower_call(LowerCtx *ctx, Node *node) {
   if (node->type && node->type->ty != TY_VOID)
     call.dst = mir_new_vreg(ctx->mf);
 
-  mir_emit(ctx->mf, call);
+  mir_emit(ctx->mf, &call);
   return call.dst;
 }
 
 static void emit_jmp_if_eq(LowerCtx *ctx, VReg lhs, VReg rhs, Type *type, int label) {
   VReg ne = mir_new_vreg(ctx->mf);
-  MirInst inst = new_inst(MIR_OP_NE);
+  MirInst inst;
+  init_inst(&inst, MIR_OP_NE);
   inst.dst = ne;
   inst.src1 = lhs;
   inst.src2 = rhs;
   inst.type = type;
-  mir_emit(ctx->mf, inst);
+  mir_emit(ctx->mf, &inst);
   emit_jz(ctx, ne, label);
 }
 
@@ -562,11 +575,12 @@ static VReg lower_expr(LowerCtx *ctx, Node *node) {
     if (!node->fn)
       lower_error_node("function name node has no function in lowering", node);
     VReg dst = mir_new_vreg(ctx->mf);
-    MirInst inst = new_inst(MIR_OP_ADDR_FUNC);
+    MirInst inst;
+  init_inst(&inst, MIR_OP_ADDR_FUNC);
     inst.dst = dst;
     inst.call_fn = node->fn;
     inst.type = node->type;
-    mir_emit(ctx->mf, inst);
+    mir_emit(ctx->mf, &inst);
     return dst;
   }
   case ND_ADDR:
@@ -619,11 +633,12 @@ static VReg lower_expr(LowerCtx *ctx, Node *node) {
   case ND_TYPECAST: {
     VReg src = lower_expr(ctx, node->lhs);
     VReg dst = mir_new_vreg(ctx->mf);
-    MirInst inst = new_inst(MIR_OP_CAST);
+    MirInst inst;
+  init_inst(&inst, MIR_OP_CAST);
     inst.dst = dst;
     inst.src1 = src;
     inst.type = node->type;
-    mir_emit(ctx->mf, inst);
+    mir_emit(ctx->mf, &inst);
     return dst;
   }
   case ND_FUNCALL:
@@ -648,10 +663,11 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     return;
   case ND_RETURN: {
     VReg src = lower_expr(ctx, node->rhs);
-    MirInst inst = new_inst(MIR_OP_RET);
+    MirInst inst;
+  init_inst(&inst, MIR_OP_RET);
     inst.src1 = src;
     inst.type = node->type;
-    mir_emit(ctx->mf, inst);
+    mir_emit(ctx->mf, &inst);
     return;
   }
   case ND_IF: {
