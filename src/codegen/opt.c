@@ -28,14 +28,13 @@ static MirInst new_inst(MirOp op) {
   inst.src1 = MIR_INVALID_VREG;
   inst.src2 = MIR_INVALID_VREG;
   inst.label = MIR_INVALID_LABEL;
+  inst.var = NULL;
   inst.call_fn = NULL;
   inst.argc = 0;
   for (int i = 0; i < MAX_FUNC_PARAMS; i++)
     inst.args[i] = MIR_INVALID_VREG;
   return inst;
 }
-
-static bool is_local_var_node(Node *node) { return node && (node->kind == ND_LVAR || node->kind == ND_VARDEC); }
 
 static int new_label(LowerCtx *ctx) { return mir_new_label(ctx->mf); }
 
@@ -60,6 +59,137 @@ static void emit_jz(LowerCtx *ctx, VReg cond, int label) {
 
 static VReg lower_expr(LowerCtx *ctx, Node *node);
 static void lower_stmt(LowerCtx *ctx, Node *node);
+
+static VReg lower_imm(LowerCtx *ctx, long imm, Type *type) {
+  VReg dst = mir_new_vreg(ctx->mf);
+  MirInst inst = new_inst(MIR_OP_IMM);
+  inst.dst = dst;
+  inst.imm = imm;
+  inst.type = type;
+  mir_emit(ctx->mf, inst);
+  return dst;
+}
+
+static void emit_mov(LowerCtx *ctx, VReg dst, VReg src, Type *type) {
+  MirInst inst = new_inst(MIR_OP_MOV);
+  inst.dst = dst;
+  inst.src1 = src;
+  inst.type = type;
+  mir_emit(ctx->mf, inst);
+}
+
+static VReg lower_not(LowerCtx *ctx, Node *node) {
+  VReg src = lower_expr(ctx, node->lhs);
+  VReg zero = lower_imm(ctx, 0, node->type);
+  VReg dst = mir_new_vreg(ctx->mf);
+  MirInst eq = new_inst(MIR_OP_EQ);
+  eq.dst = dst;
+  eq.src1 = src;
+  eq.src2 = zero;
+  eq.type = node->type;
+  mir_emit(ctx->mf, eq);
+  return dst;
+}
+
+static VReg lower_logical_and(LowerCtx *ctx, Node *node) {
+  VReg dst = mir_new_vreg(ctx->mf);
+  VReg zero = lower_imm(ctx, 0, node->type);
+  VReg one = lower_imm(ctx, 1, node->type);
+  int l_end = new_label(ctx);
+
+  emit_mov(ctx, dst, zero, node->type);
+
+  VReg lhs = lower_expr(ctx, node->lhs);
+  emit_jz(ctx, lhs, l_end);
+
+  VReg rhs = lower_expr(ctx, node->rhs);
+  emit_jz(ctx, rhs, l_end);
+
+  emit_mov(ctx, dst, one, node->type);
+  emit_label(ctx, l_end);
+  return dst;
+}
+
+static VReg lower_logical_or(LowerCtx *ctx, Node *node) {
+  VReg dst = mir_new_vreg(ctx->mf);
+  VReg zero = lower_imm(ctx, 0, node->type);
+  VReg one = lower_imm(ctx, 1, node->type);
+  int l_eval_rhs = new_label(ctx);
+  int l_end = new_label(ctx);
+
+  emit_mov(ctx, dst, zero, node->type);
+
+  VReg lhs = lower_expr(ctx, node->lhs);
+  emit_jz(ctx, lhs, l_eval_rhs);
+  emit_mov(ctx, dst, one, node->type);
+  emit_jmp(ctx, l_end);
+
+  emit_label(ctx, l_eval_rhs);
+  VReg rhs = lower_expr(ctx, node->rhs);
+  emit_jz(ctx, rhs, l_end);
+  emit_mov(ctx, dst, one, node->type);
+
+  emit_label(ctx, l_end);
+  return dst;
+}
+
+static VReg lower_addr(LowerCtx *ctx, Node *node) {
+  if (!ctx || !ctx->mf || !node)
+    lower_error_node("invalid address lowering context", node);
+
+  switch (node->kind) {
+  case ND_LVAR:
+  case ND_VARDEC:
+    if (!node->var)
+      lower_error_node("local variable node has no symbol in lowering", node);
+    break;
+  case ND_GVAR:
+  case ND_GLBDEC:
+    if (!node->var)
+      lower_error_node("global variable node has no symbol in lowering", node);
+    break;
+  case ND_DEREF:
+    return lower_expr(ctx, node->lhs);
+  default:
+    lower_error_node("expression is not addressable in lowering", node);
+  }
+
+  VReg dst = mir_new_vreg(ctx->mf);
+  MirInst inst = new_inst(MIR_OP_ADDR_SYMBOL);
+  inst.dst = dst;
+  inst.type = node->type;
+  inst.var = node->var;
+  if (node->kind == ND_LVAR || node->kind == ND_VARDEC) {
+    if (!node->var->is_static) {
+      inst.op = MIR_OP_ADDR_LOCAL;
+      inst.offset = node->var->offset;
+      inst.var = NULL;
+    }
+  }
+  mir_emit(ctx->mf, inst);
+  return dst;
+}
+
+static VReg lower_load_from_addr(LowerCtx *ctx, VReg addr, Type *type) {
+  if (type && type->ty == TY_ARR)
+    return addr;
+
+  VReg dst = mir_new_vreg(ctx->mf);
+  MirInst load = new_inst(MIR_OP_LOAD);
+  load.dst = dst;
+  load.src1 = addr;
+  load.type = type;
+  mir_emit(ctx->mf, load);
+  return dst;
+}
+
+static void lower_store_to_addr(LowerCtx *ctx, VReg addr, VReg value, Type *type) {
+  MirInst store = new_inst(MIR_OP_STORE);
+  store.src1 = addr;
+  store.src2 = value;
+  store.type = type;
+  mir_emit(ctx->mf, store);
+}
 
 static VReg lower_binary(LowerCtx *ctx, Node *node, MirOp op) {
   VReg lhs = lower_expr(ctx, node->lhs);
@@ -108,26 +238,35 @@ static VReg lower_expr(LowerCtx *ctx, Node *node) {
 
   switch (node->kind) {
   case ND_NUM: {
+    return lower_imm(ctx, node->val, node->type);
+  }
+  case ND_LVAR:
+  case ND_VARDEC:
+  case ND_GVAR:
+  case ND_GLBDEC: {
+    VReg addr = lower_addr(ctx, node);
+    return lower_load_from_addr(ctx, addr, node->type);
+  }
+  case ND_FUNCNAME: {
+    if (!node->fn)
+      lower_error_node("function name node has no function in lowering", node);
     VReg dst = mir_new_vreg(ctx->mf);
-    MirInst inst = new_inst(MIR_OP_IMM);
+    MirInst inst = new_inst(MIR_OP_ADDR_FUNC);
     inst.dst = dst;
-    inst.imm = node->val;
+    inst.call_fn = node->fn;
     inst.type = node->type;
     mir_emit(ctx->mf, inst);
     return dst;
   }
-  case ND_LVAR:
-  case ND_VARDEC: {
-    if (!node->var || node->var->is_static)
-      lower_error_node("unsupported lvalue in lowering", node);
-
-    VReg dst = mir_new_vreg(ctx->mf);
-    MirInst inst = new_inst(MIR_OP_LOAD_LOCAL);
-    inst.dst = dst;
-    inst.offset = node->var->offset;
-    inst.type = node->type;
-    mir_emit(ctx->mf, inst);
-    return dst;
+  case ND_ADDR:
+    if (!node->lhs)
+      lower_error_node("address operator has no operand in lowering", node);
+    if (node->lhs->kind == ND_FUNCNAME)
+      return lower_expr(ctx, node->lhs);
+    return lower_addr(ctx, node->lhs);
+  case ND_DEREF: {
+    VReg addr = lower_expr(ctx, node->lhs);
+    return lower_load_from_addr(ctx, addr, node->type);
   }
   case ND_ADD:
     return lower_binary(ctx, node, MIR_OP_ADD);
@@ -147,16 +286,16 @@ static VReg lower_expr(LowerCtx *ctx, Node *node) {
     return lower_binary(ctx, node, MIR_OP_LT);
   case ND_LE:
     return lower_binary(ctx, node, MIR_OP_LE);
+  case ND_AND:
+    return lower_logical_and(ctx, node);
+  case ND_OR:
+    return lower_logical_or(ctx, node);
+  case ND_NOT:
+    return lower_not(ctx, node);
   case ND_ASSIGN: {
-    if (!is_local_var_node(node->lhs) || !node->lhs->var || node->lhs->var->is_static)
-      lower_error_node("unsupported assignment target in lowering", node);
-
+    VReg addr = lower_addr(ctx, node->lhs);
     VReg rhs = lower_expr(ctx, node->rhs);
-    MirInst st = new_inst(MIR_OP_STORE_LOCAL);
-    st.src1 = rhs;
-    st.offset = node->lhs->var->offset;
-    st.type = node->lhs->type;
-    mir_emit(ctx->mf, st);
+    lower_store_to_addr(ctx, addr, rhs, node->lhs ? node->lhs->type : node->type);
     return rhs;
   }
   case ND_COMMA:
@@ -301,6 +440,11 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     return;
   case ND_NUM:
   case ND_LVAR:
+  case ND_GVAR:
+  case ND_GLBDEC:
+  case ND_FUNCNAME:
+  case ND_ADDR:
+  case ND_DEREF:
   case ND_ADD:
   case ND_SUB:
   case ND_MUL:
@@ -310,6 +454,9 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
   case ND_NE:
   case ND_LT:
   case ND_LE:
+  case ND_AND:
+  case ND_OR:
+  case ND_NOT:
   case ND_ASSIGN:
   case ND_COMMA:
   case ND_TYPECAST:

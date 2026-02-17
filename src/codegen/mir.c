@@ -32,6 +32,16 @@ static const char *mir_op_name(MirOp op) {
     return "LOAD_LOCAL";
   case MIR_OP_STORE_LOCAL:
     return "STORE_LOCAL";
+  case MIR_OP_ADDR_LOCAL:
+    return "ADDR_LOCAL";
+  case MIR_OP_ADDR_SYMBOL:
+    return "ADDR_SYMBOL";
+  case MIR_OP_ADDR_FUNC:
+    return "ADDR_FUNC";
+  case MIR_OP_LOAD:
+    return "LOAD";
+  case MIR_OP_STORE:
+    return "STORE";
   case MIR_OP_CAST:
     return "CAST";
   case MIR_OP_ADD:
@@ -126,6 +136,31 @@ void mir_dump(FILE *out, const MirFunction *mf) {
       break;
     case MIR_OP_STORE_LOCAL:
       fprintf(out, "local[%d] <- v%d", in->offset, in->src1);
+      break;
+    case MIR_OP_ADDR_LOCAL:
+      fprintf(out, "v%d <- &local[%d]", in->dst, in->offset);
+      break;
+    case MIR_OP_ADDR_SYMBOL:
+      if (in->var) {
+        if (in->var->is_static && in->var->block > 0)
+          fprintf(out, "v%d <- &%.*s.%d", in->dst, in->var->len, in->var->name, in->var->block);
+        else
+          fprintf(out, "v%d <- &%.*s", in->dst, in->var->len, in->var->name);
+      } else {
+        fprintf(out, "v%d <- &<null-symbol>", in->dst);
+      }
+      break;
+    case MIR_OP_ADDR_FUNC:
+      if (in->call_fn)
+        fprintf(out, "v%d <- &%.*s", in->dst, in->call_fn->len, in->call_fn->name);
+      else
+        fprintf(out, "v%d <- &<null-function>", in->dst);
+      break;
+    case MIR_OP_LOAD:
+      fprintf(out, "v%d <- *v%d", in->dst, in->src1);
+      break;
+    case MIR_OP_STORE:
+      fprintf(out, "*v%d <- v%d", in->src1, in->src2);
       break;
     case MIR_OP_CAST:
       fprintf(out, "v%d <- cast(v%d)", in->dst, in->src1);

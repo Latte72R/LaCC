@@ -18,6 +18,11 @@ typedef enum {
   MIR_OP_MOV,
   MIR_OP_LOAD_LOCAL,
   MIR_OP_STORE_LOCAL,
+  MIR_OP_ADDR_LOCAL,
+  MIR_OP_ADDR_SYMBOL,
+  MIR_OP_ADDR_FUNC,
+  MIR_OP_LOAD,
+  MIR_OP_STORE,
   MIR_OP_CAST,
   MIR_OP_ADD,
   MIR_OP_SUB,
@@ -47,6 +52,7 @@ struct MirInst {
   long imm;
   int offset;
   int label;
+  LVar *var;
   Function *call_fn;
   int argc;
   VReg args[MAX_FUNC_PARAMS];
