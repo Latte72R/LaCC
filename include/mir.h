@@ -35,6 +35,15 @@ typedef enum {
   MIR_OP_NE,
   MIR_OP_LT,
   MIR_OP_LE,
+  MIR_OP_BITAND,
+  MIR_OP_BITOR,
+  MIR_OP_BITXOR,
+  MIR_OP_SHL,
+  MIR_OP_SHR,
+  MIR_OP_BITNOT,
+  MIR_OP_ADDR_STRING,
+  MIR_OP_ADDR_ARRAY,
+  MIR_OP_ADDR_STRUCT_LITERAL,
   MIR_OP_LABEL,
   MIR_OP_JMP,
   MIR_OP_JZ,
@@ -68,6 +77,9 @@ struct MirFunction {
   int inst_cap;
   int next_vreg;
   int next_label;
+  int param_count;
+  int param_offsets[MAX_FUNC_PARAMS];
+  Type *param_types[MAX_FUNC_PARAMS];
 };
 
 void mir_init(MirFunction *mf, Function *fn);

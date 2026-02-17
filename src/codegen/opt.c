@@ -1,6 +1,9 @@
 #include "codegen.h"
+#include "codegen_internal.h"
 #include "diagnostics.h"
 #include "mir.h"
+#include "opt_internal.h"
+#include "platform.h"
 #include "runtime.h"
 
 #include <stdbool.h>
@@ -428,7 +431,7 @@ static VReg lower_addr(LowerCtx *ctx, Node *node) {
 }
 
 static VReg lower_load_from_addr(LowerCtx *ctx, VReg addr, Type *type) {
-  if (type && type->ty == TY_ARR)
+  if (type && (type->ty == TY_ARR || type->ty == TY_STRUCT || type->ty == TY_UNION))
     return addr;
 
   VReg dst = mir_new_vreg(ctx->mf);
@@ -450,6 +453,38 @@ static void lower_store_to_addr(LowerCtx *ctx, VReg addr, VReg value, Type *type
   mir_emit(ctx->mf, &store);
 }
 
+static Type *byte_copy_type() {
+  static Type *ty = NULL;
+  if (!ty) {
+    ty = new_type(TY_CHAR);
+    ty->is_unsigned = true;
+  }
+  return ty;
+}
+
+static VReg emit_binary_inst(LowerCtx *ctx, MirOp op, VReg lhs, VReg rhs, Type *type) {
+  VReg dst = mir_new_vreg(ctx->mf);
+  MirInst inst;
+  init_inst(&inst, op);
+  inst.dst = dst;
+  inst.src1 = lhs;
+  inst.src2 = rhs;
+  inst.type = type;
+  mir_emit(ctx->mf, &inst);
+  return dst;
+}
+
+static void lower_copy_bytes(LowerCtx *ctx, VReg dst_addr, VReg src_addr, int size) {
+  Type *byte_ty = byte_copy_type();
+  for (int i = 0; i < size; i++) {
+    VReg off = lower_imm(ctx, i, NULL);
+    VReg src_p = emit_binary_inst(ctx, MIR_OP_ADD, src_addr, off, NULL);
+    VReg dst_p = emit_binary_inst(ctx, MIR_OP_ADD, dst_addr, off, NULL);
+    VReg one = lower_load_from_addr(ctx, src_p, byte_ty);
+    lower_store_to_addr(ctx, dst_p, one, byte_ty);
+  }
+}
+
 static VReg lower_postinc(LowerCtx *ctx, Node *node) {
   if (!node->lhs || !node->rhs)
     lower_error_node("invalid postinc node in lowering", node);
@@ -464,13 +499,43 @@ static VReg lower_postinc(LowerCtx *ctx, Node *node) {
 static VReg lower_binary(LowerCtx *ctx, Node *node, MirOp op) {
   VReg lhs = lower_expr(ctx, node->lhs);
   VReg rhs = lower_expr(ctx, node->rhs);
+  return emit_binary_inst(ctx, op, lhs, rhs, node->type);
+}
+
+static VReg lower_compare(LowerCtx *ctx, Node *node, MirOp op) {
+  VReg lhs = lower_expr(ctx, node->lhs);
+  VReg rhs = lower_expr(ctx, node->rhs);
+  Type *cmp_type = node->type;
+  if (node->lhs && node->rhs && node->lhs->type && node->rhs->type) {
+    if (is_number(node->lhs->type) && is_number(node->rhs->type))
+      cmp_type = max_type(node->lhs->type, node->rhs->type);
+    else if (node->lhs->type->is_unsigned)
+      cmp_type = node->lhs->type;
+    else if (node->rhs->type->is_unsigned)
+      cmp_type = node->rhs->type;
+  }
+  return emit_binary_inst(ctx, op, lhs, rhs, cmp_type);
+}
+
+static VReg lower_unary(LowerCtx *ctx, Node *node, MirOp op) {
+  VReg src = lower_expr(ctx, node->lhs);
   VReg dst = mir_new_vreg(ctx->mf);
 
   MirInst inst;
   init_inst(&inst, op);
   inst.dst = dst;
-  inst.src1 = lhs;
-  inst.src2 = rhs;
+  inst.src1 = src;
+  inst.type = node->type;
+  mir_emit(ctx->mf, &inst);
+  return dst;
+}
+
+static VReg lower_const_addr(LowerCtx *ctx, Node *node, MirOp op) {
+  VReg dst = mir_new_vreg(ctx->mf);
+  MirInst inst;
+  init_inst(&inst, op);
+  inst.dst = dst;
+  inst.offset = node->id;
   inst.type = node->type;
   mir_emit(ctx->mf, &inst);
   return dst;
@@ -576,7 +641,7 @@ static VReg lower_expr(LowerCtx *ctx, Node *node) {
       lower_error_node("function name node has no function in lowering", node);
     VReg dst = mir_new_vreg(ctx->mf);
     MirInst inst;
-  init_inst(&inst, MIR_OP_ADDR_FUNC);
+    init_inst(&inst, MIR_OP_ADDR_FUNC);
     inst.dst = dst;
     inst.call_fn = node->fn;
     inst.type = node->type;
@@ -593,6 +658,12 @@ static VReg lower_expr(LowerCtx *ctx, Node *node) {
     VReg addr = lower_expr(ctx, node->lhs);
     return lower_load_from_addr(ctx, addr, node->type);
   }
+  case ND_STRING:
+    return lower_const_addr(ctx, node, MIR_OP_ADDR_STRING);
+  case ND_ARRAY:
+    return lower_const_addr(ctx, node, MIR_OP_ADDR_ARRAY);
+  case ND_STRUCT_LITERAL:
+    return lower_const_addr(ctx, node, MIR_OP_ADDR_STRUCT_LITERAL);
   case ND_ADD:
     return lower_binary(ctx, node, MIR_OP_ADD);
   case ND_SUB:
@@ -608,22 +679,47 @@ static VReg lower_expr(LowerCtx *ctx, Node *node) {
   case ND_NE:
     return lower_binary(ctx, node, MIR_OP_NE);
   case ND_LT:
-    return lower_binary(ctx, node, MIR_OP_LT);
+    return lower_compare(ctx, node, MIR_OP_LT);
   case ND_LE:
-    return lower_binary(ctx, node, MIR_OP_LE);
+    return lower_compare(ctx, node, MIR_OP_LE);
+  case ND_BITAND:
+    return lower_binary(ctx, node, MIR_OP_BITAND);
+  case ND_BITOR:
+    return lower_binary(ctx, node, MIR_OP_BITOR);
+  case ND_BITXOR:
+    return lower_binary(ctx, node, MIR_OP_BITXOR);
+  case ND_SHL:
+    return lower_binary(ctx, node, MIR_OP_SHL);
+  case ND_SHR:
+    return lower_binary(ctx, node, MIR_OP_SHR);
   case ND_AND:
     return lower_logical_and(ctx, node);
   case ND_OR:
     return lower_logical_or(ctx, node);
   case ND_NOT:
     return lower_not(ctx, node);
+  case ND_BITNOT:
+    return lower_unary(ctx, node, MIR_OP_BITNOT);
   case ND_TERNARY:
     return lower_ternary(ctx, node);
   case ND_ASSIGN: {
+    if (node->val) {
+      VReg dst_addr = lower_addr(ctx, node->lhs);
+      VReg src_addr = lower_expr(ctx, node->rhs);
+      lower_copy_bytes(ctx, dst_addr, src_addr, get_sizeof(node->lhs->type));
+      return src_addr;
+    }
+    if (node->lhs && node->lhs->type && (node->lhs->type->ty == TY_STRUCT || node->lhs->type->ty == TY_UNION)) {
+      VReg dst_addr = lower_addr(ctx, node->lhs);
+      VReg src_addr = lower_addr(ctx, node->rhs);
+      lower_copy_bytes(ctx, dst_addr, src_addr, get_sizeof(node->lhs->type));
+      return src_addr;
+    }
     VReg addr = lower_addr(ctx, node->lhs);
     VReg rhs = lower_expr(ctx, node->rhs);
-    lower_store_to_addr(ctx, addr, rhs, node->lhs ? node->lhs->type : node->type);
-    return rhs;
+    Type *lhs_type = node->lhs ? node->lhs->type : node->type;
+    lower_store_to_addr(ctx, addr, rhs, lhs_type);
+    return lower_load_from_addr(ctx, addr, lhs_type);
   }
   case ND_POSTINC:
     return lower_postinc(ctx, node);
@@ -634,7 +730,7 @@ static VReg lower_expr(LowerCtx *ctx, Node *node) {
     VReg src = lower_expr(ctx, node->lhs);
     VReg dst = mir_new_vreg(ctx->mf);
     MirInst inst;
-  init_inst(&inst, MIR_OP_CAST);
+    init_inst(&inst, MIR_OP_CAST);
     inst.dst = dst;
     inst.src1 = src;
     inst.type = node->type;
@@ -664,7 +760,7 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
   case ND_RETURN: {
     VReg src = lower_expr(ctx, node->rhs);
     MirInst inst;
-  init_inst(&inst, MIR_OP_RET);
+    init_inst(&inst, MIR_OP_RET);
     inst.src1 = src;
     inst.type = node->type;
     mir_emit(ctx->mf, &inst);
@@ -792,6 +888,9 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     return;
   }
   case ND_VARDEC:
+  case ND_ASM:
+  case ND_EXTERN:
+  case ND_TYPEDEF:
     return;
   case ND_NUM:
   case ND_LVAR:
@@ -830,6 +929,16 @@ static void lower_function(Node *fn_node, MirFunction *mf) {
     lower_error_node("invalid function node in lowering", fn_node);
 
   mir_init(mf, fn_node->fn);
+  if (fn_node->val < 0 || fn_node->val > MAX_FUNC_PARAMS)
+    lower_error_node("invalid function parameter count in lowering", fn_node);
+  mf->param_count = fn_node->val;
+  for (int i = 0; i < mf->param_count; i++) {
+    if (!fn_node->args[i] || !fn_node->args[i]->var)
+      lower_error_node("invalid function parameter node in lowering", fn_node);
+    mf->param_offsets[i] = fn_node->args[i]->var->offset;
+    mf->param_types[i] = fn_node->args[i]->type;
+  }
+
   LowerCtx ctx = {0};
   ctx.mf = mf;
   ctx.fn = fn_node->fn;
@@ -839,6 +948,24 @@ static void lower_function(Node *fn_node, MirFunction *mf) {
     pop_switch_ctx(&ctx, fn_node);
   free_label_map(ctx.label_map);
   ctx.label_map = NULL;
+}
+
+static void emit_mir_program(int dump_mir) {
+#if LACC_PLATFORM_APPLE
+  write_file("  .section __TEXT,__text,regular,pure_instructions\n");
+#else
+  write_file("  .text\n");
+#endif
+  for (int i = 0; code[i]->kind != ND_NONE; i++) {
+    if (code[i]->kind != ND_FUNCDEF)
+      continue;
+    MirFunction mf;
+    lower_function(code[i], &mf);
+    if (dump_mir)
+      mir_dump(stderr, &mf);
+    emit_mir_function(&mf);
+    mir_free(&mf);
+  }
 }
 
 static int should_dump_mir() {
@@ -851,18 +978,11 @@ static int should_dump_mir() {
 void generate_assembly_optimized() {
   int dump_mir = should_dump_mir();
 
-  for (int i = 0; code[i]->kind != ND_NONE; i++) {
-    if (code[i]->kind != ND_FUNCDEF)
-      continue;
-
-    MirFunction mf;
-    lower_function(code[i], &mf);
-
-    if (dump_mir)
-      mir_dump(stderr, &mf);
-    mir_free(&mf);
-  }
-
-  // Lowering is connected, but asm emission is still the existing backend.
-  generate_assembly();
+  write_file(".intel_syntax noprefix\n");
+#if !LACC_PLATFORM_APPLE
+  write_file("  .section .note.GNU-stack,\"\",@progbits\n");
+#endif
+  gen_rodata_section();
+  gen_data_section();
+  emit_mir_program(dump_mir);
 }

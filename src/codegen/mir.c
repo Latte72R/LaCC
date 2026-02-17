@@ -66,6 +66,24 @@ static const char *mir_op_name(MirOp op) {
     return "LT";
   case MIR_OP_LE:
     return "LE";
+  case MIR_OP_BITAND:
+    return "BITAND";
+  case MIR_OP_BITOR:
+    return "BITOR";
+  case MIR_OP_BITXOR:
+    return "BITXOR";
+  case MIR_OP_SHL:
+    return "SHL";
+  case MIR_OP_SHR:
+    return "SHR";
+  case MIR_OP_BITNOT:
+    return "BITNOT";
+  case MIR_OP_ADDR_STRING:
+    return "ADDR_STRING";
+  case MIR_OP_ADDR_ARRAY:
+    return "ADDR_ARRAY";
+  case MIR_OP_ADDR_STRUCT_LITERAL:
+    return "ADDR_STRUCT";
   case MIR_OP_LABEL:
     return "LABEL";
   case MIR_OP_JMP:
@@ -197,6 +215,33 @@ void mir_dump(FILE *out, const MirFunction *mf) {
       break;
     case MIR_OP_LE:
       fprintf(out, "v%d <- (v%d <= v%d)", in->dst, in->src1, in->src2);
+      break;
+    case MIR_OP_BITAND:
+      fprintf(out, "v%d <- v%d & v%d", in->dst, in->src1, in->src2);
+      break;
+    case MIR_OP_BITOR:
+      fprintf(out, "v%d <- v%d | v%d", in->dst, in->src1, in->src2);
+      break;
+    case MIR_OP_BITXOR:
+      fprintf(out, "v%d <- v%d ^ v%d", in->dst, in->src1, in->src2);
+      break;
+    case MIR_OP_SHL:
+      fprintf(out, "v%d <- v%d << v%d", in->dst, in->src1, in->src2);
+      break;
+    case MIR_OP_SHR:
+      fprintf(out, "v%d <- v%d >> v%d", in->dst, in->src1, in->src2);
+      break;
+    case MIR_OP_BITNOT:
+      fprintf(out, "v%d <- ~v%d", in->dst, in->src1);
+      break;
+    case MIR_OP_ADDR_STRING:
+      fprintf(out, "v%d <- &.L.str%d", in->dst, in->offset);
+      break;
+    case MIR_OP_ADDR_ARRAY:
+      fprintf(out, "v%d <- &.L.arr%d", in->dst, in->offset);
+      break;
+    case MIR_OP_ADDR_STRUCT_LITERAL:
+      fprintf(out, "v%d <- &.L.struct%d", in->dst, in->offset);
       break;
     case MIR_OP_LABEL:
       fprintf(out, "L%d:", in->label);
