@@ -5,14 +5,50 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
+
+enum {
+  MAX_CTRL_DEPTH = 128,
+};
+
+typedef struct ControlFrame ControlFrame;
+struct ControlFrame {
+  int break_label;
+  int continue_label;
+};
+
+typedef struct AstLabelMap AstLabelMap;
+struct AstLabelMap {
+  AstLabelMap *next;
+  int ast_label_id;
+  int mir_label;
+};
+
+typedef struct SwitchCaseMap SwitchCaseMap;
+struct SwitchCaseMap {
+  SwitchCaseMap *next;
+  int case_value;
+  int case_label;
+};
+
+typedef struct SwitchCtx SwitchCtx;
+struct SwitchCtx {
+  SwitchCtx *next;
+  int switch_id;
+  int end_label;
+  int default_label;
+  SwitchCaseMap *cases;
+};
 
 // ASTをMIRへlowerするときに必要な情報
 typedef struct LowerCtx LowerCtx;
 struct LowerCtx {
   MirFunction *mf;
-  int loop_depth;
-  int loop_step_labels[64];
-  int loop_end_labels[64];
+  Function *fn;
+  int ctrl_depth;
+  ControlFrame ctrl_stack[MAX_CTRL_DEPTH];
+  AstLabelMap *label_map;
+  SwitchCtx *switch_stack;
 };
 
 static void lower_error_node(const char *msg, Node *node) {
@@ -59,6 +95,189 @@ static void emit_jz(LowerCtx *ctx, VReg cond, int label) {
 
 static VReg lower_expr(LowerCtx *ctx, Node *node);
 static void lower_stmt(LowerCtx *ctx, Node *node);
+
+static void push_control(LowerCtx *ctx, int break_label, int continue_label, Node *node) {
+  if (ctx->ctrl_depth >= MAX_CTRL_DEPTH)
+    lower_error_node("control nesting too deep in lowering", node);
+  ctx->ctrl_stack[ctx->ctrl_depth].break_label = break_label;
+  ctx->ctrl_stack[ctx->ctrl_depth].continue_label = continue_label;
+  ctx->ctrl_depth++;
+}
+
+static void pop_control(LowerCtx *ctx, Node *node) {
+  if (ctx->ctrl_depth <= 0)
+    lower_error_node("invalid control stack pop in lowering", node);
+  ctx->ctrl_depth--;
+}
+
+static int find_break_target(LowerCtx *ctx, Node *node) {
+  for (int i = ctx->ctrl_depth - 1; i >= 0; i--) {
+    if (ctx->ctrl_stack[i].break_label != MIR_INVALID_LABEL)
+      return ctx->ctrl_stack[i].break_label;
+  }
+  lower_error_node("break outside of loop/switch in lowering", node);
+  return MIR_INVALID_LABEL;
+}
+
+static int find_continue_target(LowerCtx *ctx, Node *node) {
+  for (int i = ctx->ctrl_depth - 1; i >= 0; i--) {
+    if (ctx->ctrl_stack[i].continue_label != MIR_INVALID_LABEL)
+      return ctx->ctrl_stack[i].continue_label;
+  }
+  lower_error_node("continue outside of loop in lowering", node);
+  return MIR_INVALID_LABEL;
+}
+
+static Label *find_function_label(Function *fn, const char *name, int len) {
+  for (Label *label = fn ? fn->labels : NULL; label; label = label->next) {
+    if (label->len == len && !strncmp(label->name, name, len))
+      return label;
+  }
+  return NULL;
+}
+
+static int find_mir_label(LowerCtx *ctx, int ast_label_id) {
+  for (AstLabelMap *it = ctx->label_map; it; it = it->next) {
+    if (it->ast_label_id == ast_label_id)
+      return it->mir_label;
+  }
+  return MIR_INVALID_LABEL;
+}
+
+static int create_mir_label(LowerCtx *ctx, int ast_label_id, Node *node) {
+  if (find_mir_label(ctx, ast_label_id) != MIR_INVALID_LABEL)
+    lower_error_node("duplicate MIR label mapping in lowering", node);
+
+  AstLabelMap *entry = malloc(sizeof(*entry));
+  if (!entry)
+    error("memory allocation failed [in create_mir_label]");
+  entry->ast_label_id = ast_label_id;
+  entry->mir_label = new_label(ctx);
+  entry->next = ctx->label_map;
+  ctx->label_map = entry;
+  return entry->mir_label;
+}
+
+static void seed_function_label_map(LowerCtx *ctx, Function *fn, Node *node) {
+  for (Label *label = fn ? fn->labels : NULL; label; label = label->next)
+    (void)create_mir_label(ctx, label->id, node);
+}
+
+static void free_label_map(AstLabelMap *map) {
+  while (map) {
+    AstLabelMap *next = map->next;
+    free(map);
+    map = next;
+  }
+}
+
+static SwitchCaseMap *find_switch_case_map(const SwitchCtx *sw, int case_value) {
+  for (SwitchCaseMap *it = sw ? sw->cases : NULL; it; it = it->next) {
+    if (it->case_value == case_value)
+      return it;
+  }
+  return NULL;
+}
+
+static void add_switch_case_map(SwitchCtx *sw, int case_value, int case_label) {
+  SwitchCaseMap *entry = malloc(sizeof(*entry));
+  if (!entry)
+    error("memory allocation failed [in add_switch_case_map]");
+  entry->case_value = case_value;
+  entry->case_label = case_label;
+  entry->next = sw->cases;
+  sw->cases = entry;
+}
+
+static void free_switch_case_map(SwitchCaseMap *map) {
+  while (map) {
+    SwitchCaseMap *next = map->next;
+    free(map);
+    map = next;
+  }
+}
+
+static SwitchCtx *find_switch_ctx(LowerCtx *ctx, int switch_id) {
+  for (SwitchCtx *it = ctx->switch_stack; it; it = it->next) {
+    if (it->switch_id == switch_id)
+      return it;
+  }
+  return NULL;
+}
+
+static SwitchCtx *push_switch_ctx(LowerCtx *ctx, int switch_id, int end_label, int default_label) {
+  SwitchCtx *sw = malloc(sizeof(*sw));
+  if (!sw)
+    error("memory allocation failed [in push_switch_ctx]");
+  sw->switch_id = switch_id;
+  sw->end_label = end_label;
+  sw->default_label = default_label;
+  sw->cases = NULL;
+  sw->next = ctx->switch_stack;
+  ctx->switch_stack = sw;
+  return sw;
+}
+
+static void pop_switch_ctx(LowerCtx *ctx, Node *node) {
+  if (!ctx->switch_stack)
+    lower_error_node("invalid switch stack pop in lowering", node);
+  SwitchCtx *sw = ctx->switch_stack;
+  ctx->switch_stack = sw->next;
+  free_switch_case_map(sw->cases);
+  free(sw);
+}
+
+static void collect_switch_cases(Node *node, int switch_id, int **cases, int *case_cnt, int *case_cap) {
+  if (!node)
+    return;
+
+  if (node->kind == ND_CASE && node->id == switch_id) {
+    for (int i = 0; i < *case_cnt; i++) {
+      if ((*cases)[i] == node->val)
+        return;
+    }
+    *cases = safe_realloc_array(*cases, sizeof(int), *case_cnt + 1, case_cap);
+    (*cases)[(*case_cnt)++] = node->val;
+    return;
+  }
+
+  switch (node->kind) {
+  case ND_BLOCK:
+    for (int i = 0; node->body && node->body[i] && node->body[i]->kind != ND_NONE; i++)
+      collect_switch_cases(node->body[i], switch_id, cases, case_cnt, case_cap);
+    break;
+  case ND_IF:
+  case ND_TERNARY:
+    collect_switch_cases(node->cond, switch_id, cases, case_cnt, case_cap);
+    collect_switch_cases(node->then, switch_id, cases, case_cnt, case_cap);
+    collect_switch_cases(node->els, switch_id, cases, case_cnt, case_cap);
+    break;
+  case ND_WHILE:
+  case ND_DOWHILE:
+  case ND_FOR:
+    collect_switch_cases(node->init, switch_id, cases, case_cnt, case_cap);
+    collect_switch_cases(node->cond, switch_id, cases, case_cnt, case_cap);
+    collect_switch_cases(node->then, switch_id, cases, case_cnt, case_cap);
+    collect_switch_cases(node->step, switch_id, cases, case_cnt, case_cap);
+    break;
+  case ND_SWITCH:
+    collect_switch_cases(node->cond, switch_id, cases, case_cnt, case_cap);
+    collect_switch_cases(node->then, switch_id, cases, case_cnt, case_cap);
+    break;
+  case ND_TYPECAST:
+    collect_switch_cases(node->lhs, switch_id, cases, case_cnt, case_cap);
+    break;
+  case ND_FUNCALL:
+    collect_switch_cases(node->lhs, switch_id, cases, case_cnt, case_cap);
+    for (int i = 0; i < MAX_FUNC_PARAMS && node->args[i]; i++)
+      collect_switch_cases(node->args[i], switch_id, cases, case_cnt, case_cap);
+    break;
+  default:
+    collect_switch_cases(node->lhs, switch_id, cases, case_cnt, case_cap);
+    collect_switch_cases(node->rhs, switch_id, cases, case_cnt, case_cap);
+    break;
+  }
+}
 
 static VReg lower_imm(LowerCtx *ctx, long imm, Type *type) {
   VReg dst = mir_new_vreg(ctx->mf);
@@ -133,6 +352,36 @@ static VReg lower_logical_or(LowerCtx *ctx, Node *node) {
   return dst;
 }
 
+static VReg lower_ternary(LowerCtx *ctx, Node *node) {
+  if (!node->cond || !node->then || !node->els)
+    lower_error_node("invalid ternary node in lowering", node);
+
+  VReg cond = lower_expr(ctx, node->cond);
+  int l_else = new_label(ctx);
+  int l_end = new_label(ctx);
+
+  if (node->type && node->type->ty == TY_VOID) {
+    emit_jz(ctx, cond, l_else);
+    (void)lower_expr(ctx, node->then);
+    emit_jmp(ctx, l_end);
+    emit_label(ctx, l_else);
+    (void)lower_expr(ctx, node->els);
+    emit_label(ctx, l_end);
+    return MIR_INVALID_VREG;
+  }
+
+  VReg dst = mir_new_vreg(ctx->mf);
+  emit_jz(ctx, cond, l_else);
+  VReg then_v = lower_expr(ctx, node->then);
+  emit_mov(ctx, dst, then_v, node->type);
+  emit_jmp(ctx, l_end);
+  emit_label(ctx, l_else);
+  VReg else_v = lower_expr(ctx, node->els);
+  emit_mov(ctx, dst, else_v, node->type);
+  emit_label(ctx, l_end);
+  return dst;
+}
+
 static VReg lower_addr(LowerCtx *ctx, Node *node) {
   if (!ctx || !ctx->mf || !node)
     lower_error_node("invalid address lowering context", node);
@@ -191,6 +440,17 @@ static void lower_store_to_addr(LowerCtx *ctx, VReg addr, VReg value, Type *type
   mir_emit(ctx->mf, store);
 }
 
+static VReg lower_postinc(LowerCtx *ctx, Node *node) {
+  if (!node->lhs || !node->rhs)
+    lower_error_node("invalid postinc node in lowering", node);
+
+  VReg addr = lower_addr(ctx, node->lhs);
+  VReg old_value = lower_load_from_addr(ctx, addr, node->lhs->type);
+  VReg new_value = lower_expr(ctx, node->rhs);
+  lower_store_to_addr(ctx, addr, new_value, node->lhs->type);
+  return old_value;
+}
+
 static VReg lower_binary(LowerCtx *ctx, Node *node, MirOp op) {
   VReg lhs = lower_expr(ctx, node->lhs);
   VReg rhs = lower_expr(ctx, node->rhs);
@@ -230,6 +490,57 @@ static VReg lower_call(LowerCtx *ctx, Node *node) {
 
   mir_emit(ctx->mf, call);
   return call.dst;
+}
+
+static void emit_jmp_if_eq(LowerCtx *ctx, VReg lhs, VReg rhs, Type *type, int label) {
+  VReg ne = mir_new_vreg(ctx->mf);
+  MirInst inst = new_inst(MIR_OP_NE);
+  inst.dst = ne;
+  inst.src1 = lhs;
+  inst.src2 = rhs;
+  inst.type = type;
+  mir_emit(ctx->mf, inst);
+  emit_jz(ctx, ne, label);
+}
+
+static void lower_switch_stmt(LowerCtx *ctx, Node *node) {
+  if (!node->cond || !node->then)
+    lower_error_node("invalid switch node in lowering", node);
+
+  VReg cond = lower_expr(ctx, node->cond);
+  int l_end = new_label(ctx);
+  int l_default = node->has_default ? new_label(ctx) : l_end;
+
+  SwitchCtx *sw = push_switch_ctx(ctx, node->id, l_end, l_default);
+
+  int *cases = NULL;
+  int case_cnt = 0;
+  int case_cap = 0;
+  collect_switch_cases(node->then, node->id, &cases, &case_cnt, &case_cap);
+  for (int i = 0; i < case_cnt; i++) {
+    if (find_switch_case_map(sw, cases[i]))
+      lower_error_node("duplicate switch case value in lowering", node);
+    add_switch_case_map(sw, cases[i], new_label(ctx));
+  }
+
+  for (int i = 0; i < case_cnt; i++) {
+    SwitchCaseMap *cm = find_switch_case_map(sw, cases[i]);
+    if (!cm)
+      lower_error_node("switch case label not found in lowering", node);
+    VReg case_value = lower_imm(ctx, cases[i], node->cond->type);
+    emit_jmp_if_eq(ctx, cond, case_value, node->cond->type, cm->case_label);
+  }
+
+  free(cases);
+  cases = NULL;
+  emit_jmp(ctx, l_default);
+
+  push_control(ctx, l_end, MIR_INVALID_LABEL, node);
+  lower_stmt(ctx, node->then);
+  pop_control(ctx, node);
+
+  emit_label(ctx, l_end);
+  pop_switch_ctx(ctx, node);
 }
 
 static VReg lower_expr(LowerCtx *ctx, Node *node) {
@@ -292,12 +603,16 @@ static VReg lower_expr(LowerCtx *ctx, Node *node) {
     return lower_logical_or(ctx, node);
   case ND_NOT:
     return lower_not(ctx, node);
+  case ND_TERNARY:
+    return lower_ternary(ctx, node);
   case ND_ASSIGN: {
     VReg addr = lower_addr(ctx, node->lhs);
     VReg rhs = lower_expr(ctx, node->rhs);
     lower_store_to_addr(ctx, addr, rhs, node->lhs ? node->lhs->type : node->type);
     return rhs;
   }
+  case ND_POSTINC:
+    return lower_postinc(ctx, node);
   case ND_COMMA:
     (void)lower_expr(ctx, node->lhs);
     return lower_expr(ctx, node->rhs);
@@ -364,13 +679,9 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     VReg cond = lower_expr(ctx, node->cond);
     emit_jz(ctx, cond, l_end);
 
-    if (ctx->loop_depth >= 64)
-      lower_error_node("loop nesting too deep", node);
-    ctx->loop_step_labels[ctx->loop_depth] = l_begin;
-    ctx->loop_end_labels[ctx->loop_depth] = l_end;
-    ctx->loop_depth++;
+    push_control(ctx, l_end, l_begin, node);
     lower_stmt(ctx, node->then);
-    ctx->loop_depth--;
+    pop_control(ctx, node);
 
     emit_jmp(ctx, l_begin);
     emit_label(ctx, l_end);
@@ -382,13 +693,9 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     int l_end = new_label(ctx);
     emit_label(ctx, l_begin);
 
-    if (ctx->loop_depth >= 64)
-      lower_error_node("loop nesting too deep", node);
-    ctx->loop_step_labels[ctx->loop_depth] = l_step;
-    ctx->loop_end_labels[ctx->loop_depth] = l_end;
-    ctx->loop_depth++;
+    push_control(ctx, l_end, l_step, node);
     lower_stmt(ctx, node->then);
-    ctx->loop_depth--;
+    pop_control(ctx, node);
 
     emit_label(ctx, l_step);
     VReg cond = lower_expr(ctx, node->cond);
@@ -411,13 +718,9 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
       emit_jz(ctx, cond, l_end);
     }
 
-    if (ctx->loop_depth >= 64)
-      lower_error_node("loop nesting too deep", node);
-    ctx->loop_step_labels[ctx->loop_depth] = l_step;
-    ctx->loop_end_labels[ctx->loop_depth] = l_end;
-    ctx->loop_depth++;
+    push_control(ctx, l_end, l_step, node);
     lower_stmt(ctx, node->then);
-    ctx->loop_depth--;
+    pop_control(ctx, node);
 
     emit_label(ctx, l_step);
     if (node->step && node->step->kind != ND_NONE)
@@ -427,15 +730,51 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     return;
   }
   case ND_BREAK:
-    if (ctx->loop_depth <= 0)
-      lower_error_node("break outside of loop in lowering", node);
-    emit_jmp(ctx, ctx->loop_end_labels[ctx->loop_depth - 1]);
+    emit_jmp(ctx, find_break_target(ctx, node));
     return;
   case ND_CONTINUE:
-    if (ctx->loop_depth <= 0)
-      lower_error_node("continue outside of loop in lowering", node);
-    emit_jmp(ctx, ctx->loop_step_labels[ctx->loop_depth - 1]);
+    emit_jmp(ctx, find_continue_target(ctx, node));
     return;
+  case ND_GOTO: {
+    if (!node->fn || !node->label)
+      lower_error_node("invalid goto node in lowering", node);
+    Label *target = find_function_label(node->fn, node->label->name, node->label->len);
+    if (!target)
+      lower_error_node("undefined label in goto lowering", node);
+    int mir_label = find_mir_label(ctx, target->id);
+    if (mir_label == MIR_INVALID_LABEL)
+      lower_error_node("label mapping not found in goto lowering", node);
+    emit_jmp(ctx, mir_label);
+    return;
+  }
+  case ND_LABEL:
+    if (!node->label)
+      lower_error_node("invalid label node in lowering", node);
+    int mir_label = find_mir_label(ctx, node->label->id);
+    if (mir_label == MIR_INVALID_LABEL)
+      lower_error_node("label mapping not found in label lowering", node);
+    emit_label(ctx, mir_label);
+    return;
+  case ND_SWITCH:
+    lower_switch_stmt(ctx, node);
+    return;
+  case ND_CASE: {
+    SwitchCtx *sw = find_switch_ctx(ctx, node->id);
+    if (!sw)
+      lower_error_node("case label outside switch in lowering", node);
+    SwitchCaseMap *cm = find_switch_case_map(sw, node->val);
+    if (!cm)
+      lower_error_node("case label not registered in lowering", node);
+    emit_label(ctx, cm->case_label);
+    return;
+  }
+  case ND_DEFAULT: {
+    SwitchCtx *sw = find_switch_ctx(ctx, node->id);
+    if (!sw || sw->default_label == MIR_INVALID_LABEL)
+      lower_error_node("default label outside switch in lowering", node);
+    emit_label(ctx, sw->default_label);
+    return;
+  }
   case ND_VARDEC:
     return;
   case ND_NUM:
@@ -457,6 +796,8 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
   case ND_AND:
   case ND_OR:
   case ND_NOT:
+  case ND_POSTINC:
+  case ND_TERNARY:
   case ND_ASSIGN:
   case ND_COMMA:
   case ND_TYPECAST:
@@ -475,7 +816,13 @@ static void lower_function(Node *fn_node, MirFunction *mf) {
   mir_init(mf, fn_node->fn);
   LowerCtx ctx = {0};
   ctx.mf = mf;
+  ctx.fn = fn_node->fn;
+  seed_function_label_map(&ctx, fn_node->fn, fn_node);
   lower_stmt(&ctx, fn_node->lhs);
+  while (ctx.switch_stack)
+    pop_switch_ctx(&ctx, fn_node);
+  free_label_map(ctx.label_map);
+  ctx.label_map = NULL;
 }
 
 static int should_dump_mir() {
