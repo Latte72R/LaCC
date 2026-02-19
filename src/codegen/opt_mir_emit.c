@@ -344,6 +344,7 @@ static void emit_cast_reg(Type *type, const char *reg64) {
     break;
   case TY_INT:
     if (type->is_unsigned)
+      // 32bitのmovは符号なしでゼロ拡張される
       write_file("  mov %s, %s\n", reg32_name(reg64), reg32_name(reg64));
     else
       write_file("  movsxd %s, %s\n", reg64, reg32_name(reg64));
@@ -357,6 +358,61 @@ static void emit_cast_reg(Type *type, const char *reg64) {
     break;
   default:
     error("unsupported type in MIR cast [ty=%d]", type->ty);
+  }
+}
+
+static void emit_typed_imm_to_reg(Type *type, const char *reg64, long imm) {
+  if (!reg64)
+    error("missing destination register [in emit_typed_imm_to_reg]");
+
+  if (!type) {
+    error("missing type [in emit_typed_imm_to_reg]");
+  }
+
+  switch (type->ty) {
+  case TY_BOOL:
+    write_file("  mov %s, %u\n", reg32_name(reg64), imm ? 1u : 0u);
+    break;
+  case TY_CHAR: {
+    unsigned long u = ((unsigned long)imm) & 0xffUL;
+    if (type->is_unsigned) {
+      write_file("  mov %s, %lu\n", reg32_name(reg64), u);
+    } else {
+      write_file("  mov %s, %lu\n", reg8_name(reg64), u);
+      write_file("  movsx %s, %s\n", reg64, reg8_name(reg64));
+    }
+    break;
+  }
+  case TY_SHORT: {
+    unsigned long u = ((unsigned long)imm) & 0xffffUL;
+    if (type->is_unsigned) {
+      write_file("  mov %s, %lu\n", reg32_name(reg64), u);
+    } else {
+      write_file("  mov %s, %lu\n", reg16_name(reg64), u);
+      write_file("  movsx %s, %s\n", reg64, reg16_name(reg64));
+    }
+    break;
+  }
+  case TY_INT: {
+    unsigned long u = ((unsigned long)imm) & 0xffffffffUL;
+    if (type->is_unsigned) {
+      write_file("  mov %s, %lu\n", reg32_name(reg64), u);
+    } else {
+      write_file("  mov %s, %lu\n", reg32_name(reg64), u);
+      write_file("  movsxd %s, %s\n", reg64, reg32_name(reg64));
+    }
+    break;
+  }
+  case TY_LONG:
+  case TY_LONGLONG:
+  case TY_PTR:
+  case TY_ARGARR:
+  case TY_ARR:
+  case TY_VOID:
+    write_file("  mov %s, %ld\n", reg64, imm);
+    break;
+  default:
+    error("unsupported type in MIR imm [ty=%d]", type->ty);
   }
 }
 
@@ -379,9 +435,6 @@ static void normalize_cmp_operands(Type *type, const char *lhs_reg64, const char
     } else if (sz == 2) {
       write_file("  movzx %s, %s\n", reg32_name(lhs_reg64), reg16_name(lhs_reg64));
       write_file("  movzx %s, %s\n", reg32_name(rhs_reg64), reg16_name(rhs_reg64));
-    } else if (sz == 4) {
-      write_file("  mov %s, %s\n", reg32_name(lhs_reg64), reg32_name(lhs_reg64));
-      write_file("  mov %s, %s\n", reg32_name(rhs_reg64), reg32_name(rhs_reg64));
     }
   } else {
     if (sz == 1) {
@@ -390,9 +443,6 @@ static void normalize_cmp_operands(Type *type, const char *lhs_reg64, const char
     } else if (sz == 2) {
       write_file("  movsx %s, %s\n", reg32_name(lhs_reg64), reg16_name(lhs_reg64));
       write_file("  movsx %s, %s\n", reg32_name(rhs_reg64), reg16_name(rhs_reg64));
-    } else if (sz == 4) {
-      write_file("  movsxd %s, %s\n", lhs_reg64, reg32_name(lhs_reg64));
-      write_file("  movsxd %s, %s\n", rhs_reg64, reg32_name(rhs_reg64));
     }
   }
 }
@@ -445,8 +495,7 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in) {
   case MIR_OP_IMM: {
     const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
     const char *work = dst_reg ? dst_reg : "rax";
-    write_file("  mov %s, %ld\n", work, in->imm);
-    emit_cast_reg(in->type, work);
+    emit_typed_imm_to_reg(in->type, work, in->imm);
     if (!dst_reg)
       store_reg_to_vreg(ctx, in->dst, work);
     return;
@@ -706,7 +755,10 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in) {
     load_vreg_to_reg(ctx, in->src1, lhs_work);
     load_vreg_to_reg(ctx, in->src2, rhs_work);
     normalize_cmp_operands(in->type, lhs_work, rhs_work);
-    write_file("  cmp %s, %s\n", lhs_work, rhs_work);
+    if (in->type && type_size(in->type) <= 4)
+      write_file("  cmp %s, %s\n", reg32_name(lhs_work), reg32_name(rhs_work));
+    else
+      write_file("  cmp %s, %s\n", lhs_work, rhs_work);
 
     const char *res_reg = vreg_assigned_reg64(ctx, in->dst);
     const char *res_work = res_reg ? res_reg : "rax";
