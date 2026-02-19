@@ -809,7 +809,8 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in) {
     if (align_pad)
       write_file("  sub rsp, 8\n");
 
-    for (int a = in->argc - 1; a >= 0; a--) {
+    // Push only stack-passed args (arg7+), right-to-left.
+    for (int a = in->argc - 1; a >= reg_argc; a--) {
       const char *arg_reg = vreg_assigned_reg64(ctx, in->args[a]);
       if (arg_reg) {
         write_file("  push %s\n", arg_reg);
@@ -821,16 +822,26 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in) {
       }
     }
 
+    // Move register-passed args directly into ABI arg regs.
+    for (int a = 0; a < reg_argc; a++) {
+      const char *dst = mir_arg_regs8[a];
+      const char *arg_reg = vreg_assigned_reg64(ctx, in->args[a]);
+      if (arg_reg) {
+        if (strcmp(arg_reg, dst))
+          write_file("  mov %s, %s\n", dst, arg_reg);
+      } else {
+        int off = vreg_stack_offset_or_neg1(ctx, in->args[a]);
+        if (off < 0)
+          error("invalid call arg location [in MIR_OP_CALL]");
+        write_file("  mov %s, QWORD PTR [rbp - %d]\n", dst, off);
+      }
+    }
+
     const char *fnptr_reg = NULL;
     if (!in->call_fn) {
       fnptr_reg = vreg_assigned_reg64(ctx, in->src1);
       if (!fnptr_reg)
         load_vreg_to_reg(ctx, in->src1, "r10");
-    }
-
-    for (int a = 0; a < reg_argc; a++) {
-      write_file("  pop rax\n");
-      write_file("  mov %s, rax\n", mir_arg_regs8[a]);
     }
 
     write_file("  mov rax, 0\n");
