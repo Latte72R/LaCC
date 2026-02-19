@@ -34,9 +34,27 @@ static void write_array_data(Array *arr) {
   }
 }
 
+static StructReloc *find_struct_reloc_at(const StructLiteral *lit, int offset) {
+  for (StructReloc *it = lit ? lit->relocs : NULL; it; it = it->next) {
+    if (it->offset == offset)
+      return it;
+  }
+  return NULL;
+}
+
 static void write_struct_data(StructLiteral *lit) {
-  for (int i = 0; i < lit->size; i++)
+  for (int i = 0; i < lit->size;) {
+    StructReloc *rel = find_struct_reloc_at(lit, i);
+    if (rel) {
+      if (!rel->str)
+        error("invalid struct relocation [in write_struct_data]");
+      write_file("  .quad .L.str%d\n", rel->str->id);
+      i += 8;
+      continue;
+    }
     write_file("  .byte %d\n", lit->data[i]);
+    i++;
+  }
 }
 
 // 文字列リテラルの生成
