@@ -129,6 +129,28 @@ static void emit_implicit_return_if_needed(LowerCtx *ctx, Node *node) {
 static VReg lower_expr(LowerCtx *ctx, Node *node);
 static void lower_stmt(LowerCtx *ctx, Node *node);
 
+static int cast_is_noop(Type *from, Type *to) {
+  if (!from || !to)
+    return false;
+
+  if (to->ty == TY_BOOL)
+    return false;
+
+  if (is_ptr_or_arr(from) && is_ptr_or_arr(to))
+    return true;
+
+  if (is_number(from) && is_number(to))
+    return type_size(from) == type_size(to);
+
+  if (is_ptr_or_arr(from) && is_number(to))
+    return type_size(from) == type_size(to);
+
+  if (is_number(from) && is_ptr_or_arr(to))
+    return type_size(from) == type_size(to);
+
+  return false;
+}
+
 static void push_control(LowerCtx *ctx, int break_label, int continue_label, Node *node) {
   if (ctx->ctrl_depth >= MAX_CTRL_DEPTH)
     lower_error_node("control nesting too deep in lowering", node);
@@ -748,6 +770,10 @@ static VReg lower_expr(LowerCtx *ctx, Node *node) {
     return lower_expr(ctx, node->rhs);
   case ND_TYPECAST: {
     VReg src = lower_expr(ctx, node->lhs);
+    Type *from = node->lhs ? node->lhs->type : NULL;
+    if (cast_is_noop(from, node->type))
+      return src;
+
     VReg dst = mir_new_vreg(ctx->mf);
     MirInst inst;
     init_inst(&inst, MIR_OP_CAST);

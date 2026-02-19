@@ -209,6 +209,32 @@ static Node *build_binary_with_const_fold(NodeKind kind, Node *lhs, Node *rhs, T
   return node;
 }
 
+static Node *fold_const_cast(Type *type, Node *expr) {
+  if (!type || !expr || expr->kind != ND_NUM)
+    return NULL;
+  if (!(is_number(type) || is_ptr_or_arr(type)))
+    return NULL;
+
+  int bits = type_size(type) * 8;
+  if (bits <= 0 || bits > 64)
+    bits = 64;
+
+  unsigned long long mask = bit_mask_for_width(bits);
+  unsigned long long uv = ((unsigned long long)expr->val) & mask;
+  long long sv = sign_extend_width(uv, bits);
+
+  Node *folded;
+  if (type->ty == TY_BOOL) {
+    folded = new_num(expr->val ? 1 : 0);
+  } else if (type->is_unsigned || is_ptr_or_arr(type)) {
+    folded = new_num((int)uv);
+  } else {
+    folded = new_num((int)sv);
+  }
+  folded->type = type;
+  return folded;
+}
+
 static Node *comma_expr() {
   Node *node = assign();
   while (consume(",")) {
@@ -740,6 +766,12 @@ Node *type_cast() {
       warning_at(tok->loc, "cast to smaller integer type '%s' from pointer [in type cast]", type_name(type));
     }
   }
+
+  // (char)123 のような定数キャストは frontend で即値化
+  Node *folded = fold_const_cast(type, node->lhs);
+  if (folded)
+    return folded;
+
   return node;
 }
 
