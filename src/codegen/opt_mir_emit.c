@@ -20,6 +20,8 @@ struct MirAsmCtx {
   const MirFunction *mf;
   const RegAllocResult *ra;
   const char *epilogue_label;
+  int pending_jmp_label;
+  int has_pending_jmp;
   int spill_base;
   int save_base;
   int save_slot[RA_PREG_COUNT];
@@ -426,32 +428,32 @@ static void emit_typed_imm_to_stack_direct(Type *type, int off, long imm) {
 
   switch (type->ty) {
   case TY_BOOL:
-    write_file("  mov BYTE PTR [rbp - %ld], %lu\n", off, imm ? 1UL : 0UL);
+    write_file("  mov BYTE PTR [rbp - %d], %lu\n", off, imm ? 1UL : 0UL);
     break;
   case TY_CHAR: {
     unsigned long u = ((unsigned long)imm) & 0xffUL;
     if (type->is_unsigned) {
-      write_file("  mov BYTE PTR [rbp - %ld], %lu\n", off, u);
+      write_file("  mov BYTE PTR [rbp - %d], %lu\n", off, u);
     } else {
-      write_file("  mov BYTE PTR [rbp - %ld], %ld\n", off, (long)u);
+      write_file("  mov BYTE PTR [rbp - %d], %ld\n", off, (long)u);
     }
     break;
   }
   case TY_SHORT: {
     unsigned long u = ((unsigned long)imm) & 0xffffUL;
     if (type->is_unsigned) {
-      write_file("  mov WORD PTR [rbp - %ld], %lu\n", off, u);
+      write_file("  mov WORD PTR [rbp - %d], %lu\n", off, u);
     } else {
-      write_file("  mov WORD PTR [rbp - %ld], %ld\n", off, (long)u);
+      write_file("  mov WORD PTR [rbp - %d], %ld\n", off, (long)u);
     }
     break;
   }
   case TY_INT: {
     unsigned long u = ((unsigned long)imm) & 0xffffffffUL;
     if (type->is_unsigned) {
-      write_file("  mov DWORD PTR [rbp - %ld], %lu\n", off, u);
+      write_file("  mov DWORD PTR [rbp - %d], %lu\n", off, u);
     } else {
-      write_file("  mov DWORD PTR [rbp - %ld], %ld\n", off, (long)u);
+      write_file("  mov DWORD PTR [rbp - %d], %ld\n", off, (long)u);
     }
     break;
   }
@@ -478,6 +480,28 @@ static void emit_mir_label(const MirFunction *mf, int label) {
 
 static void emit_mir_jmp(const MirFunction *mf, int label) {
   write_file("  jmp .Lmir.%.*s.%d\n", mf->fn->len, mf->fn->name, label);
+}
+
+static void flush_pending_jmp(MirAsmCtx *ctx) {
+  if (!ctx)
+    return;
+  if (!ctx->has_pending_jmp)
+    return;
+  emit_mir_jmp(ctx->mf, ctx->pending_jmp_label);
+  ctx->has_pending_jmp = 0;
+  ctx->pending_jmp_label = MIR_INVALID_LABEL;
+}
+
+static int can_ret_fallthrough_to_epilogue(const MirFunction *mf, int inst_idx) {
+  if (!mf || inst_idx < 0 || inst_idx >= mf->inst_len)
+    return 0;
+  for (int i = inst_idx + 1; i < mf->inst_len; i++) {
+    MirOp op = mf->insts[i].op;
+    if (op == MIR_OP_LABEL || op == MIR_OP_NOP)
+      continue;
+    return 0;
+  }
+  return 1;
 }
 
 static void normalize_cmp_operands(Type *type, const char *lhs_reg64, const char *rhs_reg64) {
@@ -540,9 +564,29 @@ static void emit_binop(const MirAsmCtx *ctx, const MirInst *in, const char *op, 
     store_reg_to_vreg(ctx, in->dst, work);
 }
 
-static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in) {
+static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
   if (!ctx || !ctx->mf || !ctx->mf->fn || !in)
     error("invalid MIR emit context");
+
+  if (in->op == MIR_OP_LABEL) {
+    if (ctx->has_pending_jmp && ctx->pending_jmp_label == in->label) {
+      ctx->has_pending_jmp = 0;
+      ctx->pending_jmp_label = MIR_INVALID_LABEL;
+    } else {
+      flush_pending_jmp(ctx);
+    }
+    emit_mir_label(ctx->mf, in->label);
+    return;
+  }
+
+  if (in->op == MIR_OP_JMP) {
+    flush_pending_jmp(ctx);
+    ctx->has_pending_jmp = 1;
+    ctx->pending_jmp_label = in->label;
+    return;
+  }
+
+  flush_pending_jmp(ctx);
 
   switch (in->op) {
   case MIR_OP_NOP:
@@ -893,12 +937,6 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in) {
       store_reg_to_vreg(ctx, in->dst, work);
     return;
   }
-  case MIR_OP_LABEL:
-    emit_mir_label(ctx->mf, in->label);
-    return;
-  case MIR_OP_JMP:
-    emit_mir_jmp(ctx->mf, in->label);
-    return;
   case MIR_OP_JZ: {
     const char *src_reg = vreg_assigned_reg64(ctx, in->src1);
     if (src_reg) {
@@ -981,11 +1019,12 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in) {
       write_file("  setne al\n");
       write_file("  movzx eax, al\n");
     }
-    write_file("  jmp %s\n", ctx->epilogue_label);
+    if (!can_ret_fallthrough_to_epilogue(ctx->mf, inst_idx))
+      write_file("  jmp %s\n", ctx->epilogue_label);
     return;
+  default:
+    error("unsupported MIR op in asm emitter [op=%d]", in->op);
   }
-
-  error("unsupported MIR op in asm emitter [op=%d]", in->op);
 }
 
 void emit_mir_function(const MirFunction *mf) {
@@ -1038,6 +1077,8 @@ void emit_mir_function(const MirFunction *mf) {
   if (n <= 0 || n >= (int)sizeof(epilogue_label))
     error("epilogue label too long in MIR asm emitter");
   ctx.epilogue_label = epilogue_label;
+  ctx.has_pending_jmp = 0;
+  ctx.pending_jmp_label = MIR_INVALID_LABEL;
 
   for (int i = 0; i < mf->param_count; i++) {
     int off = mf->param_offsets[i];
@@ -1052,11 +1093,11 @@ void emit_mir_function(const MirFunction *mf) {
   }
 
   for (int i = 0; i < mf->inst_len; i++)
-    emit_mir_inst(&ctx, &mf->insts[i]);
+    emit_mir_inst(&ctx, &mf->insts[i], i);
+  flush_pending_jmp(&ctx);
 
   if (mf->fn->type->return_type->ty == TY_VOID || !strncmp(mf->fn->name, "main", 4)) {
     write_file("  mov rax, 0\n");
-    write_file("  jmp %s\n", ctx.epilogue_label);
   }
 
   write_file("%s:\n", ctx.epilogue_label);
