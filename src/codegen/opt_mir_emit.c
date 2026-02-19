@@ -371,14 +371,14 @@ static void emit_typed_imm_to_reg(Type *type, const char *reg64, long imm) {
 
   switch (type->ty) {
   case TY_BOOL:
-    write_file("  mov %s, %u\n", reg32_name(reg64), imm ? 1u : 0u);
+    write_file("  mov %s, %lu\n", reg32_name(reg64), imm ? 1UL : 0UL);
     break;
   case TY_CHAR: {
     unsigned long u = ((unsigned long)imm) & 0xffUL;
     if (type->is_unsigned) {
       write_file("  mov %s, %lu\n", reg32_name(reg64), u);
     } else {
-      write_file("  mov %s, %lu\n", reg8_name(reg64), u);
+      write_file("  mov %s, %ld\n", reg8_name(reg64), (long)u);
       write_file("  movsx %s, %s\n", reg64, reg8_name(reg64));
     }
     break;
@@ -388,7 +388,7 @@ static void emit_typed_imm_to_reg(Type *type, const char *reg64, long imm) {
     if (type->is_unsigned) {
       write_file("  mov %s, %lu\n", reg32_name(reg64), u);
     } else {
-      write_file("  mov %s, %lu\n", reg16_name(reg64), u);
+      write_file("  mov %s, %ld\n", reg16_name(reg64), (long)u);
       write_file("  movsx %s, %s\n", reg64, reg16_name(reg64));
     }
     break;
@@ -398,7 +398,7 @@ static void emit_typed_imm_to_reg(Type *type, const char *reg64, long imm) {
     if (type->is_unsigned) {
       write_file("  mov %s, %lu\n", reg32_name(reg64), u);
     } else {
-      write_file("  mov %s, %lu\n", reg32_name(reg64), u);
+      write_file("  mov %s, %ld\n", reg32_name(reg64), (long)u);
       write_file("  movsxd %s, %s\n", reg64, reg32_name(reg64));
     }
     break;
@@ -409,10 +409,66 @@ static void emit_typed_imm_to_reg(Type *type, const char *reg64, long imm) {
   case TY_ARGARR:
   case TY_ARR:
   case TY_VOID:
-    write_file("  mov %s, %ld\n", reg64, imm);
+    if (type->is_unsigned) {
+      write_file("  mov %s, %lu\n", reg64, (unsigned long)imm);
+    } else {
+      write_file("  mov %s, %ld\n", reg64, imm);
+    }
     break;
   default:
     error("unsupported type in MIR imm [ty=%d]", type->ty);
+  }
+}
+
+static void emit_typed_imm_to_stack_direct(Type *type, int off, long imm) {
+  if (!type)
+    error("missing type [in emit_typed_imm_to_stack_direct]");
+
+  switch (type->ty) {
+  case TY_BOOL:
+    write_file("  mov BYTE PTR [rbp - %ld], %lu\n", off, imm ? 1UL : 0UL);
+    break;
+  case TY_CHAR: {
+    unsigned long u = ((unsigned long)imm) & 0xffUL;
+    if (type->is_unsigned) {
+      write_file("  mov BYTE PTR [rbp - %ld], %lu\n", off, u);
+    } else {
+      write_file("  mov BYTE PTR [rbp - %ld], %ld\n", off, (long)u);
+    }
+    break;
+  }
+  case TY_SHORT: {
+    unsigned long u = ((unsigned long)imm) & 0xffffUL;
+    if (type->is_unsigned) {
+      write_file("  mov WORD PTR [rbp - %ld], %lu\n", off, u);
+    } else {
+      write_file("  mov WORD PTR [rbp - %ld], %ld\n", off, (long)u);
+    }
+    break;
+  }
+  case TY_INT: {
+    unsigned long u = ((unsigned long)imm) & 0xffffffffUL;
+    if (type->is_unsigned) {
+      write_file("  mov DWORD PTR [rbp - %ld], %lu\n", off, u);
+    } else {
+      write_file("  mov DWORD PTR [rbp - %ld], %ld\n", off, (long)u);
+    }
+    break;
+  }
+  case TY_LONG:
+  case TY_LONGLONG:
+  case TY_PTR:
+  case TY_ARGARR:
+  case TY_ARR:
+  case TY_VOID:
+    if (type->is_unsigned) {
+      write_file("  mov QWORD PTR [rbp - %d], %lu\n", off, (unsigned long)imm);
+    } else {
+      write_file("  mov QWORD PTR [rbp - %d], %ld\n", off, imm);
+    }
+    break;
+  default:
+    error("unsupported type in MIR imm stack direct [ty=%d]", type->ty);
   }
 }
 
@@ -494,10 +550,14 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in) {
     return;
   case MIR_OP_IMM: {
     const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
-    const char *work = dst_reg ? dst_reg : "rax";
-    emit_typed_imm_to_reg(in->type, work, in->imm);
-    if (!dst_reg)
-      store_reg_to_vreg(ctx, in->dst, work);
+    if (dst_reg) {
+      emit_typed_imm_to_reg(in->type, dst_reg, in->imm);
+      return;
+    }
+    int dst_off = vreg_stack_offset_or_neg1(ctx, in->dst);
+    if (dst_off < 0)
+      error("invalid dst location [in MIR_OP_IMM]");
+    emit_typed_imm_to_stack_direct(in->type, dst_off, in->imm);
     return;
   }
   case MIR_OP_MOV: {
