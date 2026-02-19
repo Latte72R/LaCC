@@ -1012,8 +1012,6 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
   case MIR_OP_RET:
     if (in->src1 != MIR_INVALID_VREG)
       load_vreg_to_reg(ctx, in->src1, "rax");
-    else
-      write_file("  mov rax, 0\n");
     if (in->type && in->type->ty == TY_BOOL) {
       write_file("  cmp rax, 0\n");
       write_file("  setne al\n");
@@ -1095,10 +1093,6 @@ void emit_mir_function(const MirFunction *mf) {
   for (int i = 0; i < mf->inst_len; i++)
     emit_mir_inst(&ctx, &mf->insts[i], i);
   flush_pending_jmp(&ctx);
-
-  if (mf->fn->type->return_type->ty == TY_VOID || !strncmp(mf->fn->name, "main", 4)) {
-    write_file("  mov rax, 0\n");
-  }
 
   write_file("%s:\n", ctx.epilogue_label);
   for (int p = RA_PREG_COUNT - 1; p >= 0; p--) {

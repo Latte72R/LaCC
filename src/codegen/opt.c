@@ -100,6 +100,32 @@ static void emit_jz(LowerCtx *ctx, VReg cond, int label) {
   mir_emit(ctx->mf, &inst);
 }
 
+static int is_main_function(const Function *fn) { return fn && fn->len == 4 && !strncmp(fn->name, "main", 4); }
+
+static void emit_implicit_return_if_needed(LowerCtx *ctx, Node *node) {
+  if (!ctx || !ctx->mf || !ctx->fn || !ctx->fn->type || !ctx->fn->type->return_type)
+    lower_error_node("invalid function in implicit return lowering", node);
+
+  Type *ret_type = ctx->fn->type->return_type;
+  if (ret_type->ty != TY_VOID && !is_main_function(ctx->fn))
+    return;
+
+  MirInst inst;
+  init_inst(&inst, MIR_OP_RET);
+  if (is_main_function(ctx->fn)) {
+    VReg zero = mir_new_vreg(ctx->mf);
+    MirInst imm;
+    init_inst(&imm, MIR_OP_IMM);
+    imm.dst = zero;
+    imm.imm = 0;
+    imm.type = ret_type;
+    mir_emit(ctx->mf, &imm);
+    inst.src1 = zero;
+  }
+  inst.type = ret_type;
+  mir_emit(ctx->mf, &inst);
+}
+
 static VReg lower_expr(LowerCtx *ctx, Node *node);
 static void lower_stmt(LowerCtx *ctx, Node *node);
 
@@ -752,10 +778,10 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
       lower_stmt(ctx, node->body[i]);
     return;
   case ND_RETURN: {
-    VReg src = lower_expr(ctx, node->rhs);
     MirInst inst;
     init_inst(&inst, MIR_OP_RET);
-    inst.src1 = src;
+    if (!node->type || node->type->ty != TY_VOID)
+      inst.src1 = lower_expr(ctx, node->rhs);
     inst.type = node->type;
     mir_emit(ctx->mf, &inst);
     return;
@@ -938,6 +964,7 @@ static void lower_function(Node *fn_node, MirFunction *mf) {
   ctx.fn = fn_node->fn;
   seed_function_label_map(&ctx, fn_node->fn, fn_node);
   lower_stmt(&ctx, fn_node->lhs);
+  emit_implicit_return_if_needed(&ctx, fn_node);
   while (ctx.switch_stack)
     pop_switch_ctx(&ctx, fn_node);
   free_label_map(ctx.label_map);
