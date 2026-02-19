@@ -2,6 +2,7 @@
 #include "diagnostics.h"
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 typedef struct {
@@ -98,6 +99,48 @@ static int alloc_free_preg(const int *preg_in_use) {
   return -1;
 }
 
+static int env_is_on(const char *name) {
+  const char *v = getenv(name);
+  return v && v[0] && v[0] != '0';
+}
+
+static int str_eq_len(const char *a, int alen, const char *b) {
+  if (!a || !b)
+    return 0;
+  int blen = strlen(b);
+  return alen == blen && !strncmp(a, b, alen);
+}
+
+static int should_dump_ra_trace(const MirFunction *mf) {
+  if (!env_is_on("LACC_DUMP_RA") && !env_is_on("LACC_DUMP_MIR"))
+    return 0;
+  const char *filter = getenv("LACC_DUMP_RA_FN");
+  if (!filter || !filter[0])
+    return 1;
+  if (!mf || !mf->fn || !mf->fn->name)
+    return 0;
+  return str_eq_len(mf->fn->name, mf->fn->len, filter);
+}
+
+static void dump_active(FILE *out, Interval **active, int active_cnt, const int *reg_for_vreg) {
+  if (!out)
+    return;
+  fprintf(out, "    active:");
+  if (active_cnt <= 0) {
+    fprintf(out, " (empty)\n");
+    return;
+  }
+  for (int i = 0; i < active_cnt; i++) {
+    Interval *it = active[i];
+    int preg = reg_for_vreg[it->vreg];
+    if (preg >= 0)
+      fprintf(out, " v%d[%d,%d]=%s", it->vreg, it->start, it->end, ra_preg64(preg));
+    else
+      fprintf(out, " v%d[%d,%d]=<none>", it->vreg, it->start, it->end);
+  }
+  fprintf(out, "\n");
+}
+
 void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   if (!mf || !out)
     error("invalid input [in regalloc_run]");
@@ -106,6 +149,14 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   out->vreg_count = mf->next_vreg;
   if (mf->next_vreg <= 0)
     return;
+  int dump_trace = should_dump_ra_trace(mf);
+  FILE *trace_out = stderr;
+  if (dump_trace) {
+    if (mf->fn && mf->fn->name)
+      fprintf(trace_out, "RA trace %.*s (insts=%d, vregs=%d)\n", mf->fn->len, mf->fn->name, mf->inst_len, mf->next_vreg);
+    else
+      fprintf(trace_out, "RA trace <null-fn> (insts=%d, vregs=%d)\n", mf->inst_len, mf->next_vreg);
+  }
 
   out->locs = calloc(mf->next_vreg, sizeof(RaVRegLoc));
   if (!out->locs)
@@ -246,6 +297,12 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
     }
   }
   qsort(intervals, interval_cnt, sizeof(Interval), cmp_interval_start);
+  if (dump_trace) {
+    fprintf(trace_out, "  intervals:");
+    for (int i = 0; i < interval_cnt; i++)
+      fprintf(trace_out, " v%d[%d,%d]", intervals[i].vreg, intervals[i].start, intervals[i].end);
+    fprintf(trace_out, "\n");
+  }
 
   int *preg_in_use = calloc(RA_PREG_COUNT, sizeof(int));
   int *reg_for_vreg = malloc(sizeof(int) * mf->next_vreg);
@@ -263,6 +320,8 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
 
   for (int i = 0; i < interval_cnt; i++) {
     Interval *cur = &intervals[i];
+    if (dump_trace)
+      fprintf(trace_out, "  scan v%d[%d,%d]\n", cur->vreg, cur->start, cur->end);
 
     int write_idx = 0;
     for (int a = 0; a < active_cnt; a++) {
@@ -271,6 +330,8 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
         int preg = reg_for_vreg[it->vreg];
         if (preg >= 0)
           preg_in_use[preg] = 0;
+        if (dump_trace && preg >= 0)
+          fprintf(trace_out, "    expire v%d[%d,%d] from %s\n", it->vreg, it->start, it->end, ra_preg64(preg));
       } else {
         active[write_idx++] = it;
       }
@@ -286,6 +347,10 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
       active[active_cnt++] = cur;
       if (active_cnt > 1)
         qsort(active, active_cnt, sizeof(Interval *), cmp_active_end);
+      if (dump_trace) {
+        fprintf(trace_out, "    assign v%d -> %s\n", cur->vreg, ra_preg64(preg));
+        dump_active(trace_out, active, active_cnt, reg_for_vreg);
+      }
       continue;
     }
 
@@ -305,9 +370,18 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
       reg_for_vreg[cur->vreg] = victim_reg;
       active[active_cnt - 1] = cur;
       qsort(active, active_cnt, sizeof(Interval *), cmp_active_end);
+      if (dump_trace) {
+        fprintf(trace_out, "    spill v%d -> slot%d\n", victim->vreg, slot_for_vreg[victim->vreg]);
+        fprintf(trace_out, "    assign v%d -> %s\n", cur->vreg, ra_preg64(victim_reg));
+        dump_active(trace_out, active, active_cnt, reg_for_vreg);
+      }
     } else {
       if (slot_for_vreg[cur->vreg] < 0)
         slot_for_vreg[cur->vreg] = spill_count++;
+      if (dump_trace) {
+        fprintf(trace_out, "    spill v%d -> slot%d\n", cur->vreg, slot_for_vreg[cur->vreg]);
+        dump_active(trace_out, active, active_cnt, reg_for_vreg);
+      }
     }
   }
 
@@ -328,6 +402,16 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
       out->locs[v].reg = -1;
       out->locs[v].stack_slot = out->spill_count++;
     }
+  }
+  if (dump_trace) {
+    fprintf(trace_out, "  result:");
+    for (int v = 0; v < mf->next_vreg; v++) {
+      if (out->locs[v].kind == RA_LOC_REG)
+        fprintf(trace_out, " v%d=%s", v, ra_preg64(out->locs[v].reg));
+      else
+        fprintf(trace_out, " v%d=slot%d", v, out->locs[v].stack_slot);
+    }
+    fprintf(trace_out, "\n");
   }
 
   free(active);
