@@ -34,11 +34,13 @@ static int align_up(int n, int align) {
   return ((n + align - 1) / align) * align;
 }
 
-static int count_mask_bits(unsigned mask) {
+static int count_saved_mask_bits(unsigned mask) {
   int c = 0;
-  while (mask) {
-    c += (mask & 1u);
-    mask >>= 1;
+  for (int p = 0; p < RA_PREG_COUNT; p++) {
+    if (!(mask & (1u << p)))
+      continue;
+    if (ra_preg_is_callee_saved(p))
+      c++;
   }
   return c;
 }
@@ -1036,7 +1038,7 @@ void emit_mir_function(const MirFunction *mf) {
   ctx.mf = mf;
   ctx.ra = &ra;
   ctx.spill_base = align_up(mf->fn->offset, 8);
-  int save_count = count_mask_bits(ra.used_reg_mask);
+  int save_count = count_saved_mask_bits(ra.used_reg_mask);
   ctx.save_base = ctx.spill_base + (ra.spill_count * 8);
   int frame_payload = ctx.save_base + (save_count * 8);
   ctx.frame_size = align_frame_size_for_calls(frame_payload);
@@ -1062,6 +1064,8 @@ void emit_mir_function(const MirFunction *mf) {
     write_file("  sub rsp, %d\n", ctx.frame_size);
   int save_idx = 0;
   for (int p = 0; p < RA_PREG_COUNT; p++) {
+    if (!ra_preg_is_callee_saved(p))
+      continue;
     if (!(ra.used_reg_mask & (1u << p)))
       continue;
     int off = ctx.save_base + ((save_idx + 1) * 8);
@@ -1096,6 +1100,8 @@ void emit_mir_function(const MirFunction *mf) {
 
   write_file("%s:\n", ctx.epilogue_label);
   for (int p = RA_PREG_COUNT - 1; p >= 0; p--) {
+    if (!ra_preg_is_callee_saved(p))
+      continue;
     if (ctx.save_slot[p] >= 0)
       write_file("  mov %s, QWORD PTR [rbp - %d]\n", ra_preg64(p), ctx.save_slot[p]);
   }

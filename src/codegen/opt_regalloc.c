@@ -11,12 +11,21 @@ typedef struct {
   int end;
 } Interval;
 
-static const char *k_ra_preg64[RA_PREG_COUNT] = {"rbx", "r12", "r13", "r14", "r15"};
+static const char *k_ra_preg64[RA_PREG_COUNT] = {"rbx", "r12", "r13", "r14", "r15", "r8", "r9", "r10"};
+static const int k_ra_preg_callee_saved[RA_PREG_COUNT] = {1, 1, 1, 1, 1, 0, 0, 0};
+static const int k_ra_pref_callee_first[RA_PREG_COUNT] = {0, 1, 2, 3, 4, 5, 6, 7};
+static const int k_ra_pref_caller_first[RA_PREG_COUNT] = {5, 6, 7, 0, 1, 2, 3, 4};
 
 const char *ra_preg64(int preg) {
   if (preg < 0 || preg >= RA_PREG_COUNT)
     error("invalid preg id [in ra_preg64]");
   return k_ra_preg64[preg];
+}
+
+int ra_preg_is_callee_saved(int preg) {
+  if (preg < 0 || preg >= RA_PREG_COUNT)
+    error("invalid preg id [in ra_preg_is_callee_saved]");
+  return k_ra_preg_callee_saved[preg];
 }
 
 static int bit_words(int nbits) {
@@ -91,8 +100,13 @@ static int cmp_active_end(const void *a, const void *b) {
   return ia->end - ib->end;
 }
 
-static int alloc_free_preg(const int *preg_in_use) {
-  for (int p = 0; p < RA_PREG_COUNT; p++) {
+static int alloc_free_preg(const int *preg_in_use, unsigned allowed_mask, const int *pref_order) {
+  for (int i = 0; i < RA_PREG_COUNT; i++) {
+    int p = pref_order[i];
+    if (p < 0 || p >= RA_PREG_COUNT)
+      error("invalid preg preference entry [in alloc_free_preg]");
+    if (!(allowed_mask & (1u << p)))
+      continue;
     if (!preg_in_use[p])
       return p;
   }
@@ -253,7 +267,8 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   int *start = malloc(sizeof(int) * mf->next_vreg);
   int *end = malloc(sizeof(int) * mf->next_vreg);
   int *copy_src_at_start = malloc(sizeof(int) * mf->next_vreg);
-  if (!start || !end || !copy_src_at_start)
+  int *crosses_call = calloc(mf->next_vreg, sizeof(int));
+  if (!start || !end || !copy_src_at_start || !crosses_call)
     error("memory allocation failed [in regalloc_run ranges]");
   for (int v = 0; v < mf->next_vreg; v++) {
     start[v] = -1;
@@ -277,6 +292,17 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
       // end[v] = max(end[v], i)
       if (i > end[v])
         end[v] = i;
+    }
+  }
+
+  for (int i = 0; i < ninst; i++) {
+    if (mf->insts[i].op != MIR_OP_CALL)
+      continue;
+    const unsigned long long *in_i = cbit_row(in, i, words);
+    const unsigned long long *out_i = cbit_row(out_bits, i, words);
+    for (int v = 0; v < mf->next_vreg; v++) {
+      if (bit_get(in_i, v) && bit_get(out_i, v))
+        crosses_call[v] = 1;
     }
   }
 
@@ -334,13 +360,26 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
 
   int active_cnt = 0;
   int spill_count = 0;
+  unsigned callee_saved_mask = 0;
+  for (int p = 0; p < RA_PREG_COUNT; p++) {
+    if (ra_preg_is_callee_saved(p))
+      callee_saved_mask |= 1u << p;
+  }
+  unsigned all_reg_mask = callee_saved_mask;
+  for (int p = 0; p < RA_PREG_COUNT; p++) {
+    if (!ra_preg_is_callee_saved(p))
+      all_reg_mask |= 1u << p;
+  }
 
   for (int i = 0; i < interval_cnt; i++) {
     Interval *cur = &intervals[i];
     int copy_src = copy_src_at_start[cur->vreg];
     int preferred_preg = -1;
+    unsigned allowed_mask = crosses_call[cur->vreg] ? callee_saved_mask : all_reg_mask;
+    const int *alloc_pref = crosses_call[cur->vreg] ? k_ra_pref_callee_first : k_ra_pref_caller_first;
     if (dump_trace)
-      fprintf(trace_out, "  scan v%d[%d,%d]\n", cur->vreg, cur->start, cur->end);
+      fprintf(trace_out, "  scan v%d[%d,%d] allow=%s\n", cur->vreg, cur->start, cur->end,
+              crosses_call[cur->vreg] ? "callee-saved" : "all");
 
     int write_idx = 0;
     for (int a = 0; a < active_cnt; a++) {
@@ -369,15 +408,16 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
 
     if (preferred_preg < 0 && copy_src != MIR_INVALID_VREG) {
       int cand = reg_for_vreg[copy_src];
-      if (cand >= 0 && !preg_in_use[cand])
+      if (cand >= 0 && (allowed_mask & (1u << cand)) && !preg_in_use[cand])
         preferred_preg = cand;
     }
 
     int preg = -1;
-    if (preferred_preg >= 0 && preferred_preg < RA_PREG_COUNT && !preg_in_use[preferred_preg])
+    if (preferred_preg >= 0 && preferred_preg < RA_PREG_COUNT && (allowed_mask & (1u << preferred_preg)) &&
+        !preg_in_use[preferred_preg])
       preg = preferred_preg;
     else
-      preg = alloc_free_preg(preg_in_use);
+      preg = alloc_free_preg(preg_in_use, allowed_mask, alloc_pref);
     if (preg >= 0) {
       reg_for_vreg[cur->vreg] = preg;
       preg_in_use[preg] = 1;
@@ -394,21 +434,28 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
       continue;
     }
 
-    if (active_cnt <= 0)
-      error("regalloc internal error: no active interval with full regs");
+    Interval *victim = NULL;
+    int victim_idx = -1;
+    int victim_reg = -1;
+    for (int a = 0; a < active_cnt; a++) {
+      Interval *it = active[a];
+      int preg_it = reg_for_vreg[it->vreg];
+      if (preg_it < 0 || !(allowed_mask & (1u << preg_it)))
+        continue;
+      if (!victim || it->end > victim->end) {
+        victim = it;
+        victim_idx = a;
+        victim_reg = preg_it;
+      }
+    }
 
-    Interval *victim = active[active_cnt - 1];
-    int victim_reg = reg_for_vreg[victim->vreg];
-    if (victim_reg < 0)
-      error("regalloc internal error: victim has no register");
-
-    if (victim->end > cur->end) {
+    if (victim && victim->end > cur->end) {
       if (slot_for_vreg[victim->vreg] < 0)
         slot_for_vreg[victim->vreg] = spill_count++;
       reg_for_vreg[victim->vreg] = -1;
 
       reg_for_vreg[cur->vreg] = victim_reg;
-      active[active_cnt - 1] = cur;
+      active[victim_idx] = cur;
       qsort(active, active_cnt, sizeof(Interval *), cmp_active_end);
       if (dump_trace) {
         fprintf(trace_out, "    spill v%d -> slot%d\n", victim->vreg, slot_for_vreg[victim->vreg]);
@@ -459,6 +506,7 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   free(reg_for_vreg);
   free(preg_in_use);
   free(intervals);
+  free(crosses_call);
   free(copy_src_at_start);
   free(end);
   free(start);

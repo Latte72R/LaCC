@@ -26,10 +26,11 @@ typedef struct {
 } RegAllocResult;
 
 enum {
-  RA_PREG_COUNT = 5,
+  RA_PREG_COUNT = 8,
 };
 
 const char *ra_preg64(int preg);
+int ra_preg_is_callee_saved(int preg);
 void regalloc_run(const MirFunction *mf, RegAllocResult *out);
 void regalloc_free(RegAllocResult *out);
 
