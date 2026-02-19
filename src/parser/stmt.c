@@ -107,6 +107,19 @@ Node *if_stmt() {
   } else {
     node->els = NULL;
   }
+
+  int ok = true;
+  int cond_value = eval_const_expr(node->cond, &ok);
+  if (ok) {
+    if (cond_value)
+      return node->then;
+    if (node->els)
+      return node->els;
+    Node *empty = new_node(ND_NONE);
+    empty->endline = true;
+    return empty;
+  }
+
   return node;
 }
 

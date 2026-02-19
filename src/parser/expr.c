@@ -32,6 +32,50 @@ static long long sign_extend_width(unsigned long long v, int bits) {
   return (long long)v;
 }
 
+static Node *build_compare_with_const_fold(NodeKind kind, Node *lhs, Node *rhs) {
+  if (lhs && rhs && lhs->kind == ND_NUM && rhs->kind == ND_NUM && lhs->type && rhs->type && is_number(lhs->type) &&
+      is_number(rhs->type)) {
+    Type *cmp_type = max_type(lhs->type, rhs->type);
+    int bits = type_size(cmp_type) * 8;
+    if (bits <= 0 || bits > 64)
+      bits = 64;
+    unsigned long long mask = bit_mask_for_width(bits);
+    unsigned long long ul = ((unsigned long long)lhs->val) & mask;
+    unsigned long long ur = ((unsigned long long)rhs->val) & mask;
+    long long sl = sign_extend_width(ul, bits);
+    long long sr = sign_extend_width(ur, bits);
+
+    int v = 0;
+    if (cmp_type->is_unsigned) {
+      if (kind == ND_EQ)
+        v = (ul == ur);
+      else if (kind == ND_NE)
+        v = (ul != ur);
+      else if (kind == ND_LT)
+        v = (ul < ur);
+      else if (kind == ND_LE)
+        v = (ul <= ur);
+    } else {
+      if (kind == ND_EQ)
+        v = (sl == sr);
+      else if (kind == ND_NE)
+        v = (sl != sr);
+      else if (kind == ND_LT)
+        v = (sl < sr);
+      else if (kind == ND_LE)
+        v = (sl <= sr);
+    }
+
+    Node *folded = new_num(v ? 1 : 0);
+    folded->type = new_type(TY_INT);
+    return folded;
+  }
+
+  Node *node = new_binary(kind, lhs, rhs);
+  node->type = new_type(TY_INT);
+  return node;
+}
+
 static Node *build_binary_with_const_fold(NodeKind kind, Node *lhs, Node *rhs, Type *type) {
   if (lhs && rhs && type && lhs->kind == ND_NUM && rhs->kind == ND_NUM) {
     int bits = type_size(type) * 8;
@@ -298,6 +342,7 @@ Node *assign() {
 Node *ternary_operator() {
   Node *node = logical_or();
   if (consume("?")) {
+    Node *cond = node;
     // Inside conditional operator, both branches should be parsed as
     // assignment-expressions (not full comma-expressions). Using expr()
     // here would swallow argument separators (',') in contexts like
@@ -344,7 +389,16 @@ Node *ternary_operator() {
       }
       ternary->type = then_branch->type;
     }
-    node = ternary;
+
+    int ok = true;
+    int cond_value = eval_const_expr(cond, &ok);
+    if (ok) {
+      Node *picked = cond_value ? then_branch : else_branch;
+      picked->type = ternary->type;
+      node = picked;
+    } else {
+      node = ternary;
+    }
   }
   return node;
 }
@@ -439,8 +493,7 @@ Node *equality() {
         warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
                    type_name(rhs->type));
       }
-      node = new_binary(ND_EQ, node, rhs);
-      node->type = new_type(TY_INT);
+      node = build_compare_with_const_fold(ND_EQ, node, rhs);
     } else if (consume("!=")) {
       Node *rhs = relational();
       if (is_enum_type(node->type) && is_enum_type(rhs->type) && node->type->object != rhs->type->object) {
@@ -452,8 +505,7 @@ Node *equality() {
         warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
                    type_name(rhs->type));
       }
-      node = new_binary(ND_NE, node, rhs);
-      node->type = new_type(TY_INT);
+      node = build_compare_with_const_fold(ND_NE, node, rhs);
     } else {
       break;
     }
@@ -477,8 +529,7 @@ Node *relational() {
         warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
                    type_name(rhs->type));
       }
-      node = new_binary(ND_LT, node, rhs);
-      node->type = new_type(TY_INT);
+      node = build_compare_with_const_fold(ND_LT, node, rhs);
     } else if (consume("<=")) {
       Node *rhs = bit_shift();
       if (is_enum_type(node->type) && is_enum_type(rhs->type) && node->type->object != rhs->type->object) {
@@ -490,8 +541,7 @@ Node *relational() {
         warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
                    type_name(rhs->type));
       }
-      node = new_binary(ND_LE, node, rhs);
-      node->type = new_type(TY_INT);
+      node = build_compare_with_const_fold(ND_LE, node, rhs);
     } else if (consume(">")) {
       Node *lhs = bit_shift();
       if (is_enum_type(lhs->type) && is_enum_type(node->type) && lhs->type->object != node->type->object) {
@@ -503,8 +553,7 @@ Node *relational() {
         warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
                    type_name(lhs->type));
       }
-      node = new_binary(ND_LT, lhs, node);
-      node->type = new_type(TY_INT);
+      node = build_compare_with_const_fold(ND_LT, lhs, node);
     } else if (consume(">=")) {
       Node *lhs = bit_shift();
       if (is_enum_type(lhs->type) && is_enum_type(node->type) && lhs->type->object != node->type->object) {
@@ -516,8 +565,7 @@ Node *relational() {
         warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
                    type_name(lhs->type));
       }
-      node = new_binary(ND_LE, lhs, node);
-      node->type = new_type(TY_INT);
+      node = build_compare_with_const_fold(ND_LE, lhs, node);
     } else {
       break;
     }
