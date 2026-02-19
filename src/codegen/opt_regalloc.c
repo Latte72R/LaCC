@@ -252,11 +252,13 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
 
   int *start = malloc(sizeof(int) * mf->next_vreg);
   int *end = malloc(sizeof(int) * mf->next_vreg);
-  if (!start || !end)
+  int *copy_src_at_start = malloc(sizeof(int) * mf->next_vreg);
+  if (!start || !end || !copy_src_at_start)
     error("memory allocation failed [in regalloc_run ranges]");
   for (int v = 0; v < mf->next_vreg; v++) {
     start[v] = -1;
     end[v] = -1;
+    copy_src_at_start[v] = MIR_INVALID_VREG;
   }
 
   for (int i = 0; i < ninst; i++) {
@@ -282,6 +284,21 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   for (int v = 0; v < mf->next_vreg; v++) {
     if (start[v] >= 0 && end[v] >= start[v])
       interval_cnt++;
+  }
+
+  // copy coalescing hint:
+  // if interval v starts with "v <- src" and src dies at this instruction,
+  // prefer assigning the same physical register to v.
+  for (int v = 0; v < mf->next_vreg; v++) {
+    int s = start[v];
+    if (s < 0 || s >= ninst)
+      continue;
+    MirInst *in_s = &mf->insts[s];
+    if (in_s->op != MIR_OP_MOV || in_s->dst != v || in_s->src1 == MIR_INVALID_VREG)
+      continue;
+    if (in_s->src1 < 0 || in_s->src1 >= mf->next_vreg)
+      error("invalid MOV src vreg for copy coalescing hint");
+    copy_src_at_start[v] = in_s->src1;
   }
 
   Interval *intervals = malloc(sizeof(Interval) * (interval_cnt > 0 ? interval_cnt : 1));
@@ -320,18 +337,28 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
 
   for (int i = 0; i < interval_cnt; i++) {
     Interval *cur = &intervals[i];
+    int copy_src = copy_src_at_start[cur->vreg];
+    int preferred_preg = -1;
     if (dump_trace)
       fprintf(trace_out, "  scan v%d[%d,%d]\n", cur->vreg, cur->start, cur->end);
 
     int write_idx = 0;
     for (int a = 0; a < active_cnt; a++) {
       Interval *it = active[a];
-      if (it->end < cur->start) {
+      int expire_for_copy = (copy_src != MIR_INVALID_VREG && it->vreg == copy_src && it->end == cur->start);
+      if (it->end < cur->start || expire_for_copy) {
         int preg = reg_for_vreg[it->vreg];
-        if (preg >= 0)
+        if (preg >= 0) {
           preg_in_use[preg] = 0;
-        if (dump_trace && preg >= 0)
-          fprintf(trace_out, "    expire v%d[%d,%d] from %s\n", it->vreg, it->start, it->end, ra_preg64(preg));
+          if (expire_for_copy)
+            preferred_preg = preg;
+        }
+        if (dump_trace && preg >= 0) {
+          if (expire_for_copy)
+            fprintf(trace_out, "    expire(copy) v%d[%d,%d] from %s\n", it->vreg, it->start, it->end, ra_preg64(preg));
+          else
+            fprintf(trace_out, "    expire v%d[%d,%d] from %s\n", it->vreg, it->start, it->end, ra_preg64(preg));
+        }
       } else {
         active[write_idx++] = it;
       }
@@ -340,7 +367,17 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
     if (active_cnt > 1)
       qsort(active, active_cnt, sizeof(Interval *), cmp_active_end);
 
-    int preg = alloc_free_preg(preg_in_use);
+    if (preferred_preg < 0 && copy_src != MIR_INVALID_VREG) {
+      int cand = reg_for_vreg[copy_src];
+      if (cand >= 0 && !preg_in_use[cand])
+        preferred_preg = cand;
+    }
+
+    int preg = -1;
+    if (preferred_preg >= 0 && preferred_preg < RA_PREG_COUNT && !preg_in_use[preferred_preg])
+      preg = preferred_preg;
+    else
+      preg = alloc_free_preg(preg_in_use);
     if (preg >= 0) {
       reg_for_vreg[cur->vreg] = preg;
       preg_in_use[preg] = 1;
@@ -348,7 +385,10 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
       if (active_cnt > 1)
         qsort(active, active_cnt, sizeof(Interval *), cmp_active_end);
       if (dump_trace) {
-        fprintf(trace_out, "    assign v%d -> %s\n", cur->vreg, ra_preg64(preg));
+        if (copy_src != MIR_INVALID_VREG && preferred_preg == preg)
+          fprintf(trace_out, "    assign(coalesce v%d<-v%d) v%d -> %s\n", cur->vreg, copy_src, cur->vreg, ra_preg64(preg));
+        else
+          fprintf(trace_out, "    assign v%d -> %s\n", cur->vreg, ra_preg64(preg));
         dump_active(trace_out, active, active_cnt, reg_for_vreg);
       }
       continue;
@@ -419,6 +459,7 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   free(reg_for_vreg);
   free(preg_in_use);
   free(intervals);
+  free(copy_src_at_start);
   free(end);
   free(start);
   free(tmp_in);
