@@ -23,6 +23,7 @@ typedef enum {
   MIR_OP_ADDR_FUNC,
   MIR_OP_LOAD,
   MIR_OP_STORE,
+  MIR_OP_MEMCPY,
   MIR_OP_CAST,
   MIR_OP_ADD,
   MIR_OP_SUB,

@@ -42,6 +42,8 @@ static const char *mir_op_name(MirOp op) {
     return "LOAD";
   case MIR_OP_STORE:
     return "STORE";
+  case MIR_OP_MEMCPY:
+    return "MEMCPY";
   case MIR_OP_CAST:
     return "CAST";
   case MIR_OP_ADD:
@@ -179,6 +181,9 @@ void mir_dump(FILE *out, const MirFunction *mf) {
       break;
     case MIR_OP_STORE:
       fprintf(out, "*v%d <- v%d", in->src1, in->src2);
+      break;
+    case MIR_OP_MEMCPY:
+      fprintf(out, "memcpy(v%d <- v%d, size=%ld)", in->src1, in->src2, in->imm);
       break;
     case MIR_OP_CAST:
       fprintf(out, "v%d <- cast(v%d)", in->dst, in->src1);

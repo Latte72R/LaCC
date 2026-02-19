@@ -579,6 +579,65 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in) {
     store_reg_to_ptr(in->type, ptr_work, val_work);
     return;
   }
+  case MIR_OP_MEMCPY: {
+    long size = in->imm;
+    if (size < 0)
+      error("invalid memcpy size [in MIR_OP_MEMCPY]");
+    if (size == 0)
+      return;
+
+    // Use call-clobbered pointer regs for block copy; allocated vregs stay in callee-saved regs.
+    load_vreg_to_reg(ctx, in->src1, "rdi");
+    load_vreg_to_reg(ctx, in->src2, "rsi");
+
+    if (size > 32) {
+      write_file("  mov rcx, %ld\n", size);
+      write_file("  rep movsb\n");
+      return;
+    }
+
+    long off = 0;
+    while (off + 8 <= size) {
+      if (off == 0) {
+        write_file("  mov r11, QWORD PTR [rsi]\n");
+        write_file("  mov QWORD PTR [rdi], r11\n");
+      } else {
+        write_file("  mov r11, QWORD PTR [rsi + %ld]\n", off);
+        write_file("  mov QWORD PTR [rdi + %ld], r11\n", off);
+      }
+      off += 8;
+    }
+    if (off + 4 <= size) {
+      if (off == 0) {
+        write_file("  mov r11d, DWORD PTR [rsi]\n");
+        write_file("  mov DWORD PTR [rdi], r11d\n");
+      } else {
+        write_file("  mov r11d, DWORD PTR [rsi + %ld]\n", off);
+        write_file("  mov DWORD PTR [rdi + %ld], r11d\n", off);
+      }
+      off += 4;
+    }
+    if (off + 2 <= size) {
+      if (off == 0) {
+        write_file("  mov r11w, WORD PTR [rsi]\n");
+        write_file("  mov WORD PTR [rdi], r11w\n");
+      } else {
+        write_file("  mov r11w, WORD PTR [rsi + %ld]\n", off);
+        write_file("  mov WORD PTR [rdi + %ld], r11w\n", off);
+      }
+      off += 2;
+    }
+    if (off < size) {
+      if (off == 0) {
+        write_file("  mov r11b, BYTE PTR [rsi]\n");
+        write_file("  mov BYTE PTR [rdi], r11b\n");
+      } else {
+        write_file("  mov r11b, BYTE PTR [rsi + %ld]\n", off);
+        write_file("  mov BYTE PTR [rdi + %ld], r11b\n", off);
+      }
+    }
+    return;
+  }
   case MIR_OP_CAST: {
     const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
     const char *work = dst_reg ? dst_reg : "rax";

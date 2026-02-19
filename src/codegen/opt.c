@@ -453,15 +453,6 @@ static void lower_store_to_addr(LowerCtx *ctx, VReg addr, VReg value, Type *type
   mir_emit(ctx->mf, &store);
 }
 
-static Type *byte_copy_type() {
-  static Type *ty = NULL;
-  if (!ty) {
-    ty = new_type(TY_CHAR);
-    ty->is_unsigned = true;
-  }
-  return ty;
-}
-
 static VReg emit_binary_inst(LowerCtx *ctx, MirOp op, VReg lhs, VReg rhs, Type *type) {
   VReg dst = mir_new_vreg(ctx->mf);
   MirInst inst;
@@ -474,15 +465,18 @@ static VReg emit_binary_inst(LowerCtx *ctx, MirOp op, VReg lhs, VReg rhs, Type *
   return dst;
 }
 
-static void lower_copy_bytes(LowerCtx *ctx, VReg dst_addr, VReg src_addr, int size) {
-  Type *byte_ty = byte_copy_type();
-  for (int i = 0; i < size; i++) {
-    VReg off = lower_imm(ctx, i, NULL);
-    VReg src_p = emit_binary_inst(ctx, MIR_OP_ADD, src_addr, off, NULL);
-    VReg dst_p = emit_binary_inst(ctx, MIR_OP_ADD, dst_addr, off, NULL);
-    VReg one = lower_load_from_addr(ctx, src_p, byte_ty);
-    lower_store_to_addr(ctx, dst_p, one, byte_ty);
-  }
+static void emit_memcpy(LowerCtx *ctx, VReg dst_addr, VReg src_addr, int size) {
+  if (size < 0)
+    error("invalid memcpy size in lowering");
+  if (size == 0)
+    return;
+
+  MirInst inst;
+  init_inst(&inst, MIR_OP_MEMCPY);
+  inst.src1 = dst_addr;
+  inst.src2 = src_addr;
+  inst.imm = size;
+  mir_emit(ctx->mf, &inst);
 }
 
 static VReg lower_postinc(LowerCtx *ctx, Node *node) {
@@ -706,13 +700,13 @@ static VReg lower_expr(LowerCtx *ctx, Node *node) {
     if (node->val) {
       VReg dst_addr = lower_addr(ctx, node->lhs);
       VReg src_addr = lower_expr(ctx, node->rhs);
-      lower_copy_bytes(ctx, dst_addr, src_addr, get_sizeof(node->lhs->type));
+      emit_memcpy(ctx, dst_addr, src_addr, get_sizeof(node->lhs->type));
       return src_addr;
     }
     if (node->lhs && node->lhs->type && (node->lhs->type->ty == TY_STRUCT || node->lhs->type->ty == TY_UNION)) {
       VReg dst_addr = lower_addr(ctx, node->lhs);
       VReg src_addr = lower_addr(ctx, node->rhs);
-      lower_copy_bytes(ctx, dst_addr, src_addr, get_sizeof(node->lhs->type));
+      emit_memcpy(ctx, dst_addr, src_addr, get_sizeof(node->lhs->type));
       return src_addr;
     }
     VReg addr = lower_addr(ctx, node->lhs);
