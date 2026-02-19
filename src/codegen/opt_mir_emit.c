@@ -1,7 +1,9 @@
 #include "diagnostics.h"
 #include "opt_internal.h"
+#include "opt_regalloc.h"
 #include "platform.h"
 
+#include <stdio.h>
 #include <string.h>
 
 enum {
@@ -16,7 +18,11 @@ static const char *mir_arg_regs8[MIR_CALL_ARG_REGS] = {"rdi", "rsi", "rdx", "rcx
 typedef struct MirAsmCtx MirAsmCtx;
 struct MirAsmCtx {
   const MirFunction *mf;
-  int vreg_base;
+  const RegAllocResult *ra;
+  const char *epilogue_label;
+  int spill_base;
+  int save_base;
+  int save_slot[RA_PREG_COUNT];
   int frame_size;
 };
 
@@ -24,22 +30,67 @@ static int align_up(int n, int align) {
   if (align <= 0)
     return n;
   return ((n + align - 1) / align) * align;
+} 
+
+static int count_mask_bits(unsigned mask) {
+  int c = 0;
+  while (mask) {
+    c += (mask & 1u);
+    mask >>= 1;
+  }
+  return c;
 }
 
-static int vreg_slot_offset(const MirAsmCtx *ctx, VReg vreg) {
-  if (!ctx || !ctx->mf || vreg < 0 || vreg >= ctx->mf->next_vreg)
-    error("invalid virtual register [in vreg_slot_offset]");
-  return ctx->vreg_base + (vreg + 1) * 8;
+static int align_frame_size_for_calls(int size) {
+  int want_mod = 0;
+  int aligned = align_up(size, 16);
+  if ((aligned & 15) != want_mod)
+    aligned += 8;
+  return aligned;
+}
+
+static const RaVRegLoc *vreg_loc(const MirAsmCtx *ctx, VReg vreg) {
+  if (!ctx || !ctx->ra || !ctx->ra->locs || vreg < 0 || vreg >= ctx->ra->vreg_count)
+    error("invalid virtual register [in vreg_loc]");
+  return &ctx->ra->locs[vreg];
+}
+
+static int spill_slot_offset(const MirAsmCtx *ctx, int slot) {
+  if (!ctx || slot < 0)
+    error("invalid spill slot [in spill_slot_offset]");
+  return ctx->spill_base + (slot + 1) * 8;
 }
 
 static void load_vreg_to_reg(const MirAsmCtx *ctx, VReg vreg, const char *reg64) {
-  int off = vreg_slot_offset(ctx, vreg);
-  write_file("  mov %s, QWORD PTR [rbp - %d]\n", reg64, off);
+  const RaVRegLoc *loc = vreg_loc(ctx, vreg);
+  if (loc->kind == RA_LOC_REG) {
+    const char *src = ra_preg64(loc->reg);
+    if (strcmp(src, reg64))
+      write_file("  mov %s, %s\n", reg64, src);
+    return;
+  }
+  if (loc->kind == RA_LOC_STACK) {
+    int off = spill_slot_offset(ctx, loc->stack_slot);
+    write_file("  mov %s, QWORD PTR [rbp - %d]\n", reg64, off);
+    return;
+  }
+  error("invalid vreg location [in load_vreg_to_reg]");
 }
 
 static void store_reg_to_vreg(const MirAsmCtx *ctx, VReg vreg, const char *reg64) {
-  int off = vreg_slot_offset(ctx, vreg);
-  write_file("  mov QWORD PTR [rbp - %d], %s\n", off, reg64);
+  const RaVRegLoc *loc = vreg_loc(ctx, vreg);
+  if (loc->kind == RA_LOC_REG) {
+    const char *dst = ra_preg64(loc->reg);
+    if (strcmp(dst, reg64))
+      write_file("  mov %s, %s\n", dst, reg64);
+    return;
+  }
+  if (loc->kind == RA_LOC_STACK) {
+    int off = spill_slot_offset(ctx, loc->stack_slot);
+    write_file("  mov QWORD PTR [rbp - %d], %s\n", off, reg64);
+    return;
+  }
+  error("invalid vreg location [in store_reg_to_vreg]");
 }
 
 static void load_rax_from_local(int offset, Type *type) {
@@ -500,9 +551,7 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in) {
       write_file("  setne al\n");
       write_file("  movzx eax, al\n");
     }
-    write_file("  mov rsp, rbp\n");
-    write_file("  pop rbp\n");
-    write_file("  ret\n");
+    write_file("  jmp %s\n", ctx->epilogue_label);
     return;
   }
 
@@ -513,10 +562,19 @@ void emit_mir_function(const MirFunction *mf) {
   if (!mf || !mf->fn)
     error("invalid MIR function in asm emitter");
 
+  RegAllocResult ra = {0};
+  regalloc_run(mf, &ra);
+
   MirAsmCtx ctx = {0};
   ctx.mf = mf;
-  ctx.vreg_base = align_up(mf->fn->offset, 8);
-  ctx.frame_size = align_up(ctx.vreg_base + (mf->next_vreg * 8), 16);
+  ctx.ra = &ra;
+  ctx.spill_base = align_up(mf->fn->offset, 8);
+  int save_count = count_mask_bits(ra.used_reg_mask);
+  ctx.save_base = ctx.spill_base + (ra.spill_count * 8);
+  int frame_payload = ctx.save_base + (save_count * 8);
+  ctx.frame_size = align_frame_size_for_calls(frame_payload);
+  for (int p = 0; p < RA_PREG_COUNT; p++)
+    ctx.save_slot[p] = -1;
 
   int is_local_symbol = mf->fn->is_static || mf->fn->is_inline;
 #if !LACC_PLATFORM_APPLE
@@ -535,6 +593,21 @@ void emit_mir_function(const MirFunction *mf) {
   write_file("  mov rbp, rsp\n");
   if (ctx.frame_size > 0)
     write_file("  sub rsp, %d\n", ctx.frame_size);
+  int save_idx = 0;
+  for (int p = 0; p < RA_PREG_COUNT; p++) {
+    if (!(ra.used_reg_mask & (1u << p)))
+      continue;
+    int off = ctx.save_base + ((save_idx + 1) * 8);
+    ctx.save_slot[p] = off;
+    write_file("  mov QWORD PTR [rbp - %d], %s\n", off, ra_preg64(p));
+    save_idx++;
+  }
+
+  char epilogue_label[256];
+  int n = snprintf(epilogue_label, sizeof(epilogue_label), ".Lmir.epilogue.%.*s", mf->fn->len, mf->fn->name);
+  if (n <= 0 || n >= (int)sizeof(epilogue_label))
+    error("epilogue label too long in MIR asm emitter");
+  ctx.epilogue_label = epilogue_label;
 
   for (int i = 0; i < mf->param_count; i++) {
     int off = mf->param_offsets[i];
@@ -553,8 +626,17 @@ void emit_mir_function(const MirFunction *mf) {
 
   if (mf->fn->type->return_type->ty == TY_VOID || !strncmp(mf->fn->name, "main", 4)) {
     write_file("  mov rax, 0\n");
-    write_file("  mov rsp, rbp\n");
-    write_file("  pop rbp\n");
-    write_file("  ret\n");
+    write_file("  jmp %s\n", ctx.epilogue_label);
   }
+
+  write_file("%s:\n", ctx.epilogue_label);
+  for (int p = RA_PREG_COUNT - 1; p >= 0; p--) {
+    if (ctx.save_slot[p] >= 0)
+      write_file("  mov %s, QWORD PTR [rbp - %d]\n", ra_preg64(p), ctx.save_slot[p]);
+  }
+  write_file("  mov rsp, rbp\n");
+  write_file("  pop rbp\n");
+  write_file("  ret\n");
+
+  regalloc_free(&ra);
 }
