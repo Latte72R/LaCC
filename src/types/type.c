@@ -518,16 +518,20 @@ int eval_const_expr(Node *node, int *ok) {
   case ND_SHL: {
     int ok1 = true, ok2 = true;
     unsigned long long l = (unsigned long long)eval_const_expr(node->lhs, &ok1);
-    unsigned long long r = (unsigned long long)eval_const_expr(node->rhs, &ok2);
-    *ok = ok1 && ok2;
-    return (int)(l << r);
+    long long rhs = eval_const_expr(node->rhs, &ok2);
+    *ok = ok1 && ok2 && rhs >= 0 && rhs < 64;
+    if (!*ok)
+      return 0;
+    return (int)(l << rhs);
   }
   case ND_SHR: {
     int ok1 = true, ok2 = true;
     unsigned long long l = (unsigned long long)eval_const_expr(node->lhs, &ok1);
-    unsigned long long r = (unsigned long long)eval_const_expr(node->rhs, &ok2);
-    *ok = ok1 && ok2;
-    return (int)(l >> r);
+    long long rhs = eval_const_expr(node->rhs, &ok2);
+    *ok = ok1 && ok2 && rhs >= 0 && rhs < 64;
+    if (!*ok)
+      return 0;
+    return (int)(l >> rhs);
   }
   case ND_BITAND: {
     int ok1 = true, ok2 = true;
