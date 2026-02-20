@@ -34,16 +34,23 @@ static void trim_trailing_comma_for_empty_vararg(char *buf, int *len) {
   }
 }
 
-static void append_with_concat(char **buf, int *len, int *cap, const char *text, int text_len, int *pending_concat) {
-  if (*pending_concat) {
-    trim_trailing_whitespace(*buf, len);
-    while (text_len > 0 && isspace(*text)) {
+typedef struct {
+  char **buf;
+  int *len;
+  int *cap;
+  int *pending_concat;
+} AppendCtx;
+
+static void append_with_concat(AppendCtx *ctx, const char *text, int text_len) {
+  if (*ctx->pending_concat) {
+    trim_trailing_whitespace(*ctx->buf, ctx->len);
+    while (text_len > 0 && isspace((unsigned char)*text)) {
       text++;
       text_len--;
     }
-    *pending_concat = false;
+    *ctx->pending_concat = false;
   }
-  append_text(buf, len, cap, text, text_len);
+  append_text(ctx->buf, ctx->len, ctx->cap, text, text_len);
 }
 
 static char *stringize_argument(char *arg) {
@@ -93,6 +100,11 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
   int in_string = false;
   int in_char = false;
   int pending_concat = false;
+  AppendCtx append_ctx;
+  append_ctx.buf = &buf;
+  append_ctx.len = &len;
+  append_ctx.cap = &cap;
+  append_ctx.pending_concat = &pending_concat;
   char **expanded_args = NULL;
   if (arg_count > 0) {
     expanded_args = malloc(sizeof(char *) * arg_count);
@@ -111,11 +123,11 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
     char ch = *p;
 
     if (in_string) {
-      append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
+      append_with_concat(&append_ctx, &ch, 1);
       if (ch == '\\' && *(p + 1)) {
         p++;
         ch = *p;
-        append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
+        append_with_concat(&append_ctx, &ch, 1);
       } else if (ch == '"') {
         in_string = false;
       }
@@ -124,11 +136,11 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
     }
 
     if (in_char) {
-      append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
+      append_with_concat(&append_ctx, &ch, 1);
       if (ch == '\\' && *(p + 1)) {
         p++;
         ch = *p;
-        append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
+        append_with_concat(&append_ctx, &ch, 1);
       } else if (ch == '\'') {
         in_char = false;
       }
@@ -138,14 +150,14 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
 
     if (ch == '"') {
       in_string = true;
-      append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
+      append_with_concat(&append_ctx, &ch, 1);
       p++;
       continue;
     }
 
     if (ch == '\'') {
       in_char = true;
-      append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
+      append_with_concat(&append_ctx, &ch, 1);
       p++;
       continue;
     }
@@ -177,7 +189,7 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
         error("expected macro parameter after '#'");
       char *arg = args[arg_index] ? args[arg_index] : "";
       char *stringized = stringize_argument(arg);
-      append_with_concat(&buf, &len, &cap, stringized, (int)strlen(stringized), &pending_concat);
+      append_with_concat(&append_ctx, stringized, (int)strlen(stringized));
       free(stringized);
       continue;
     }
@@ -205,19 +217,19 @@ char *substitute_macro_body(Macro *macro, char **args, int arg_count) {
             trim_trailing_comma_for_empty_vararg(buf, &len);
             pending_concat = false;
           } else {
-            append_with_concat(&buf, &len, &cap, arg_text, arg_len, &pending_concat);
+            append_with_concat(&append_ctx, arg_text, arg_len);
           }
           replaced = true;
           break;
         }
       }
       if (!replaced) {
-        append_with_concat(&buf, &len, &cap, start, ident_len, &pending_concat);
+        append_with_concat(&append_ctx, start, ident_len);
       }
       continue;
     }
 
-    append_with_concat(&buf, &len, &cap, &ch, 1, &pending_concat);
+    append_with_concat(&append_ctx, &ch, 1);
     p++;
   }
 

@@ -425,55 +425,10 @@ static void emit_typed_imm_to_reg(Type *type, const char *reg64, long imm) {
 }
 
 static void emit_typed_imm_to_stack_direct(Type *type, int off, long imm) {
-  if (!type)
-    error("missing type [in emit_typed_imm_to_stack_direct]");
-
-  switch (type->ty) {
-  case TY_BOOL:
-    write_file("  mov BYTE PTR [rbp - %d], %lu\n", off, imm ? 1UL : 0UL);
-    break;
-  case TY_CHAR: {
-    unsigned long u = ((unsigned long)imm) & 0xffUL;
-    if (type->is_unsigned) {
-      write_file("  mov BYTE PTR [rbp - %d], %lu\n", off, u);
-    } else {
-      write_file("  mov BYTE PTR [rbp - %d], %ld\n", off, (long)u);
-    }
-    break;
-  }
-  case TY_SHORT: {
-    unsigned long u = ((unsigned long)imm) & 0xffffUL;
-    if (type->is_unsigned) {
-      write_file("  mov WORD PTR [rbp - %d], %lu\n", off, u);
-    } else {
-      write_file("  mov WORD PTR [rbp - %d], %ld\n", off, (long)u);
-    }
-    break;
-  }
-  case TY_INT: {
-    unsigned long u = ((unsigned long)imm) & 0xffffffffUL;
-    if (type->is_unsigned) {
-      write_file("  mov DWORD PTR [rbp - %d], %lu\n", off, u);
-    } else {
-      write_file("  mov DWORD PTR [rbp - %d], %ld\n", off, (long)u);
-    }
-    break;
-  }
-  case TY_LONG:
-  case TY_LONGLONG:
-  case TY_PTR:
-  case TY_ARGARR:
-  case TY_ARR:
-  case TY_VOID:
-    if (type->is_unsigned) {
-      write_file("  mov QWORD PTR [rbp - %d], %lu\n", off, (unsigned long)imm);
-    } else {
-      write_file("  mov QWORD PTR [rbp - %d], %ld\n", off, imm);
-    }
-    break;
-  default:
-    error("unsupported type in MIR imm stack direct [ty=%d]", type->ty);
-  }
+  // Spill slots are always 8-byte cells; materialize a canonical 64-bit value
+  // in a temp register first, then store full width.
+  emit_typed_imm_to_reg(type, "r11", imm);
+  write_file("  mov QWORD PTR [rbp - %d], r11\n", off);
 }
 
 static void emit_mir_label(const MirFunction *mf, int label) {

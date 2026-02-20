@@ -565,12 +565,16 @@ static VReg lower_postinc(LowerCtx *ctx, Node *node, bool need_value) {
     lower_error_node("invalid postinc node in lowering", node);
 
   VReg addr = lower_addr(ctx, node->lhs);
+  VReg old_value = MIR_INVALID_VREG;
+  if (need_value)
+    old_value = lower_load_from_addr(ctx, addr, node->lhs->type);
+
   VReg new_value = lower_expr(ctx, node->rhs);
   lower_store_to_addr(ctx, addr, new_value, node->lhs->type);
   if (!need_value)
     return MIR_INVALID_VREG;
 
-  return lower_load_from_addr(ctx, addr, node->lhs->type);
+  return old_value;
 }
 
 static VReg lower_binary(LowerCtx *ctx, Node *node, MirOp op, bool need_value) {
