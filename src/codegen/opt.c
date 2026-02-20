@@ -1079,7 +1079,7 @@ static void lower_function(Node *fn_node, MirFunction *mf) {
   ctx.label_map = NULL;
 }
 
-static void emit_mir_program(int dump_mir) {
+static void emit_mir_program(int dump_mir, int optimize_level) {
 #if LACC_PLATFORM_APPLE
   write_file("  .section __TEXT,__text,regular,pure_instructions\n");
 #else
@@ -1090,6 +1090,8 @@ static void emit_mir_program(int dump_mir) {
       continue;
     MirFunction mf;
     lower_function(code[i], &mf);
+    if (optimize_level > 0)
+      optimize_mir_mem2reg(&mf);
     if (dump_mir)
       mir_dump(stderr, &mf);
     emit_mir_function(&mf);
@@ -1104,7 +1106,7 @@ static int should_dump_mir() {
   return true;
 }
 
-void generate_assembly_optimized() {
+void generate_assembly_optimized(int optimize_level) {
   int dump_mir = should_dump_mir();
 
   write_file(".intel_syntax noprefix\n");
@@ -1113,5 +1115,5 @@ void generate_assembly_optimized() {
 #endif
   gen_rodata_section();
   gen_data_section();
-  emit_mir_program(dump_mir);
+  emit_mir_program(dump_mir, optimize_level);
 }

@@ -319,10 +319,7 @@ int main(int argc, char **argv) {
   free_all_macros();
   free_all_locations();
 
-  if (optimize_level > 0)
-    generate_assembly_optimized();
-  else
-    generate_assembly();
+  generate_assembly_optimized(optimize_level);
 
   free_all_nodes();
   free_all_functions();
