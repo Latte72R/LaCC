@@ -1,6 +1,6 @@
 #include "diagnostics.h"
-#include "opt_internal.h"
-#include "opt_regalloc.h"
+#include "mir_internal.h"
+#include "regalloc.h"
 #include "platform.h"
 
 #include <stdio.h>

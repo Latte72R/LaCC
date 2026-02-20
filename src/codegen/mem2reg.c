@@ -1,5 +1,5 @@
 #include "diagnostics.h"
-#include "opt_internal.h"
+#include "mem2reg.h"
 
 #include <stdlib.h>
 #include <string.h>

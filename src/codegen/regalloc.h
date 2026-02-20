@@ -1,5 +1,5 @@
-#ifndef CODEGEN_OPT_REGALLOC_H
-#define CODEGEN_OPT_REGALLOC_H
+#ifndef CODEGEN_REGALLOC_H
+#define CODEGEN_REGALLOC_H
 
 #include "mir.h"
 
@@ -34,4 +34,4 @@ int ra_preg_is_callee_saved(int preg);
 void regalloc_run(const MirFunction *mf, RegAllocResult *out);
 void regalloc_free(RegAllocResult *out);
 
-#endif // CODEGEN_OPT_REGALLOC_H
+#endif // CODEGEN_REGALLOC_H

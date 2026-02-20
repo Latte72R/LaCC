@@ -1,8 +1,9 @@
 #include "codegen.h"
 #include "codegen_internal.h"
 #include "diagnostics.h"
+#include "mem2reg.h"
 #include "mir.h"
-#include "opt_internal.h"
+#include "mir_internal.h"
 #include "platform.h"
 #include "runtime.h"
 
@@ -1106,7 +1107,7 @@ static int should_dump_mir() {
   return true;
 }
 
-void generate_assembly_optimized(int optimize_level) {
+void generate_assembly(int optimize_level) {
   int dump_mir = should_dump_mir();
 
   write_file(".intel_syntax noprefix\n");

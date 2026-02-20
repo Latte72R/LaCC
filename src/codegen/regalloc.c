@@ -1,4 +1,4 @@
-#include "opt_regalloc.h"
+#include "regalloc.h"
 #include "diagnostics.h"
 
 #include <stdlib.h>
