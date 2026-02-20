@@ -461,26 +461,65 @@ static int can_ret_fallthrough_to_epilogue(const MirFunction *mf, int inst_idx) 
   return 1;
 }
 
-static void normalize_cmp_operands(Type *type, const char *lhs_reg64, const char *rhs_reg64) {
+static int cmp_operand_size(Type *type) {
   if (!type)
-    return;
-  int sz = type_size(type);
-  if (type->is_unsigned) {
-    if (sz == 1) {
-      write_file("  movzx %s, %s\n", reg32_name(lhs_reg64), reg8_name(lhs_reg64));
-      write_file("  movzx %s, %s\n", reg32_name(rhs_reg64), reg8_name(rhs_reg64));
-    } else if (sz == 2) {
-      write_file("  movzx %s, %s\n", reg32_name(lhs_reg64), reg16_name(lhs_reg64));
-      write_file("  movzx %s, %s\n", reg32_name(rhs_reg64), reg16_name(rhs_reg64));
-    }
+    return 8;
+  switch (type->ty) {
+  case TY_BOOL:
+  case TY_CHAR:
+    return 1;
+  case TY_SHORT:
+    return 2;
+  case TY_INT:
+    return 4;
+  case TY_LONG:
+  case TY_LONGLONG:
+  case TY_PTR:
+  case TY_ARGARR:
+  case TY_ARR:
+  case TY_VOID:
+    return 8;
+  default:
+    return 8;
+  }
+}
+
+static void emit_cmp_reg_reg(Type *type, const char *lhs_reg64, const char *rhs_reg64) {
+  int sz = cmp_operand_size(type);
+  if (sz == 1) {
+    write_file("  cmp %s, %s\n", reg8_name(lhs_reg64), reg8_name(rhs_reg64));
+  } else if (sz == 2) {
+    write_file("  cmp %s, %s\n", reg16_name(lhs_reg64), reg16_name(rhs_reg64));
+  } else if (sz == 4) {
+    write_file("  cmp %s, %s\n", reg32_name(lhs_reg64), reg32_name(rhs_reg64));
   } else {
-    if (sz == 1) {
-      write_file("  movsx %s, %s\n", reg32_name(lhs_reg64), reg8_name(lhs_reg64));
-      write_file("  movsx %s, %s\n", reg32_name(rhs_reg64), reg8_name(rhs_reg64));
-    } else if (sz == 2) {
-      write_file("  movsx %s, %s\n", reg32_name(lhs_reg64), reg16_name(lhs_reg64));
-      write_file("  movsx %s, %s\n", reg32_name(rhs_reg64), reg16_name(rhs_reg64));
-    }
+    write_file("  cmp %s, %s\n", lhs_reg64, rhs_reg64);
+  }
+}
+
+static void emit_cmp_reg_zero(Type *type, const char *reg64) {
+  int sz = cmp_operand_size(type);
+  if (sz == 1) {
+    write_file("  cmp %s, 0\n", reg8_name(reg64));
+  } else if (sz == 2) {
+    write_file("  cmp %s, 0\n", reg16_name(reg64));
+  } else if (sz == 4) {
+    write_file("  cmp %s, 0\n", reg32_name(reg64));
+  } else {
+    write_file("  cmp %s, 0\n", reg64);
+  }
+}
+
+static void emit_cmp_stack_zero(Type *type, int off) {
+  int sz = cmp_operand_size(type);
+  if (sz == 1) {
+    write_file("  cmp BYTE PTR [rbp - %d], 0\n", off);
+  } else if (sz == 2) {
+    write_file("  cmp WORD PTR [rbp - %d], 0\n", off);
+  } else if (sz == 4) {
+    write_file("  cmp DWORD PTR [rbp - %d], 0\n", off);
+  } else {
+    write_file("  cmp QWORD PTR [rbp - %d], 0\n", off);
   }
 }
 
@@ -815,11 +854,7 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
 
     load_vreg_to_reg(ctx, in->src1, lhs_work);
     load_vreg_to_reg(ctx, in->src2, rhs_work);
-    normalize_cmp_operands(in->type, lhs_work, rhs_work);
-    if (in->type && type_size(in->type) <= 4)
-      write_file("  cmp %s, %s\n", reg32_name(lhs_work), reg32_name(rhs_work));
-    else
-      write_file("  cmp %s, %s\n", lhs_work, rhs_work);
+    emit_cmp_reg_reg(in->type, lhs_work, rhs_work);
 
     const char *res_reg = vreg_assigned_reg64(ctx, in->dst);
     const char *res_work = res_reg ? res_reg : "rax";
@@ -897,12 +932,12 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
   case MIR_OP_JZ: {
     const char *src_reg = vreg_assigned_reg64(ctx, in->src1);
     if (src_reg) {
-      write_file("  cmp %s, 0\n", src_reg);
+      emit_cmp_reg_zero(in->type, src_reg);
     } else {
       int off = vreg_stack_offset_or_neg1(ctx, in->src1);
       if (off < 0)
         error("invalid JZ operand location [in MIR_OP_JZ]");
-      write_file("  cmp QWORD PTR [rbp - %d], 0\n", off);
+      emit_cmp_stack_zero(in->type, off);
     }
     write_file("  je .Lmir.%.*s.%d\n", ctx->mf->fn->len, ctx->mf->fn->name, in->label);
     return;

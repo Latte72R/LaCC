@@ -93,10 +93,11 @@ static void emit_jmp(LowerCtx *ctx, int label) {
   mir_emit(ctx->mf, &inst);
 }
 
-static void emit_jz(LowerCtx *ctx, VReg cond, int label) {
+static void emit_jz(LowerCtx *ctx, VReg cond, Type *type, int label) {
   MirInst inst;
   init_inst(&inst, MIR_OP_JZ);
   inst.src1 = cond;
+  inst.type = type;
   inst.label = label;
   mir_emit(ctx->mf, &inst);
 }
@@ -384,7 +385,7 @@ static VReg lower_logical_and(LowerCtx *ctx, Node *node, bool need_value) {
   if (!need_value) {
     int l_end = new_label(ctx);
     VReg lhs = lower_expr(ctx, node->lhs);
-    emit_jz(ctx, lhs, l_end);
+    emit_jz(ctx, lhs, node->lhs ? node->lhs->type : NULL, l_end);
     lower_expr_discard(ctx, node->rhs);
     emit_label(ctx, l_end);
     return MIR_INVALID_VREG;
@@ -398,10 +399,10 @@ static VReg lower_logical_and(LowerCtx *ctx, Node *node, bool need_value) {
   emit_mov(ctx, dst, zero, node->type);
 
   VReg lhs = lower_expr(ctx, node->lhs);
-  emit_jz(ctx, lhs, l_end);
+  emit_jz(ctx, lhs, node->lhs ? node->lhs->type : NULL, l_end);
 
   VReg rhs = lower_expr(ctx, node->rhs);
-  emit_jz(ctx, rhs, l_end);
+  emit_jz(ctx, rhs, node->rhs ? node->rhs->type : NULL, l_end);
 
   emit_mov(ctx, dst, one, node->type);
   emit_label(ctx, l_end);
@@ -413,7 +414,7 @@ static VReg lower_logical_or(LowerCtx *ctx, Node *node, bool need_value) {
     int l_eval_rhs = new_label(ctx);
     int l_end = new_label(ctx);
     VReg lhs = lower_expr(ctx, node->lhs);
-    emit_jz(ctx, lhs, l_eval_rhs);
+    emit_jz(ctx, lhs, node->lhs ? node->lhs->type : NULL, l_eval_rhs);
     emit_jmp(ctx, l_end);
     emit_label(ctx, l_eval_rhs);
     lower_expr_discard(ctx, node->rhs);
@@ -430,13 +431,13 @@ static VReg lower_logical_or(LowerCtx *ctx, Node *node, bool need_value) {
   emit_mov(ctx, dst, zero, node->type);
 
   VReg lhs = lower_expr(ctx, node->lhs);
-  emit_jz(ctx, lhs, l_eval_rhs);
+  emit_jz(ctx, lhs, node->lhs ? node->lhs->type : NULL, l_eval_rhs);
   emit_mov(ctx, dst, one, node->type);
   emit_jmp(ctx, l_end);
 
   emit_label(ctx, l_eval_rhs);
   VReg rhs = lower_expr(ctx, node->rhs);
-  emit_jz(ctx, rhs, l_end);
+  emit_jz(ctx, rhs, node->rhs ? node->rhs->type : NULL, l_end);
   emit_mov(ctx, dst, one, node->type);
 
   emit_label(ctx, l_end);
@@ -452,7 +453,7 @@ static VReg lower_ternary(LowerCtx *ctx, Node *node, bool need_value) {
   int l_end = new_label(ctx);
 
   if (!need_value || (node->type && node->type->ty == TY_VOID)) {
-    emit_jz(ctx, cond, l_else);
+    emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_else);
     lower_expr_discard(ctx, node->then);
     emit_jmp(ctx, l_end);
     emit_label(ctx, l_else);
@@ -462,7 +463,7 @@ static VReg lower_ternary(LowerCtx *ctx, Node *node, bool need_value) {
   }
 
   VReg dst = mir_new_vreg(ctx->mf);
-  emit_jz(ctx, cond, l_else);
+  emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_else);
   VReg then_v = lower_expr(ctx, node->then);
   emit_mov(ctx, dst, then_v, node->type);
   emit_jmp(ctx, l_end);
@@ -700,7 +701,7 @@ static void emit_jmp_if_eq(LowerCtx *ctx, VReg lhs, VReg rhs, Type *type, int la
   inst.src2 = rhs;
   inst.type = type;
   mir_emit(ctx->mf, &inst);
-  emit_jz(ctx, ne, label);
+  emit_jz(ctx, ne, type, label);
 }
 
 static void lower_switch_stmt(LowerCtx *ctx, Node *node) {
@@ -925,14 +926,14 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     int l_end = new_label(ctx);
     if (node->els) {
       int l_else = new_label(ctx);
-      emit_jz(ctx, cond, l_else);
+      emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_else);
       lower_stmt(ctx, node->then);
       emit_jmp(ctx, l_end);
       emit_label(ctx, l_else);
       lower_stmt(ctx, node->els);
       emit_label(ctx, l_end);
     } else {
-      emit_jz(ctx, cond, l_end);
+      emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_end);
       lower_stmt(ctx, node->then);
       emit_label(ctx, l_end);
     }
@@ -943,7 +944,7 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     int l_end = new_label(ctx);
     emit_label(ctx, l_begin);
     VReg cond = lower_expr(ctx, node->cond);
-    emit_jz(ctx, cond, l_end);
+    emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_end);
 
     push_control(ctx, l_end, l_begin, node);
     lower_stmt(ctx, node->then);
@@ -965,7 +966,7 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
 
     emit_label(ctx, l_step);
     VReg cond = lower_expr(ctx, node->cond);
-    emit_jz(ctx, cond, l_end);
+    emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_end);
     emit_jmp(ctx, l_begin);
     emit_label(ctx, l_end);
     return;
@@ -981,7 +982,7 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
 
     if (node->cond && node->cond->kind != ND_NONE) {
       VReg cond = lower_expr(ctx, node->cond);
-      emit_jz(ctx, cond, l_end);
+      emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_end);
     }
 
     push_control(ctx, l_end, l_step, node);
