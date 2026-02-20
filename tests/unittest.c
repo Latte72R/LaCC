@@ -25,6 +25,7 @@ void check_with_name(int result, const char *name, int ans) {
 #include "unittests/loops_strings_arrays.c"
 #include "unittests/macro.c"
 #include "unittests/nullable_funcptrs.c"
+#include "unittests/regressions_postinc.c"
 #include "unittests/struct_arrays_bits.c"
 #include "unittests/struct_initializers.c"
 #include "unittests/switch_goto_casts.c"
@@ -263,6 +264,10 @@ int main() {
   CHECK(unsigned_test32(), 0);
   CHECK(unsigned_test33(), 8);
   CHECK(unsigned_test34(), 1);
+  CHECK(regress_postinc_test1(), 34);
+  CHECK(regress_postinc_test2(), 54);
+  CHECK(regress_postinc_test3(), 30);
+  CHECK(regress_postinc_test4(), 255);
 
   // bool / _Bool tests
   CHECK(bool_test1(), 2);
