@@ -266,7 +266,7 @@ int main() {
   CHECK(unsigned_test34(), 1);
   CHECK(regress_postinc_test1(), 34);
   CHECK(regress_postinc_test2(), 54);
-  CHECK(regress_postinc_test3(), 30);
+  CHECK(regress_postinc_test3(), 561);
   CHECK(regress_postinc_test4(), 255);
 
   // bool / _Bool tests

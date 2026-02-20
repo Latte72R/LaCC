@@ -534,6 +534,24 @@ static void lower_store_to_addr(LowerCtx *ctx, VReg addr, VReg value, Type *type
   mir_emit(ctx->mf, &store);
 }
 
+static VReg lower_cast_value_if_needed(LowerCtx *ctx, VReg src, Type *from, Type *to) {
+  if (src == MIR_INVALID_VREG)
+    return MIR_INVALID_VREG;
+  if (!to)
+    return src;
+  if (cast_is_noop(from, to))
+    return src;
+
+  VReg dst = mir_new_vreg(ctx->mf);
+  MirInst inst;
+  init_inst(&inst, MIR_OP_CAST);
+  inst.dst = dst;
+  inst.src1 = src;
+  inst.type = to;
+  mir_emit(ctx->mf, &inst);
+  return dst;
+}
+
 static VReg emit_binary_inst(LowerCtx *ctx, MirOp op, VReg lhs, VReg rhs, Type *type) {
   VReg dst = mir_new_vreg(ctx->mf);
   MirInst inst;
@@ -544,6 +562,14 @@ static VReg emit_binary_inst(LowerCtx *ctx, MirOp op, VReg lhs, VReg rhs, Type *
   inst.type = type;
   mir_emit(ctx->mf, &inst);
   return dst;
+}
+
+static VReg lower_postinc_new_from_old(LowerCtx *ctx, const Node *node, VReg old_value) {
+  Node *rhs = node->rhs;
+  MirOp op = rhs->kind == ND_ADD ? MIR_OP_ADD : MIR_OP_SUB;
+  VReg step = lower_expr(ctx, rhs->rhs);
+  Type *calc_type = rhs->type ? rhs->type : (node->lhs ? node->lhs->type : node->type);
+  return emit_binary_inst(ctx, op, old_value, step, calc_type);
 }
 
 static void emit_memcpy(LowerCtx *ctx, VReg dst_addr, VReg src_addr, int size) {
@@ -566,10 +592,8 @@ static VReg lower_postinc(LowerCtx *ctx, Node *node, bool need_value) {
 
   VReg addr = lower_addr(ctx, node->lhs);
   VReg old_value = MIR_INVALID_VREG;
-  if (need_value)
-    old_value = lower_load_from_addr(ctx, addr, node->lhs->type);
-
-  VReg new_value = lower_expr(ctx, node->rhs);
+  old_value = lower_load_from_addr(ctx, addr, node->lhs->type);
+  VReg new_value = lower_postinc_new_from_old(ctx, node, old_value);
   lower_store_to_addr(ctx, addr, new_value, node->lhs->type);
   if (!need_value)
     return MIR_INVALID_VREG;
@@ -839,6 +863,13 @@ static VReg lower_expr_impl(LowerCtx *ctx, Node *node, bool need_value) {
     lower_store_to_addr(ctx, addr, rhs, lhs_type);
     if (!need_value)
       return MIR_INVALID_VREG;
+
+    // Scalar-like assignments already have the stored value in "rhs";
+    // return it with assignment conversion instead of reloading from memory.
+    if (lhs_type && lhs_type->ty != TY_STRUCT && lhs_type->ty != TY_UNION && lhs_type->ty != TY_ARR)
+      return lower_cast_value_if_needed(ctx, rhs, node->rhs ? node->rhs->type : NULL, lhs_type);
+
+    // Aggregates keep address-style value flow in the current MIR design.
     return lower_load_from_addr(ctx, addr, lhs_type);
   }
   case ND_POSTINC:
@@ -858,17 +889,7 @@ static VReg lower_expr_impl(LowerCtx *ctx, Node *node, bool need_value) {
     }
     VReg src = lower_expr(ctx, node->lhs);
     Type *from = node->lhs ? node->lhs->type : NULL;
-    if (cast_is_noop(from, node->type))
-      return src;
-
-    VReg dst = mir_new_vreg(ctx->mf);
-    MirInst inst;
-    init_inst(&inst, MIR_OP_CAST);
-    inst.dst = dst;
-    inst.src1 = src;
-    inst.type = node->type;
-    mir_emit(ctx->mf, &inst);
-    return dst;
+    return lower_cast_value_if_needed(ctx, src, from, node->type);
   }
   case ND_FUNCALL:
     return lower_call(ctx, node, need_value);

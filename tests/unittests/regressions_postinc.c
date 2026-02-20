@@ -13,12 +13,13 @@ int regress_postinc_test2() {
 }
 
 int regress_postinc_test3() {
-  int arr[3];
+  int a[3];
   int i = 0;
-  arr[0] = 10;
-  arr[1] = 20;
-  arr[2] = 30;
-  return arr[i++] + arr[i]; // 10 + 20 = 30
+  a[0] = 5;
+  a[1] = 6;
+  a[2] = 7;
+  int old = a[i++]++;
+  return old * 100 + a[0] * 10 + i; // 561 (i is evaluated once)
 }
 
 int regress_postinc_test4() {
