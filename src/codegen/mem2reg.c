@@ -1,5 +1,5 @@
-#include "diagnostics.h"
 #include "mem2reg.h"
+#include "diagnostics.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -104,21 +104,19 @@ static void append_store_local(MirInst **out_insts, int *out_len, int *out_cap, 
   append_inst(out_insts, out_len, out_cap, &st);
 }
 
-static void append_mov(MirInst **out_insts, int *out_len, int *out_cap, VReg dst, VReg src, Type *type) {
-  if (dst == src)
-    return;
-  MirInst mv;
-  memset(&mv, 0, sizeof(mv));
-  mv.op = MIR_OP_MOV;
-  mv.dst = dst;
-  mv.src1 = src;
-  mv.src2 = MIR_INVALID_VREG;
-  mv.label = MIR_INVALID_LABEL;
-  mv.type = type;
-  mv.argc = 0;
+static void append_cast(MirInst **out_insts, int *out_len, int *out_cap, VReg dst, VReg src, Type *type) {
+  MirInst cs;
+  memset(&cs, 0, sizeof(cs));
+  cs.op = MIR_OP_CAST;
+  cs.dst = dst;
+  cs.src1 = src;
+  cs.src2 = MIR_INVALID_VREG;
+  cs.label = MIR_INVALID_LABEL;
+  cs.type = type;
+  cs.argc = 0;
   for (int i = 0; i < MAX_FUNC_PARAMS; i++)
-    mv.args[i] = MIR_INVALID_VREG;
-  append_inst(out_insts, out_len, out_cap, &mv);
+    cs.args[i] = MIR_INVALID_VREG;
+  append_inst(out_insts, out_len, out_cap, &cs);
 }
 
 static void flush_dirty_locals(MirInst **out_insts, int *out_len, int *out_cap, LocalSlot *slots, int slot_len,
@@ -183,6 +181,13 @@ void optimize_mir_mem2reg(MirFunction *mf) {
       int s = addr_slot_of_vreg[in->src1];
       if (s >= 0 && (!slots[s].promotable || !local_access_compatible(slots[s].type, in->type)))
         slots[s].promotable = 0;
+      // STORE の値側にローカルアドレスが現れるとき
+      // 例: p = &a; *q = p;
+      if (in->src2 >= 0 && in->src2 < mf->next_vreg) {
+        int rhs_slot = addr_slot_of_vreg[in->src2];
+        if (rhs_slot >= 0)
+          slots[rhs_slot].promotable = 0;
+      }
       continue;
     }
 
@@ -246,7 +251,7 @@ void optimize_mir_mem2reg(MirFunction *mf) {
       if (s >= 0 && slots[s].promotable) {
         if (in.op == MIR_OP_LOAD) {
           if (state[s].valid) {
-            append_mov(&out_insts, &out_len, &out_cap, in.dst, state[s].value, in.type);
+            append_cast(&out_insts, &out_len, &out_cap, in.dst, state[s].value, in.type);
           } else {
             in.op = MIR_OP_LOAD_LOCAL;
             in.src1 = MIR_INVALID_VREG;
@@ -272,7 +277,7 @@ void optimize_mir_mem2reg(MirFunction *mf) {
       int s = find_slot(slots, slot_len, in.offset);
       if (s >= 0 && slots[s].promotable && local_access_compatible(slots[s].type, in.type)) {
         if (state[s].valid) {
-          append_mov(&out_insts, &out_len, &out_cap, in.dst, state[s].value, in.type);
+          append_cast(&out_insts, &out_len, &out_cap, in.dst, state[s].value, in.type);
         } else {
           append_inst(&out_insts, &out_len, &out_cap, &in);
           state[s].valid = 1;
