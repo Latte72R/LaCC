@@ -221,7 +221,7 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
       continue;
     } else if (in_i->op == MIR_OP_JMP) {
       succ0[i] = label_to_inst ? label_to_inst[in_i->label] : -1;
-    } else if (in_i->op == MIR_OP_JZ) {
+    } else if (in_i->op == MIR_OP_JZ || in_i->op == MIR_OP_JCC) {
       succ0[i] = (i + 1 < ninst) ? (i + 1) : -1;
       succ1[i] = label_to_inst ? label_to_inst[in_i->label] : -1;
     } else {

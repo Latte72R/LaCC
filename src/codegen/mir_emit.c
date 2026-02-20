@@ -523,6 +523,26 @@ static void emit_cmp_stack_zero(Type *type, int off) {
   }
 }
 
+static const char *jcc_mnemonic(long cc, Type *type) {
+  switch (cc) {
+  case MIR_CC_EQ:
+    return "je";
+  case MIR_CC_NE:
+    return "jne";
+  case MIR_CC_LT:
+    return (type && type->is_unsigned) ? "jb" : "jl";
+  case MIR_CC_LE:
+    return (type && type->is_unsigned) ? "jbe" : "jle";
+  case MIR_CC_GT:
+    return (type && type->is_unsigned) ? "ja" : "jg";
+  case MIR_CC_GE:
+    return (type && type->is_unsigned) ? "jae" : "jge";
+  default:
+    error("invalid MIR JCC condition [cc=%ld]", cc);
+  }
+  return "je";
+}
+
 static int reg_eq(const char *a, const char *b) { return a && b && !strcmp(a, b); }
 
 static void emit_binop(const MirAsmCtx *ctx, const MirInst *in, const char *op, int commutative) {
@@ -940,6 +960,21 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
       emit_cmp_stack_zero(in->type, off);
     }
     write_file("  je .Lmir.%.*s.%d\n", ctx->mf->fn->len, ctx->mf->fn->name, in->label);
+    return;
+  }
+  case MIR_OP_JCC: {
+    const char *lhs_reg = vreg_assigned_reg64(ctx, in->src1);
+    const char *rhs_reg = vreg_assigned_reg64(ctx, in->src2);
+    const char *lhs_work = lhs_reg ? lhs_reg : "rax";
+    const char *rhs_work = rhs_reg ? rhs_reg : "rdi";
+    if (reg_eq(lhs_work, rhs_work))
+      rhs_work = "r11";
+
+    load_vreg_to_reg(ctx, in->src1, lhs_work);
+    load_vreg_to_reg(ctx, in->src2, rhs_work);
+    emit_cmp_reg_reg(in->type, lhs_work, rhs_work);
+    write_file("  %s .Lmir.%.*s.%d\n", jcc_mnemonic(in->imm, in->type), ctx->mf->fn->len, ctx->mf->fn->name,
+               in->label);
     return;
   }
   case MIR_OP_CALL: {

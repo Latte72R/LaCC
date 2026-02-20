@@ -48,9 +48,19 @@ typedef enum {
   MIR_OP_LABEL,
   MIR_OP_JMP,
   MIR_OP_JZ,
+  MIR_OP_JCC,
   MIR_OP_CALL,
   MIR_OP_RET
 } MirOp;
+
+typedef enum {
+  MIR_CC_EQ,
+  MIR_CC_NE,
+  MIR_CC_LT,
+  MIR_CC_LE,
+  MIR_CC_GT,
+  MIR_CC_GE,
+} MirCondCode;
 
 // 1命令分のデータ
 typedef struct MirInst MirInst;

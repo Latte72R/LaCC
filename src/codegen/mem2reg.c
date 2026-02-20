@@ -138,7 +138,7 @@ static void invalidate_all_states(LocalState *state, int slot_len) {
 }
 
 static int is_control_barrier(MirOp op) {
-  return op == MIR_OP_LABEL || op == MIR_OP_JMP || op == MIR_OP_JZ || op == MIR_OP_RET;
+  return op == MIR_OP_LABEL || op == MIR_OP_JMP || op == MIR_OP_JZ || op == MIR_OP_JCC || op == MIR_OP_RET;
 }
 
 void optimize_mir_mem2reg(MirFunction *mf) {

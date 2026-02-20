@@ -92,6 +92,8 @@ static const char *mir_op_name(MirOp op) {
     return "JMP";
   case MIR_OP_JZ:
     return "JZ";
+  case MIR_OP_JCC:
+    return "JCC";
   case MIR_OP_CALL:
     return "CALL";
   case MIR_OP_RET:
@@ -257,6 +259,23 @@ void mir_dump(FILE *out, const MirFunction *mf) {
     case MIR_OP_JZ:
       fprintf(out, "jz v%d, L%d", in->src1, in->label);
       break;
+    case MIR_OP_JCC: {
+      const char *cc = "??";
+      if (in->imm == MIR_CC_EQ)
+        cc = "eq";
+      else if (in->imm == MIR_CC_NE)
+        cc = "ne";
+      else if (in->imm == MIR_CC_LT)
+        cc = "lt";
+      else if (in->imm == MIR_CC_LE)
+        cc = "le";
+      else if (in->imm == MIR_CC_GT)
+        cc = "gt";
+      else if (in->imm == MIR_CC_GE)
+        cc = "ge";
+      fprintf(out, "jcc.%s v%d, v%d, L%d", cc, in->src1, in->src2, in->label);
+      break;
+    }
     case MIR_OP_CALL:
       if (in->dst != MIR_INVALID_VREG)
         fprintf(out, "v%d <- ", in->dst);
