@@ -35,6 +35,7 @@ struct MirAsmCtx {
   int save_base;
   int save_slot[RA_PREG_COUNT];
   int frame_size;
+  int omit_frame;
 };
 
 static int align_up(int n, int align) {
@@ -62,6 +63,29 @@ static int align_frame_size_for_calls(int size) {
   return aligned;
 }
 
+static int mir_uses_local_offset(const MirFunction *mf, int offset) {
+  if (!mf || offset <= 0)
+    return 0;
+  for (int i = 0; i < mf->inst_len; i++) {
+    MirOp op = mf->insts[i].op;
+    if (op != MIR_OP_LOAD_LOCAL && op != MIR_OP_STORE_LOCAL && op != MIR_OP_ADDR_LOCAL)
+      continue;
+    if (mf->insts[i].offset == offset)
+      return 1;
+  }
+  return 0;
+}
+
+static int mir_has_call(const MirFunction *mf) {
+  if (!mf)
+    return 0;
+  for (int i = 0; i < mf->inst_len; i++) {
+    if (mf->insts[i].op == MIR_OP_CALL)
+      return 1;
+  }
+  return 0;
+}
+
 static int compute_required_local_stack(const MirFunction *mf) {
   if (!mf)
     return 0;
@@ -73,12 +97,6 @@ static int compute_required_local_stack(const MirFunction *mf) {
       continue;
     if (in->offset > max_off)
       max_off = in->offset;
-  }
-
-  // Parameter spill-to-local in prologue still uses param offsets.
-  for (int i = 0; i < mf->param_count; i++) {
-    if (mf->param_offsets[i] > max_off)
-      max_off = mf->param_offsets[i];
   }
   return max_off;
 }
@@ -1671,6 +1689,7 @@ void emit_mir_function(const MirFunction *mf) {
   ctx.save_base = ctx.spill_base + (ra.spill_count * 8);
   int frame_payload = ctx.save_base + (save_count * 8);
   ctx.frame_size = align_frame_size_for_calls(frame_payload);
+  ctx.omit_frame = !mir_has_call(mf) && ctx.frame_size == 0 && save_count == 0;
   for (int p = 0; p < RA_PREG_COUNT; p++)
     ctx.save_slot[p] = -1;
 
@@ -1687,20 +1706,24 @@ void emit_mir_function(const MirFunction *mf) {
 #endif
   write_file("  .p2align 4\n");
   write_file(ASM_SYM_FMT ":\n", ASM_SYM_ARGS(mf->fn->len, mf->fn->name));
-  write_file("  push rbp\n");
-  write_file("  mov rbp, rsp\n");
-  if (ctx.frame_size > 0)
-    write_file("  sub rsp, %d\n", ctx.frame_size);
+  if (!ctx.omit_frame) {
+    write_file("  push rbp\n");
+    write_file("  mov rbp, rsp\n");
+    if (ctx.frame_size > 0)
+      write_file("  sub rsp, %d\n", ctx.frame_size);
+  }
   int save_idx = 0;
-  for (int p = 0; p < RA_PREG_COUNT; p++) {
-    if (!ra_preg_is_callee_saved(p))
-      continue;
-    if (!(ra.used_reg_mask & (1u << p)))
-      continue;
-    int off = ctx.save_base + ((save_idx + 1) * 8);
-    ctx.save_slot[p] = off;
-    write_file("  mov QWORD PTR [rbp - %d], %s\n", off, ra_preg64(p));
-    save_idx++;
+  if (!ctx.omit_frame) {
+    for (int p = 0; p < RA_PREG_COUNT; p++) {
+      if (!ra_preg_is_callee_saved(p))
+        continue;
+      if (!(ra.used_reg_mask & (1u << p)))
+        continue;
+      int off = ctx.save_base + ((save_idx + 1) * 8);
+      ctx.save_slot[p] = off;
+      write_file("  mov QWORD PTR [rbp - %d], %s\n", off, ra_preg64(p));
+      save_idx++;
+    }
   }
 
   char epilogue_label[256];
@@ -1714,6 +1737,8 @@ void emit_mir_function(const MirFunction *mf) {
 
   for (int i = 0; i < mf->param_count; i++) {
     int off = mf->param_offsets[i];
+    if (!mir_uses_local_offset(mf, off))
+      continue;
     Type *ty = mf->param_types[i];
     if (i < MIR_CALL_ARG_REGS) {
       store_reg_to_local(off, ty, mir_arg_regs1[i], mir_arg_regs2[i], mir_arg_regs4[i], mir_arg_regs8[i]);
@@ -1736,8 +1761,10 @@ void emit_mir_function(const MirFunction *mf) {
     if (ctx.save_slot[p] >= 0)
       write_file("  mov %s, QWORD PTR [rbp - %d]\n", ra_preg64(p), ctx.save_slot[p]);
   }
-  write_file("  mov rsp, rbp\n");
-  write_file("  pop rbp\n");
+  if (!ctx.omit_frame) {
+    write_file("  mov rsp, rbp\n");
+    write_file("  pop rbp\n");
+  }
   write_file("  ret\n");
 
   free(skip_emit_imm);
