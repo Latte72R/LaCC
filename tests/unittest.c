@@ -18,6 +18,7 @@ void check_with_name(int result, const char *name, int ans) {
 #include "unittests/basic.c"
 #include "unittests/bool.c"
 #include "unittests/builtins_fortify.c"
+#include "unittests/casts_extra.c"
 #include "unittests/comma.c"
 #include "unittests/enum_init.c"
 #include "unittests/funcptrs_ternary_sizeof.c"
@@ -317,6 +318,19 @@ int main() {
   CHECK(builtin_strcpy_chk_test(), 1);
   CHECK(builtin_strncpy_chk_test(), 1);
   CHECK(builtin_stpcpy_chk_test(), 1);
+
+  CHECK(cast_extra_test1(), 52);
+  CHECK(cast_extra_test2(), -16);
+  CHECK(cast_extra_test3(), 65535);
+  CHECK(cast_extra_test4(), 1);
+  CHECK(cast_extra_test5(), 1);
+  CHECK(cast_extra_test6(), 0);
+  CHECK(cast_extra_test7(), 7);
+  CHECK(cast_extra_test8(), 1);
+  CHECK(cast_extra_test9(), 22136);
+  CHECK(cast_extra_test10(), 1);
+  CHECK(cast_extra_test11(), 1);
+  CHECK(cast_extra_test12(), 1);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

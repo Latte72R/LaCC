@@ -546,7 +546,15 @@ static long typed_imm_canonical_value(Type *type, long imm) {
   }
 }
 
-static int is_signext_i32(long v) { return v >= (-2147483647L - 1L) && v <= 2147483647L; }
+static int is_signext_i32(long v) { return (long)(int)v == v; }
+
+static int is_x64_imm32_signext_encodable(long v) {
+  unsigned long low = (unsigned long)(unsigned int)v;
+  unsigned long sx = low;
+  if (low & 0x80000000UL)
+    sx |= ~0xffffffffUL;
+  return (long)sx == v;
+}
 
 static int can_emit_typed_imm_to_local_direct(Type *type, long imm) {
   if (!type)
@@ -555,7 +563,7 @@ static int can_emit_typed_imm_to_local_direct(Type *type, long imm) {
     return 1;
   if (type->ty == TY_LONG || type->ty == TY_LONGLONG || type->ty == TY_PTR || type->ty == TY_ARGARR ||
       type->ty == TY_ARR)
-    return is_signext_i32(typed_imm_canonical_value(type, imm));
+    return is_x64_imm32_signext_encodable(typed_imm_canonical_value(type, imm));
   return 0;
 }
 
@@ -833,6 +841,18 @@ static int can_ret_fallthrough_to_epilogue(const MirFunction *mf, int inst_idx) 
   return 1;
 }
 
+static int needs_epilogue_label(const MirFunction *mf) {
+  if (!mf || mf->inst_len <= 0)
+    return 0;
+  for (int i = 0; i < mf->inst_len; i++) {
+    if (mf->insts[i].op != MIR_OP_RET)
+      continue;
+    if (!can_ret_fallthrough_to_epilogue(mf, i))
+      return 1;
+  }
+  return 0;
+}
+
 static int cmp_operand_size(Type *type) {
   if (!type)
     return 8;
@@ -876,7 +896,7 @@ static int cmp_imm_encodable(int sz, long imm) {
     return sext_i16(imm) == imm || (long)zext_u16(imm) == imm;
   if (sz == 4)
     return sext_i32(imm) == imm || (long)zext_u32(imm) == imm;
-  return is_signext_i32(imm);
+  return is_x64_imm32_signext_encodable(imm);
 }
 
 static int emit_cmp_reg_imm(Type *type, const char *lhs_reg64, long imm) {
@@ -991,7 +1011,7 @@ static void emit_binop(const MirAsmCtx *ctx, const MirInst *in, const char *op, 
     load_vreg_to_reg(ctx, lhs_v, work);
 
   int can_use_imm = rhs_is_imm && (strcmp(op, "add") == 0 || strcmp(op, "sub") == 0 || strcmp(op, "imul") == 0) &&
-                    is_signext_i32(rhs_imm);
+                    is_x64_imm32_signext_encodable(rhs_imm);
   if (can_use_imm) {
     write_file("  %s %s, %ld\n", op, work, rhs_imm);
   } else if (rhs_is_imm) {
@@ -1337,6 +1357,8 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     VReg rhs_v = in->src2;
     long rhs_imm = 0;
     int rhs_is_imm = vreg_single_def_imm(ctx, rhs_v, &rhs_imm);
+    if (cmp_operand_size(in->type) == 8)
+      rhs_is_imm = 0;
     if (!rhs_is_imm && (in->op == MIR_OP_EQ || in->op == MIR_OP_NE)) {
       long lhs_imm = 0;
       if (vreg_single_def_imm(ctx, lhs_v, &lhs_imm)) {
@@ -1486,6 +1508,8 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
   case MIR_OP_JCC: {
     long rhs_imm = 0;
     int rhs_is_imm = vreg_single_def_imm(ctx, in->src2, &rhs_imm);
+    if (cmp_operand_size(in->type) == 8)
+      rhs_is_imm = 0;
     const char *lhs_reg = vreg_assigned_reg64(ctx, in->src1);
     const char *rhs_reg = vreg_assigned_reg64(ctx, in->src2);
     const char *lhs_work = lhs_reg ? lhs_reg : "rax";
@@ -1665,6 +1689,7 @@ void emit_mir_function(const MirFunction *mf) {
   ctx.epilogue_label = epilogue_label;
   ctx.has_pending_jmp = 0;
   ctx.pending_jmp_label = MIR_INVALID_LABEL;
+  int emit_epilogue_label = needs_epilogue_label(mf);
 
   for (int i = 0; i < mf->param_count; i++) {
     int off = mf->param_offsets[i];
@@ -1682,7 +1707,8 @@ void emit_mir_function(const MirFunction *mf) {
     emit_mir_inst(&ctx, &mf->insts[i], i);
   flush_pending_jmp(&ctx);
 
-  write_file("%s:\n", ctx.epilogue_label);
+  if (emit_epilogue_label)
+    write_file("%s:\n", ctx.epilogue_label);
   for (int p = RA_PREG_COUNT - 1; p >= 0; p--) {
     if (!ra_preg_is_callee_saved(p))
       continue;
