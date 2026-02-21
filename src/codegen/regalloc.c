@@ -315,12 +315,14 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   // copy coalescing hint:
   // if interval v starts with "v <- src" and src dies at this instruction,
   // prefer assigning the same physical register to v.
+  // MIR_OP_CAST is included as a two-address friendly op; when coalesced it
+  // can run in-place on the source register.
   for (int v = 0; v < mf->next_vreg; v++) {
     int s = start[v];
     if (s < 0 || s >= ninst)
       continue;
     MirInst *in_s = &mf->insts[s];
-    if (in_s->op != MIR_OP_MOV || in_s->dst != v || in_s->src1 == MIR_INVALID_VREG)
+    if ((in_s->op != MIR_OP_MOV && in_s->op != MIR_OP_CAST) || in_s->dst != v || in_s->src1 == MIR_INVALID_VREG)
       continue;
     if (in_s->src1 < 0 || in_s->src1 >= mf->next_vreg)
       error("invalid MOV src vreg for copy coalescing hint");

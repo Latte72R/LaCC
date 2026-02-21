@@ -20,8 +20,14 @@ typedef struct MirAsmCtx MirAsmCtx;
 struct MirAsmCtx {
   const MirFunction *mf;
   const RegAllocResult *ra;
+  const unsigned char *single_def_meta_known;
+  const MirOp *single_def_meta_op;
+  Type *const *single_def_meta_type;
+  const int *single_def_meta_offset;
   const unsigned char *single_def_imm_known;
   const long *single_def_imm_value;
+  const unsigned char *skip_emit_addr_local;
+  const unsigned char *skip_emit_imm;
   const char *epilogue_label;
   int pending_jmp_label;
   int has_pending_jmp;
@@ -368,6 +374,80 @@ static void emit_cast_reg(Type *type, const char *reg64) {
   }
 }
 
+static void emit_cast_reg_from_reg(Type *type, const char *dst64, const char *src64) {
+  if (!type || !dst64 || !src64)
+    error("invalid cast register operands [in emit_cast_reg_from_reg]");
+  switch (type->ty) {
+  case TY_BOOL:
+    write_file("  cmp %s, 0\n", src64);
+    write_file("  setne %s\n", reg8_name(dst64));
+    write_file("  movzx %s, %s\n", reg32_name(dst64), reg8_name(dst64));
+    break;
+  case TY_CHAR:
+    if (type->is_unsigned)
+      write_file("  movzx %s, %s\n", reg32_name(dst64), reg8_name(src64));
+    else
+      write_file("  movsx %s, %s\n", reg32_name(dst64), reg8_name(src64));
+    break;
+  case TY_SHORT:
+    if (type->is_unsigned)
+      write_file("  movzx %s, %s\n", reg32_name(dst64), reg16_name(src64));
+    else
+      write_file("  movsx %s, %s\n", reg32_name(dst64), reg16_name(src64));
+    break;
+  case TY_INT:
+    if (type->is_unsigned)
+      write_file("  mov %s, %s\n", reg32_name(dst64), reg32_name(src64));
+    else
+      write_file("  movsxd %s, %s\n", dst64, reg32_name(src64));
+    break;
+  case TY_LONG:
+  case TY_LONGLONG:
+  case TY_PTR:
+  case TY_ARGARR:
+  case TY_ARR:
+  case TY_VOID:
+    if (strcmp(dst64, src64))
+      write_file("  mov %s, %s\n", dst64, src64);
+    break;
+  default:
+    error("unsupported type in MIR cast [ty=%d]", type->ty);
+  }
+}
+
+static unsigned long zext_u8(long imm) {
+  unsigned char u8 = (unsigned char)imm;
+  return (unsigned long)u8;
+}
+
+static unsigned long zext_u16(long imm) {
+  unsigned short u16 = (unsigned short)imm;
+  return (unsigned long)u16;
+}
+
+static unsigned long zext_u32(long imm) {
+  unsigned int u32 = (unsigned int)imm;
+  return (unsigned long)u32;
+}
+
+static long sext_i8(long imm) {
+  unsigned char u8 = (unsigned char)imm;
+  signed char s8 = (signed char)u8;
+  return (long)s8;
+}
+
+static long sext_i16(long imm) {
+  unsigned short u16 = (unsigned short)imm;
+  short s16 = (short)u16;
+  return (long)s16;
+}
+
+static long sext_i32(long imm) {
+  unsigned int u32 = (unsigned int)imm;
+  int s32 = (int)u32;
+  return (long)s32;
+}
+
 static void emit_typed_imm_to_reg(Type *type, const char *reg64, long imm) {
   if (!reg64)
     error("missing destination register [in emit_typed_imm_to_reg]");
@@ -381,7 +461,7 @@ static void emit_typed_imm_to_reg(Type *type, const char *reg64, long imm) {
     write_file("  mov %s, %lu\n", reg32_name(reg64), imm ? 1UL : 0UL);
     break;
   case TY_CHAR: {
-    unsigned long u = ((unsigned long)imm) & 0xffUL;
+    unsigned long u = zext_u8(imm);
     if (type->is_unsigned) {
       write_file("  mov %s, %lu\n", reg32_name(reg64), u);
     } else {
@@ -391,7 +471,7 @@ static void emit_typed_imm_to_reg(Type *type, const char *reg64, long imm) {
     break;
   }
   case TY_SHORT: {
-    unsigned long u = ((unsigned long)imm) & 0xffffUL;
+    unsigned long u = zext_u16(imm);
     if (type->is_unsigned) {
       write_file("  mov %s, %lu\n", reg32_name(reg64), u);
     } else {
@@ -401,12 +481,12 @@ static void emit_typed_imm_to_reg(Type *type, const char *reg64, long imm) {
     break;
   }
   case TY_INT: {
-    unsigned long u = ((unsigned long)imm) & 0xffffffffUL;
+    unsigned long u = zext_u32(imm);
     if (type->is_unsigned) {
       write_file("  mov %s, %lu\n", reg32_name(reg64), u);
     } else {
-      write_file("  mov %s, %ld\n", reg32_name(reg64), (long)u);
-      write_file("  movsxd %s, %s\n", reg64, reg32_name(reg64));
+      long s = sext_i32(imm);
+      write_file("  mov %s, %ld\n", reg64, s);
     }
     break;
   }
@@ -442,16 +522,16 @@ static long typed_imm_canonical_value(Type *type, long imm) {
     return imm ? 1 : 0;
   case TY_CHAR:
     if (type->is_unsigned)
-      return (long)(unsigned char)imm;
-    return (long)(signed char)(unsigned char)imm;
+      return (long)zext_u8(imm);
+    return sext_i8(imm);
   case TY_SHORT:
     if (type->is_unsigned)
-      return (long)(unsigned short)imm;
-    return (long)(short)(unsigned short)imm;
+      return (long)zext_u16(imm);
+    return sext_i16(imm);
   case TY_INT:
     if (type->is_unsigned)
-      return (long)(unsigned int)imm;
-    return (long)(int)(unsigned int)imm;
+      return (long)zext_u32(imm);
+    return sext_i32(imm);
   case TY_LONG:
   case TY_LONGLONG:
   case TY_PTR:
@@ -466,7 +546,38 @@ static long typed_imm_canonical_value(Type *type, long imm) {
   }
 }
 
-static int is_signext_i32(long v) { return (long)(int)(unsigned int)v == v; }
+static int is_signext_i32(long v) { return v >= (-2147483647L - 1L) && v <= 2147483647L; }
+
+static int emit_typed_imm_to_local_direct(Type *type, int off, long imm) {
+  long v = typed_imm_canonical_value(type, imm);
+  if (!type)
+    return 0;
+  switch (type->ty) {
+  case TY_BOOL:
+    write_file("  mov BYTE PTR [rbp - %d], %ld\n", off, v ? 1L : 0L);
+    return 1;
+  case TY_CHAR:
+    write_file("  mov BYTE PTR [rbp - %d], %ld\n", off, v);
+    return 1;
+  case TY_SHORT:
+    write_file("  mov WORD PTR [rbp - %d], %ld\n", off, v);
+    return 1;
+  case TY_INT:
+    write_file("  mov DWORD PTR [rbp - %d], %ld\n", off, v);
+    return 1;
+  case TY_LONG:
+  case TY_LONGLONG:
+  case TY_PTR:
+  case TY_ARGARR:
+  case TY_ARR:
+    if (!is_signext_i32(v))
+      return 0;
+    write_file("  mov QWORD PTR [rbp - %d], %ld\n", off, v);
+    return 1;
+  default:
+    return 0;
+  }
+}
 
 static void build_single_def_imm_info(const MirFunction *mf, unsigned char *known, long *value) {
   if (!mf || mf->next_vreg <= 0 || !known || !value)
@@ -517,6 +628,152 @@ static int vreg_single_def_imm(const MirAsmCtx *ctx, VReg vreg, long *imm) {
   if (imm)
     *imm = ctx->single_def_imm_value[vreg];
   return 1;
+}
+
+static void build_single_def_meta_info(const MirFunction *mf, unsigned char *known, MirOp *op, Type **type,
+                                       int *offset) {
+  if (!mf || mf->next_vreg <= 0 || !known || !op || !type || !offset)
+    return;
+
+  int *def_count = calloc(mf->next_vreg, sizeof(int));
+  if (!def_count)
+    error("memory allocation failed [in build_single_def_meta_info]");
+
+  for (int v = 0; v < mf->next_vreg; v++) {
+    known[v] = 0;
+    op[v] = MIR_OP_NOP;
+    type[v] = NULL;
+    offset[v] = 0;
+  }
+
+  for (int i = 0; i < mf->inst_len; i++) {
+    const MirInst *in = &mf->insts[i];
+    if (in->dst < 0 || in->dst >= mf->next_vreg)
+      continue;
+    int v = in->dst;
+    def_count[v]++;
+    if (def_count[v] != 1) {
+      known[v] = 0;
+      continue;
+    }
+    known[v] = 1;
+    op[v] = in->op;
+    type[v] = in->type;
+    offset[v] = in->offset;
+  }
+
+  for (int v = 0; v < mf->next_vreg; v++) {
+    if (def_count[v] != 1)
+      known[v] = 0;
+  }
+
+  free(def_count);
+}
+
+static int vreg_single_def_meta(const MirAsmCtx *ctx, VReg vreg, MirOp *op, Type **type) {
+  if (!ctx || !ctx->single_def_meta_known || !ctx->single_def_meta_op || !ctx->single_def_meta_type)
+    return 0;
+  if (!ctx->mf || vreg < 0 || vreg >= ctx->mf->next_vreg)
+    return 0;
+  if (!ctx->single_def_meta_known[vreg])
+    return 0;
+  if (op)
+    *op = ctx->single_def_meta_op[vreg];
+  if (type)
+    *type = ctx->single_def_meta_type[vreg];
+  return 1;
+}
+
+static int vreg_single_def_addr_local_offset(const MirAsmCtx *ctx, VReg vreg, int *offset) {
+  MirOp op = MIR_OP_NOP;
+  if (!vreg_single_def_meta(ctx, vreg, &op, NULL))
+    return 0;
+  if (op != MIR_OP_ADDR_LOCAL || !ctx->single_def_meta_offset)
+    return 0;
+  if (!ctx->mf || vreg < 0 || vreg >= ctx->mf->next_vreg)
+    return 0;
+  if (offset)
+    *offset = ctx->single_def_meta_offset[vreg];
+  return 1;
+}
+
+static int same_scalar_type(Type *a, Type *b) {
+  if (!a || !b)
+    return 0;
+  return a->ty == b->ty && a->is_unsigned == b->is_unsigned;
+}
+
+static int cast_source_is_known_canonical(const MirAsmCtx *ctx, VReg src, Type *to_type) {
+  MirOp op = MIR_OP_NOP;
+  Type *from_type = NULL;
+  if (!vreg_single_def_meta(ctx, src, &op, &from_type))
+    return 0;
+  if (!same_scalar_type(from_type, to_type))
+    return 0;
+  return op == MIR_OP_IMM || op == MIR_OP_LOAD || op == MIR_OP_LOAD_LOCAL || op == MIR_OP_CAST;
+}
+
+static int is_direct_local_store_pattern(const MirFunction *mf, const unsigned char *single_def_meta_known,
+                                         const MirOp *single_def_meta_op, const MirInst *in) {
+  if (!mf || !single_def_meta_known || !single_def_meta_op || !in)
+    return 0;
+  if (in->op != MIR_OP_STORE || !in->type || in->type->ty == TY_BOOL)
+    return 0;
+  if (in->src1 < 0 || in->src1 >= mf->next_vreg)
+    return 0;
+  if (!single_def_meta_known[in->src1])
+    return 0;
+  return single_def_meta_op[in->src1] == MIR_OP_ADDR_LOCAL;
+}
+
+static void consume_vreg_for_skip_emit(const MirFunction *mf, unsigned char *skip_emit_addr_local,
+                                       unsigned char *skip_emit_imm, VReg vreg, int keep_addr_local,
+                                       int keep_imm, const char *role) {
+  if (!mf || !skip_emit_addr_local || !skip_emit_imm || !role)
+    return;
+  if (vreg < 0 || vreg >= mf->next_vreg)
+    error("invalid %s vreg [in build_skip_emit_info]", role);
+  if (skip_emit_addr_local[vreg] && !keep_addr_local)
+    skip_emit_addr_local[vreg] = 0;
+  if (skip_emit_imm[vreg] && !keep_imm)
+    skip_emit_imm[vreg] = 0;
+}
+
+static void build_skip_emit_info(const MirFunction *mf, const unsigned char *single_def_meta_known,
+                                 const MirOp *single_def_meta_op, unsigned char *skip_emit_addr_local,
+                                 unsigned char *skip_emit_imm) {
+  if (!mf || mf->next_vreg <= 0 || !single_def_meta_known || !single_def_meta_op || !skip_emit_addr_local ||
+      !skip_emit_imm)
+    return;
+
+  for (int v = 0; v < mf->next_vreg; v++) {
+    skip_emit_addr_local[v] = 0;
+    skip_emit_imm[v] = 0;
+    if (!single_def_meta_known[v])
+      continue;
+    if (single_def_meta_op[v] == MIR_OP_ADDR_LOCAL)
+      skip_emit_addr_local[v] = 1;
+    if (single_def_meta_op[v] == MIR_OP_IMM)
+      skip_emit_imm[v] = 1;
+  }
+
+  for (int i = 0; i < mf->inst_len; i++) {
+    const MirInst *in = &mf->insts[i];
+    int allow_direct_local_store_use = is_direct_local_store_pattern(mf, single_def_meta_known, single_def_meta_op, in);
+
+    if (in->src1 != MIR_INVALID_VREG)
+      consume_vreg_for_skip_emit(mf, skip_emit_addr_local, skip_emit_imm, in->src1,
+                                 in->op == MIR_OP_LOAD || allow_direct_local_store_use, 0, "src1");
+
+    if (in->src2 != MIR_INVALID_VREG)
+      consume_vreg_for_skip_emit(mf, skip_emit_addr_local, skip_emit_imm, in->src2, 0, allow_direct_local_store_use,
+                                 "src2");
+
+    if (in->op == MIR_OP_CALL) {
+      for (int a = 0; a < in->argc; a++)
+        consume_vreg_for_skip_emit(mf, skip_emit_addr_local, skip_emit_imm, in->args[a], 0, 0, "call arg");
+    }
+  }
 }
 
 static void emit_mir_label(const MirFunction *mf, int label) {
@@ -587,11 +844,11 @@ static void emit_cmp_reg_reg(Type *type, const char *lhs_reg64, const char *rhs_
 
 static int cmp_imm_encodable(int sz, long imm) {
   if (sz == 1)
-    return (long)(signed char)(unsigned char)imm == imm || (long)(unsigned char)imm == imm;
+    return sext_i8(imm) == imm || (long)zext_u8(imm) == imm;
   if (sz == 2)
-    return (long)(short)(unsigned short)imm == imm || (long)(unsigned short)imm == imm;
+    return sext_i16(imm) == imm || (long)zext_u16(imm) == imm;
   if (sz == 4)
-    return (long)(int)(unsigned int)imm == imm || (long)(unsigned int)imm == imm;
+    return sext_i32(imm) == imm || (long)zext_u32(imm) == imm;
   return is_signext_i32(imm);
 }
 
@@ -745,6 +1002,8 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     write_file("  nop\n");
     return;
   case MIR_OP_IMM: {
+    if (ctx->skip_emit_imm && in->dst >= 0 && in->dst < ctx->mf->next_vreg && ctx->skip_emit_imm[in->dst])
+      return;
     const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
     if (dst_reg) {
       emit_typed_imm_to_reg(in->type, dst_reg, in->imm);
@@ -802,6 +1061,9 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     return;
   }
   case MIR_OP_ADDR_LOCAL: {
+    if (ctx->skip_emit_addr_local && in->dst >= 0 && in->dst < ctx->mf->next_vreg &&
+        ctx->skip_emit_addr_local[in->dst])
+      return;
     const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
     if (dst_reg) {
       write_file("  lea %s, [rbp - %d]\n", dst_reg, in->offset);
@@ -867,6 +1129,13 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
   case MIR_OP_LOAD: {
     const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
     const char *work = dst_reg ? dst_reg : "rax";
+    int local_off = 0;
+    if (vreg_single_def_addr_local_offset(ctx, in->src1, &local_off)) {
+      load_reg_from_local(local_off, in->type, work);
+      if (!dst_reg)
+        store_reg_to_vreg(ctx, in->dst, work);
+      return;
+    }
     load_vreg_to_reg(ctx, in->src1, work);
     load_reg_from_ptr(in->type, work, work);
     if (!dst_reg)
@@ -874,6 +1143,20 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     return;
   }
   case MIR_OP_STORE: {
+    int local_off = 0;
+    if (vreg_single_def_addr_local_offset(ctx, in->src1, &local_off) && !(in->type && in->type->ty == TY_BOOL)) {
+      long imm = 0;
+      if (vreg_single_def_imm(ctx, in->src2, &imm) && emit_typed_imm_to_local_direct(in->type, local_off, imm))
+        return;
+      const char *val_reg = vreg_assigned_reg64(ctx, in->src2);
+      if (val_reg) {
+        store_reg_to_local_by64(local_off, in->type, val_reg);
+      } else {
+        load_vreg_to_reg(ctx, in->src2, "r11");
+        store_reg_to_local_by64(local_off, in->type, "r11");
+      }
+      return;
+    }
     const char *ptr_reg = vreg_assigned_reg64(ctx, in->src1);
     const char *val_reg = vreg_assigned_reg64(ctx, in->src2);
     const char *ptr_work = ptr_reg ? ptr_reg : "rax";
@@ -945,9 +1228,17 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
   }
   case MIR_OP_CAST: {
     const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
+    const char *src_reg = vreg_assigned_reg64(ctx, in->src1);
     const char *work = dst_reg ? dst_reg : "rax";
-    load_vreg_to_reg(ctx, in->src1, work);
-    emit_cast_reg(in->type, work);
+    if (src_reg && cast_source_is_known_canonical(ctx, in->src1, in->type)) {
+      if (strcmp(work, src_reg))
+        write_file("  mov %s, %s\n", work, src_reg);
+    } else if (src_reg) {
+      emit_cast_reg_from_reg(in->type, work, src_reg);
+    } else {
+      load_vreg_to_reg(ctx, in->src1, work);
+      emit_cast_reg(in->type, work);
+    }
     if (!dst_reg)
       store_reg_to_vreg(ctx, in->dst, work);
     return;
@@ -1251,21 +1542,43 @@ void emit_mir_function(const MirFunction *mf) {
 
   RegAllocResult ra = {0};
   regalloc_run(mf, &ra);
+  unsigned char *single_def_meta_known = NULL;
+  MirOp *single_def_meta_op = NULL;
+  Type **single_def_meta_type = NULL;
+  int *single_def_meta_offset = NULL;
   unsigned char *single_def_imm_known = NULL;
   long *single_def_imm_value = NULL;
+  unsigned char *skip_emit_addr_local = NULL;
+  unsigned char *skip_emit_imm = NULL;
   if (mf->next_vreg > 0) {
+    single_def_meta_known = calloc(mf->next_vreg, sizeof(unsigned char));
+    single_def_meta_op = calloc(mf->next_vreg, sizeof(MirOp));
+    single_def_meta_type = calloc(mf->next_vreg, sizeof(Type *));
+    single_def_meta_offset = calloc(mf->next_vreg, sizeof(int));
     single_def_imm_known = calloc(mf->next_vreg, sizeof(unsigned char));
     single_def_imm_value = calloc(mf->next_vreg, sizeof(long));
-    if (!single_def_imm_known || !single_def_imm_value)
+    skip_emit_addr_local = calloc(mf->next_vreg, sizeof(unsigned char));
+    skip_emit_imm = calloc(mf->next_vreg, sizeof(unsigned char));
+    if (!single_def_meta_known || !single_def_meta_op || !single_def_meta_type || !single_def_meta_offset ||
+        !single_def_imm_known || !single_def_imm_value || !skip_emit_addr_local || !skip_emit_imm)
       error("memory allocation failed [in emit_mir_function single-def imm info]");
+    build_single_def_meta_info(mf, single_def_meta_known, single_def_meta_op, single_def_meta_type,
+                               single_def_meta_offset);
     build_single_def_imm_info(mf, single_def_imm_known, single_def_imm_value);
+    build_skip_emit_info(mf, single_def_meta_known, single_def_meta_op, skip_emit_addr_local, skip_emit_imm);
   }
 
   MirAsmCtx ctx = {0};
   ctx.mf = mf;
   ctx.ra = &ra;
+  ctx.single_def_meta_known = single_def_meta_known;
+  ctx.single_def_meta_op = single_def_meta_op;
+  ctx.single_def_meta_type = single_def_meta_type;
+  ctx.single_def_meta_offset = single_def_meta_offset;
   ctx.single_def_imm_known = single_def_imm_known;
   ctx.single_def_imm_value = single_def_imm_value;
+  ctx.skip_emit_addr_local = skip_emit_addr_local;
+  ctx.skip_emit_imm = skip_emit_imm;
   ctx.spill_base = align_up(mf->fn->offset, 8);
   int save_count = count_saved_mask_bits(ra.used_reg_mask);
   ctx.save_base = ctx.spill_base + (ra.spill_count * 8);
@@ -1338,6 +1651,12 @@ void emit_mir_function(const MirFunction *mf) {
   write_file("  pop rbp\n");
   write_file("  ret\n");
 
+  free(skip_emit_imm);
+  free(skip_emit_addr_local);
+  free(single_def_meta_offset);
+  free(single_def_meta_type);
+  free(single_def_meta_op);
+  free(single_def_meta_known);
   free(single_def_imm_value);
   free(single_def_imm_known);
   regalloc_free(&ra);

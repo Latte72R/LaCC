@@ -900,14 +900,17 @@ static VReg lower_expr_impl(LowerCtx *ctx, Node *node, bool need_value) {
     VReg addr = lower_addr(ctx, node->lhs);
     VReg rhs = lower_expr(ctx, node->rhs);
     Type *lhs_type = node->lhs ? node->lhs->type : node->type;
-    lower_store_to_addr(ctx, addr, rhs, lhs_type);
+    VReg stored = rhs;
+    if (lhs_type && lhs_type->ty != TY_STRUCT && lhs_type->ty != TY_UNION && lhs_type->ty != TY_ARR)
+      stored = lower_cast_value_if_needed(ctx, rhs, node->rhs ? node->rhs->type : NULL, lhs_type);
+    lower_store_to_addr(ctx, addr, stored, lhs_type);
     if (!need_value)
       return MIR_INVALID_VREG;
 
-    // Scalar-like assignments already have the stored value in "rhs";
-    // return it with assignment conversion instead of reloading from memory.
+    // Scalar-like assignments already have the stored value in "stored";
+    // return it directly instead of reloading from memory.
     if (lhs_type && lhs_type->ty != TY_STRUCT && lhs_type->ty != TY_UNION && lhs_type->ty != TY_ARR)
-      return lower_cast_value_if_needed(ctx, rhs, node->rhs ? node->rhs->type : NULL, lhs_type);
+      return stored;
 
     // Aggregates keep address-style value flow in the current MIR design.
     return lower_load_from_addr(ctx, addr, lhs_type);

@@ -141,6 +141,210 @@ static int is_control_barrier(MirOp op) {
   return op == MIR_OP_LABEL || op == MIR_OP_JMP || op == MIR_OP_JZ || op == MIR_OP_JCC || op == MIR_OP_RET;
 }
 
+static int same_scalar_type(Type *a, Type *b) {
+  if (!a || !b)
+    return 0;
+  return a->ty == b->ty && a->is_unsigned == b->is_unsigned;
+}
+
+static int resolve_copy_source(const VReg *copy_src, int vreg_count, int v) {
+  if (!copy_src || v < 0 || v >= vreg_count)
+    return v;
+  int cur = v;
+  int guard = 0;
+  while (cur >= 0 && cur < vreg_count && copy_src[cur] != MIR_INVALID_VREG && copy_src[cur] != cur) {
+    cur = copy_src[cur];
+    if (++guard > vreg_count)
+      break;
+  }
+  return cur;
+}
+
+static void rewrite_vreg_use(VReg *use, const VReg *copy_src, int vreg_count) {
+  if (!use || !copy_src || *use < 0 || *use >= vreg_count)
+    return;
+  *use = resolve_copy_source(copy_src, vreg_count, *use);
+}
+
+static void rewrite_inst_uses(MirInst *in, const VReg *copy_src, int vreg_count) {
+  if (!in || !copy_src || vreg_count <= 0)
+    return;
+  rewrite_vreg_use(&in->src1, copy_src, vreg_count);
+  rewrite_vreg_use(&in->src2, copy_src, vreg_count);
+  if (in->op == MIR_OP_CALL) {
+    for (int a = 0; a < in->argc; a++)
+      rewrite_vreg_use(&in->args[a], copy_src, vreg_count);
+  }
+}
+
+static void for_each_inst_use(const MirInst *in, int vreg_count, void (*fn)(VReg v, void *ctx), void *ctx) {
+  if (!in || !fn || vreg_count <= 0)
+    return;
+  if (in->src1 >= 0 && in->src1 < vreg_count)
+    fn(in->src1, ctx);
+  if (in->src2 >= 0 && in->src2 < vreg_count)
+    fn(in->src2, ctx);
+  if (in->op == MIR_OP_CALL) {
+    for (int a = 0; a < in->argc; a++) {
+      VReg arg = in->args[a];
+      if (arg >= 0 && arg < vreg_count)
+        fn(arg, ctx);
+    }
+  }
+}
+
+static void clear_copy_relations(VReg *copy_src, int vreg_count) {
+  if (!copy_src || vreg_count <= 0)
+    return;
+  for (int v = 0; v < vreg_count; v++)
+    copy_src[v] = MIR_INVALID_VREG;
+}
+
+static void kill_copy_relations_of(VReg *copy_src, int vreg_count, VReg dst) {
+  if (!copy_src || vreg_count <= 0 || dst < 0 || dst >= vreg_count)
+    return;
+  copy_src[dst] = MIR_INVALID_VREG;
+  for (int v = 0; v < vreg_count; v++) {
+    if (copy_src[v] == MIR_INVALID_VREG)
+      continue;
+    if (resolve_copy_source(copy_src, vreg_count, copy_src[v]) == dst)
+      copy_src[v] = MIR_INVALID_VREG;
+  }
+}
+
+typedef struct {
+  int *use_count;
+  int delta;
+} UseCountDeltaCtx;
+
+static void apply_use_count_delta(VReg v, void *ctx_void) {
+  UseCountDeltaCtx *ctx = ctx_void;
+  if (!ctx || !ctx->use_count)
+    return;
+  if (ctx->delta > 0) {
+    ctx->use_count[v] += ctx->delta;
+  } else if (ctx->delta < 0 && ctx->use_count[v] > 0) {
+    ctx->use_count[v] += ctx->delta;
+    if (ctx->use_count[v] < 0)
+      ctx->use_count[v] = 0;
+  }
+}
+
+static void add_inst_uses(const MirInst *in, int *use_count, int vreg_count) {
+  if (!in || !use_count || vreg_count <= 0)
+    return;
+  UseCountDeltaCtx ctx;
+  ctx.use_count = use_count;
+  ctx.delta = +1;
+  for_each_inst_use(in, vreg_count, apply_use_count_delta, &ctx);
+}
+
+static void remove_inst_uses(const MirInst *in, int *use_count, int vreg_count) {
+  if (!in || !use_count || vreg_count <= 0)
+    return;
+  UseCountDeltaCtx ctx;
+  ctx.use_count = use_count;
+  ctx.delta = -1;
+  for_each_inst_use(in, vreg_count, apply_use_count_delta, &ctx);
+}
+
+static int is_trivial_dead_def_candidate(MirOp op) {
+  return op == MIR_OP_MOV || op == MIR_OP_IMM || op == MIR_OP_CAST;
+}
+
+static void run_mem2reg_copyprop_and_dce(MirInst **insts, int *inst_len, int *inst_cap, int next_vreg) {
+  if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
+    return;
+
+  int *def_count = calloc(next_vreg, sizeof(int));
+  MirOp *def_op = calloc(next_vreg, sizeof(MirOp));
+  Type **def_type = calloc(next_vreg, sizeof(Type *));
+  if (!def_count || !def_op || !def_type)
+    error("memory allocation failed [in mem2reg copy-prop def info]");
+  for (int i = 0; i < *inst_len; i++) {
+    MirInst *in = &(*insts)[i];
+    if (in->dst < 0 || in->dst >= next_vreg)
+      continue;
+    def_count[in->dst]++;
+    def_op[in->dst] = in->op;
+    def_type[in->dst] = in->type;
+  }
+
+  VReg *copy_src = malloc(sizeof(VReg) * next_vreg);
+  if (!copy_src)
+    error("memory allocation failed [in mem2reg copy-prop setup]");
+  clear_copy_relations(copy_src, next_vreg);
+
+  for (int i = 0; i < *inst_len; i++) {
+    MirInst *in = &(*insts)[i];
+    rewrite_inst_uses(in, copy_src, next_vreg);
+
+    if (in->dst >= 0 && in->dst < next_vreg)
+      kill_copy_relations_of(copy_src, next_vreg, in->dst);
+
+    if (in->op == MIR_OP_MOV && in->dst >= 0 && in->dst < next_vreg && in->src1 >= 0 && in->src1 < next_vreg &&
+        in->dst != in->src1) {
+      copy_src[in->dst] = in->src1;
+    }
+
+    if (in->op == MIR_OP_CAST && in->dst >= 0 && in->dst < next_vreg && in->src1 >= 0 && in->src1 < next_vreg &&
+        in->dst != in->src1 && def_count[in->src1] == 1 && same_scalar_type(def_type[in->src1], in->type) &&
+        def_op[in->src1] != MIR_OP_NOP) {
+      copy_src[in->dst] = in->src1;
+    }
+
+    if (is_control_barrier(in->op))
+      clear_copy_relations(copy_src, next_vreg);
+  }
+
+  free(copy_src);
+  free(def_type);
+  free(def_op);
+  free(def_count);
+
+  int *use_count = calloc(next_vreg, sizeof(int));
+  unsigned char *dead = calloc(*inst_len, sizeof(unsigned char));
+  if (!use_count || !dead)
+    error("memory allocation failed [in mem2reg dce setup]");
+
+  for (int i = 0; i < *inst_len; i++)
+    add_inst_uses(&(*insts)[i], use_count, next_vreg);
+
+  int changed = 1;
+  while (changed) {
+    changed = 0;
+    for (int i = 0; i < *inst_len; i++) {
+      MirInst *in = &(*insts)[i];
+      if (dead[i])
+        continue;
+      if (!is_trivial_dead_def_candidate(in->op))
+        continue;
+      if (in->dst < 0 || in->dst >= next_vreg)
+        continue;
+      if (use_count[in->dst] != 0)
+        continue;
+
+      dead[i] = 1;
+      changed = 1;
+      remove_inst_uses(in, use_count, next_vreg);
+    }
+  }
+
+  int out = 0;
+  for (int i = 0; i < *inst_len; i++) {
+    if (dead[i])
+      continue;
+    if (out != i)
+      (*insts)[out] = (*insts)[i];
+    out++;
+  }
+  *inst_len = out;
+  *inst_cap = out;
+
+  free(use_count);
+  free(dead);
+}
+
 void optimize_mir_mem2reg(MirFunction *mf) {
   if (!mf || mf->inst_len <= 0 || mf->next_vreg <= 0)
     return;
@@ -302,9 +506,7 @@ void optimize_mir_mem2reg(MirFunction *mf) {
     append_inst(&out_insts, &out_len, &out_cap, &in);
 
   post_barrier:
-    if (in.op == MIR_OP_LABEL)
-      invalidate_all_states(state, slot_len);
-    if (in.op == MIR_OP_JMP || in.op == MIR_OP_RET)
+    if (in.op == MIR_OP_LABEL || in.op == MIR_OP_JMP || in.op == MIR_OP_RET)
       invalidate_all_states(state, slot_len);
   }
 
@@ -312,6 +514,7 @@ void optimize_mir_mem2reg(MirFunction *mf) {
   mf->insts = out_insts;
   mf->inst_len = out_len;
   mf->inst_cap = out_cap;
+  run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
 
   free(state);
   free(addr_slot_of_vreg);
