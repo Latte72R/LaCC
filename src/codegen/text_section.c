@@ -1243,24 +1243,95 @@ static void lower_function(Node *fn_node, MirFunction *mf) {
   ctx.label_map = NULL;
 }
 
+static int find_lowered_function_index(Function **fns, int fn_count, Function *target) {
+  if (!fns || fn_count <= 0 || !target)
+    return -1;
+  for (int i = 0; i < fn_count; i++) {
+    if (fns[i] == target)
+      return i;
+  }
+  if (!target->name || target->len <= 0)
+    return -1;
+  for (int i = 0; i < fn_count; i++) {
+    if (!fns[i] || !fns[i]->name)
+      continue;
+    if (fns[i]->len == target->len && !strncmp(fns[i]->name, target->name, target->len))
+      return i;
+  }
+  return -1;
+}
+
 static void emit_mir_program(int dump_mir, int optimize_level) {
 #if LACC_PLATFORM_APPLE
   write_file("  .section __TEXT,__text,regular,pure_instructions\n");
 #else
   write_file("  .text\n");
 #endif
+
+  int fn_count = 0;
+  for (int i = 0; code[i]->kind != ND_NONE; i++) {
+    if (code[i]->kind == ND_FUNCDEF)
+      fn_count++;
+  }
+  if (fn_count <= 0)
+    return;
+
+  MirFunction *mfs = calloc(fn_count, sizeof(MirFunction));
+  Function **fns = calloc(fn_count, sizeof(Function *));
+  unsigned char *reachable = calloc(fn_count, sizeof(unsigned char));
+  int *queue = malloc(sizeof(int) * fn_count);
+  if (!mfs || !fns || !reachable || !queue)
+    error("memory allocation failed [in emit_mir_program reachability setup]");
+
+  int idx = 0;
   for (int i = 0; code[i]->kind != ND_NONE; i++) {
     if (code[i]->kind != ND_FUNCDEF)
       continue;
-    MirFunction mf;
-    lower_function(code[i], &mf);
+    lower_function(code[i], &mfs[idx]);
     if (optimize_level > 0)
-      optimize_mir_mem2reg(&mf);
-    if (dump_mir)
-      mir_dump(stderr, &mf);
-    emit_mir_function(&mf);
-    mir_free(&mf);
+      optimize_mir_mem2reg(&mfs[idx]);
+    fns[idx] = mfs[idx].fn;
+    idx++;
   }
+
+  int qh = 0;
+  int qt = 0;
+  for (int i = 0; i < fn_count; i++) {
+    if (!fns[i] || fns[i]->is_static)
+      continue;
+    reachable[i] = 1;
+    queue[qt++] = i;
+  }
+
+  while (qh < qt) {
+    int from = queue[qh++];
+    MirFunction *mf = &mfs[from];
+    for (int i = 0; i < mf->inst_len; i++) {
+      MirInst *in = &mf->insts[i];
+      if ((in->op != MIR_OP_CALL && in->op != MIR_OP_ADDR_FUNC) || !in->call_fn)
+        continue;
+
+      int to = find_lowered_function_index(fns, fn_count, in->call_fn);
+      if (to < 0 || reachable[to])
+        continue;
+      reachable[to] = 1;
+      queue[qt++] = to;
+    }
+  }
+
+  for (int i = 0; i < fn_count; i++) {
+    if (reachable[i]) {
+      if (dump_mir)
+        mir_dump(stderr, &mfs[i]);
+      emit_mir_function(&mfs[i]);
+    }
+    mir_free(&mfs[i]);
+  }
+
+  free(queue);
+  free(reachable);
+  free(fns);
+  free(mfs);
 }
 
 static int should_dump_mir() {
