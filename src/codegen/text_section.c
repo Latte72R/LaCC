@@ -130,32 +130,150 @@ static Type *pick_compare_type(const Node *node) {
   return cmp_type;
 }
 
-static int try_emit_jmp_if_false_compare(LowerCtx *ctx, Node *cond, int label) {
+static int select_compare_false_cc(NodeKind kind, MirCondCode *cc) {
+  if (!cc)
+    return 0;
+  switch (kind) {
+  case ND_EQ:
+    *cc = MIR_CC_NE;
+    return 1;
+  case ND_NE:
+    *cc = MIR_CC_EQ;
+    return 1;
+  case ND_LT:
+    *cc = MIR_CC_GE;
+    return 1;
+  case ND_LE:
+    *cc = MIR_CC_GT;
+    return 1;
+  default:
+    return 0;
+  }
+}
+
+static int select_compare_true_cc(NodeKind kind, MirCondCode *cc) {
+  if (!cc)
+    return 0;
+  switch (kind) {
+  case ND_EQ:
+    *cc = MIR_CC_EQ;
+    return 1;
+  case ND_NE:
+    *cc = MIR_CC_NE;
+    return 1;
+  case ND_LT:
+    *cc = MIR_CC_LT;
+    return 1;
+  case ND_LE:
+    *cc = MIR_CC_LE;
+    return 1;
+  default:
+    return 0;
+  }
+}
+
+static void emit_jmp_if_false_fallback(LowerCtx *ctx, Node *cond, int label) {
+  VReg v = lower_expr(ctx, cond);
+  emit_jz(ctx, v, cond ? cond->type : NULL, label);
+}
+
+static void emit_jmp_if_true_fallback(LowerCtx *ctx, Node *cond, int label) {
+  int l_end = new_label(ctx);
+  VReg v = lower_expr(ctx, cond);
+  emit_jz(ctx, v, cond ? cond->type : NULL, l_end);
+  emit_jmp(ctx, label);
+  emit_label(ctx, l_end);
+}
+
+static int try_emit_jmp_if_true_cond(LowerCtx *ctx, Node *cond, int label);
+
+static int try_emit_jmp_if_false_cond(LowerCtx *ctx, Node *cond, int label) {
   if (!ctx || !cond)
     return 0;
 
   MirCondCode cc;
+  if (select_compare_false_cc(cond->kind, &cc)) {
+    VReg lhs = lower_expr(ctx, cond->lhs);
+    VReg rhs = lower_expr(ctx, cond->rhs);
+    emit_jcc(ctx, lhs, rhs, pick_compare_type(cond), cc, label);
+    return 1;
+  }
+
   switch (cond->kind) {
-  case ND_EQ:
-    cc = MIR_CC_NE;
-    break;
-  case ND_NE:
-    cc = MIR_CC_EQ;
-    break;
-  case ND_LT:
-    cc = MIR_CC_GE;
-    break;
-  case ND_LE:
-    cc = MIR_CC_GT;
-    break;
+  case ND_NOT:
+    if (!cond->lhs)
+      return 0;
+    if (!try_emit_jmp_if_true_cond(ctx, cond->lhs, label))
+      emit_jmp_if_true_fallback(ctx, cond->lhs, label);
+    return 1;
+  case ND_AND:
+    if (!cond->lhs || !cond->rhs)
+      return 0;
+    if (!try_emit_jmp_if_false_cond(ctx, cond->lhs, label))
+      emit_jmp_if_false_fallback(ctx, cond->lhs, label);
+    if (!try_emit_jmp_if_false_cond(ctx, cond->rhs, label))
+      emit_jmp_if_false_fallback(ctx, cond->rhs, label);
+    return 1;
+  case ND_OR: {
+    if (!cond->lhs || !cond->rhs)
+      return 0;
+    int l_eval_rhs = new_label(ctx);
+    int l_end = new_label(ctx);
+    if (!try_emit_jmp_if_false_cond(ctx, cond->lhs, l_eval_rhs))
+      emit_jmp_if_false_fallback(ctx, cond->lhs, l_eval_rhs);
+    emit_jmp(ctx, l_end);
+    emit_label(ctx, l_eval_rhs);
+    if (!try_emit_jmp_if_false_cond(ctx, cond->rhs, label))
+      emit_jmp_if_false_fallback(ctx, cond->rhs, label);
+    emit_label(ctx, l_end);
+    return 1;
+  }
   default:
     return 0;
   }
+}
 
-  VReg lhs = lower_expr(ctx, cond->lhs);
-  VReg rhs = lower_expr(ctx, cond->rhs);
-  emit_jcc(ctx, lhs, rhs, pick_compare_type(cond), cc, label);
-  return 1;
+static int try_emit_jmp_if_true_cond(LowerCtx *ctx, Node *cond, int label) {
+  if (!ctx || !cond)
+    return 0;
+
+  MirCondCode cc;
+  if (select_compare_true_cc(cond->kind, &cc)) {
+    VReg lhs = lower_expr(ctx, cond->lhs);
+    VReg rhs = lower_expr(ctx, cond->rhs);
+    emit_jcc(ctx, lhs, rhs, pick_compare_type(cond), cc, label);
+    return 1;
+  }
+
+  switch (cond->kind) {
+  case ND_NOT:
+    if (!cond->lhs)
+      return 0;
+    if (!try_emit_jmp_if_false_cond(ctx, cond->lhs, label))
+      emit_jmp_if_false_fallback(ctx, cond->lhs, label);
+    return 1;
+  case ND_AND: {
+    if (!cond->lhs || !cond->rhs)
+      return 0;
+    int l_end = new_label(ctx);
+    if (!try_emit_jmp_if_false_cond(ctx, cond->lhs, l_end))
+      emit_jmp_if_false_fallback(ctx, cond->lhs, l_end);
+    if (!try_emit_jmp_if_true_cond(ctx, cond->rhs, label))
+      emit_jmp_if_true_fallback(ctx, cond->rhs, label);
+    emit_label(ctx, l_end);
+    return 1;
+  }
+  case ND_OR:
+    if (!cond->lhs || !cond->rhs)
+      return 0;
+    if (!try_emit_jmp_if_true_cond(ctx, cond->lhs, label))
+      emit_jmp_if_true_fallback(ctx, cond->lhs, label);
+    if (!try_emit_jmp_if_true_cond(ctx, cond->rhs, label))
+      emit_jmp_if_true_fallback(ctx, cond->rhs, label);
+    return 1;
+  default:
+    return 0;
+  }
 }
 
 static int is_main_function(const Function *fn) { return fn && fn->len == 4 && !strncmp(fn->name, "main", 4); }
@@ -588,12 +706,14 @@ static VReg lower_ternary(LowerCtx *ctx, Node *node, bool need_value) {
   if (!node->cond || !node->then || !node->els)
     lower_error_node("invalid ternary node in lowering", node);
 
-  VReg cond = lower_expr(ctx, node->cond);
   int l_else = new_label(ctx);
   int l_end = new_label(ctx);
 
   if (!need_value || (node->type && node->type->ty == TY_VOID)) {
-    emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_else);
+    if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_else)) {
+      VReg cond = lower_expr(ctx, node->cond);
+      emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_else);
+    }
     lower_expr_discard(ctx, node->then);
     emit_jmp(ctx, l_end);
     emit_label(ctx, l_else);
@@ -603,7 +723,10 @@ static VReg lower_ternary(LowerCtx *ctx, Node *node, bool need_value) {
   }
 
   VReg dst = mir_new_vreg(ctx->mf);
-  emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_else);
+  if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_else)) {
+    VReg cond = lower_expr(ctx, node->cond);
+    emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_else);
+  }
   VReg then_v = lower_expr(ctx, node->then);
   emit_mov(ctx, dst, then_v, node->type);
   emit_jmp(ctx, l_end);
@@ -1051,7 +1174,7 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     int l_end = new_label(ctx);
     if (node->els) {
       int l_else = new_label(ctx);
-      if (!try_emit_jmp_if_false_compare(ctx, node->cond, l_else)) {
+      if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_else)) {
         VReg cond = lower_expr(ctx, node->cond);
         emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_else);
       }
@@ -1061,7 +1184,7 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
       lower_stmt(ctx, node->els);
       emit_label(ctx, l_end);
     } else {
-      if (!try_emit_jmp_if_false_compare(ctx, node->cond, l_end)) {
+      if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_end)) {
         VReg cond = lower_expr(ctx, node->cond);
         emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_end);
       }
@@ -1074,7 +1197,7 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     int l_begin = new_label(ctx);
     int l_end = new_label(ctx);
     emit_label(ctx, l_begin);
-    if (!try_emit_jmp_if_false_compare(ctx, node->cond, l_end)) {
+    if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_end)) {
       VReg cond = lower_expr(ctx, node->cond);
       emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_end);
     }
@@ -1098,7 +1221,7 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     pop_control(ctx, node);
 
     emit_label(ctx, l_step);
-    if (!try_emit_jmp_if_false_compare(ctx, node->cond, l_end)) {
+    if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_end)) {
       VReg cond = lower_expr(ctx, node->cond);
       emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_end);
     }
@@ -1116,7 +1239,7 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     emit_label(ctx, l_begin);
 
     if (node->cond && node->cond->kind != ND_NONE) {
-      if (!try_emit_jmp_if_false_compare(ctx, node->cond, l_end)) {
+      if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_end)) {
         VReg cond = lower_expr(ctx, node->cond);
         emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_end);
       }

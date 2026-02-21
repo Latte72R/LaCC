@@ -177,6 +177,100 @@ static int same_scalar_type(Type *a, Type *b) {
   return a->ty == b->ty && a->is_unsigned == b->is_unsigned;
 }
 
+static int is_integer_scalar_type(Type *type) {
+  if (!type)
+    return 0;
+  switch (type->ty) {
+  case TY_BOOL:
+  case TY_CHAR:
+  case TY_SHORT:
+  case TY_INT:
+  case TY_LONG:
+  case TY_LONGLONG:
+    return 1;
+  default:
+    return 0;
+  }
+}
+
+static int is_noop_scalar_cast(Type *from, Type *to) {
+  if (!from || !to)
+    return 0;
+  if (same_scalar_type(from, to))
+    return 1;
+  if (!is_integer_scalar_type(from) || !is_integer_scalar_type(to))
+    return 0;
+  return type_size(from) == type_size(to);
+}
+
+static int get_single_def_imm(VReg v, int vreg_count, const int *def_count, const MirOp *def_op, const long *def_imm,
+                              long *out) {
+  if (v < 0 || v >= vreg_count || !def_count || !def_op || !def_imm)
+    return 0;
+  if (def_count[v] != 1 || def_op[v] != MIR_OP_IMM)
+    return 0;
+  if (out)
+    *out = def_imm[v];
+  return 1;
+}
+
+static int try_get_identity_copy_source(const MirInst *in, int vreg_count, const int *def_count, const MirOp *def_op,
+                                        const long *def_imm, VReg *out_src) {
+  if (!in || !out_src)
+    return 0;
+  if (in->src1 < 0 || in->src1 >= vreg_count || in->src2 < 0 || in->src2 >= vreg_count)
+    return 0;
+
+  long imm1 = 0;
+  long imm2 = 0;
+  int src1_imm = get_single_def_imm(in->src1, vreg_count, def_count, def_op, def_imm, &imm1);
+  int src2_imm = get_single_def_imm(in->src2, vreg_count, def_count, def_op, def_imm, &imm2);
+
+  switch (in->op) {
+  case MIR_OP_ADD:
+    if (src1_imm && imm1 == 0) {
+      *out_src = in->src2;
+      return 1;
+    }
+    if (src2_imm && imm2 == 0) {
+      *out_src = in->src1;
+      return 1;
+    }
+    return 0;
+  case MIR_OP_SUB:
+  case MIR_OP_SHL:
+  case MIR_OP_SHR:
+    if (src2_imm && imm2 == 0) {
+      *out_src = in->src1;
+      return 1;
+    }
+    return 0;
+  case MIR_OP_MUL:
+    if (src1_imm && imm1 == 1) {
+      *out_src = in->src2;
+      return 1;
+    }
+    if (src2_imm && imm2 == 1) {
+      *out_src = in->src1;
+      return 1;
+    }
+    return 0;
+  case MIR_OP_BITOR:
+  case MIR_OP_BITXOR:
+    if (src1_imm && imm1 == 0) {
+      *out_src = in->src2;
+      return 1;
+    }
+    if (src2_imm && imm2 == 0) {
+      *out_src = in->src1;
+      return 1;
+    }
+    return 0;
+  default:
+    return 0;
+  }
+}
+
 static int resolve_copy_source(const VReg *copy_src, int vreg_count, int v) {
   if (!copy_src || v < 0 || v >= vreg_count)
     return v;
@@ -279,7 +373,31 @@ static void remove_inst_uses(const MirInst *in, int *use_count, int vreg_count) 
 }
 
 static int is_trivial_dead_def_candidate(MirOp op) {
-  return op == MIR_OP_MOV || op == MIR_OP_IMM || op == MIR_OP_CAST;
+  switch (op) {
+  case MIR_OP_MOV:
+  case MIR_OP_IMM:
+  case MIR_OP_CAST:
+  case MIR_OP_ADD:
+  case MIR_OP_SUB:
+  case MIR_OP_MUL:
+  case MIR_OP_EQ:
+  case MIR_OP_NE:
+  case MIR_OP_LT:
+  case MIR_OP_LE:
+  case MIR_OP_BITAND:
+  case MIR_OP_BITOR:
+  case MIR_OP_BITXOR:
+  case MIR_OP_BITNOT:
+  case MIR_OP_ADDR_LOCAL:
+  case MIR_OP_ADDR_SYMBOL:
+  case MIR_OP_ADDR_FUNC:
+  case MIR_OP_ADDR_STRING:
+  case MIR_OP_ADDR_ARRAY:
+  case MIR_OP_ADDR_STRUCT_LITERAL:
+    return 1;
+  default:
+    return 0;
+  }
 }
 
 static void mark_vreg_live(unsigned char *live, int vreg_count, VReg v) {
@@ -385,6 +503,53 @@ static void run_mem2reg_prune_unreferenced_labels(MirInst **insts, int *inst_len
   free(referenced);
 }
 
+static int false_cc_for_compare_op(MirOp op, MirCondCode *cc) {
+  if (!cc)
+    return 0;
+  switch (op) {
+  case MIR_OP_EQ:
+    *cc = MIR_CC_NE;
+    return 1;
+  case MIR_OP_NE:
+    *cc = MIR_CC_EQ;
+    return 1;
+  case MIR_OP_LT:
+    *cc = MIR_CC_GE;
+    return 1;
+  case MIR_OP_LE:
+    *cc = MIR_CC_GT;
+    return 1;
+  default:
+    return 0;
+  }
+}
+
+static void run_mem2reg_fuse_compare_jz(MirInst **insts, int *inst_len) {
+  if (!insts || !*insts || !inst_len || *inst_len <= 1)
+    return;
+
+  for (int i = 0; i + 1 < *inst_len; i++) {
+    MirInst *cmp = &(*insts)[i];
+    MirInst *jz = &(*insts)[i + 1];
+    if (jz->op != MIR_OP_JZ)
+      continue;
+    if (cmp->dst == MIR_INVALID_VREG || jz->src1 != cmp->dst)
+      continue;
+
+    MirCondCode cc;
+    if (!false_cc_for_compare_op(cmp->op, &cc))
+      continue;
+    if (cmp->src1 == MIR_INVALID_VREG || cmp->src2 == MIR_INVALID_VREG)
+      continue;
+
+    jz->op = MIR_OP_JCC;
+    jz->src1 = cmp->src1;
+    jz->src2 = cmp->src2;
+    jz->imm = cc;
+    jz->type = cmp->type;
+  }
+}
+
 static void run_mem2reg_copyprop_and_dce(MirInst **insts, int *inst_len, int *inst_cap, int next_vreg) {
   if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
     return;
@@ -392,7 +557,8 @@ static void run_mem2reg_copyprop_and_dce(MirInst **insts, int *inst_len, int *in
   int *def_count = calloc(next_vreg, sizeof(int));
   MirOp *def_op = calloc(next_vreg, sizeof(MirOp));
   Type **def_type = calloc(next_vreg, sizeof(Type *));
-  if (!def_count || !def_op || !def_type)
+  long *def_imm = calloc(next_vreg, sizeof(long));
+  if (!def_count || !def_op || !def_type || !def_imm)
     error("memory allocation failed [in mem2reg copy-prop def info]");
   for (int i = 0; i < *inst_len; i++) {
     MirInst *in = &(*insts)[i];
@@ -401,6 +567,7 @@ static void run_mem2reg_copyprop_and_dce(MirInst **insts, int *inst_len, int *in
     def_count[in->dst]++;
     def_op[in->dst] = in->op;
     def_type[in->dst] = in->type;
+    def_imm[in->dst] = in->imm;
   }
 
   VReg *copy_src = malloc(sizeof(VReg) * next_vreg);
@@ -421,9 +588,16 @@ static void run_mem2reg_copyprop_and_dce(MirInst **insts, int *inst_len, int *in
     }
 
     if (in->op == MIR_OP_CAST && in->dst >= 0 && in->dst < next_vreg && in->src1 >= 0 && in->src1 < next_vreg &&
-        in->dst != in->src1 && def_count[in->src1] == 1 && same_scalar_type(def_type[in->src1], in->type) &&
+        in->dst != in->src1 && def_count[in->src1] == 1 && is_noop_scalar_cast(def_type[in->src1], in->type) &&
         def_op[in->src1] != MIR_OP_NOP) {
       copy_src[in->dst] = in->src1;
+    }
+
+    VReg identity_src = MIR_INVALID_VREG;
+    if (in->dst >= 0 && in->dst < next_vreg &&
+        try_get_identity_copy_source(in, next_vreg, def_count, def_op, def_imm, &identity_src) &&
+        identity_src != MIR_INVALID_VREG && identity_src != in->dst) {
+      copy_src[in->dst] = identity_src;
     }
 
     if (is_control_barrier(in->op))
@@ -431,6 +605,7 @@ static void run_mem2reg_copyprop_and_dce(MirInst **insts, int *inst_len, int *in
   }
 
   free(copy_src);
+  free(def_imm);
   free(def_type);
   free(def_op);
   free(def_count);
@@ -658,6 +833,9 @@ void optimize_mir_mem2reg(MirFunction *mf) {
   mf->insts = out_insts;
   mf->inst_len = out_len;
   mf->inst_cap = out_cap;
+  run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
+  run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
+  run_mem2reg_fuse_compare_jz(&mf->insts, &mf->inst_len);
   run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
   run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
   run_mem2reg_compact_vregs(mf);
