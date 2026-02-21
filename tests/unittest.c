@@ -164,6 +164,7 @@ int main() {
   CHECK(switch_casts_test24(), 0);
   CHECK(switch_casts_test25(), 10);
   CHECK(switch_casts_test26(), 3);
+  CHECK(switch_casts_test29(), 255);
 
   CHECK(unions_funcptrs_test1(), 0);
   CHECK(unions_funcptrs_test2(), -4);

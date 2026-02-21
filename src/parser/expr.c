@@ -741,7 +741,8 @@ Node *type_cast() {
     error_at(token->loc, "expected ')' after type cast [in type_cast]");
   }
   Node *node = new_node(ND_TYPECAST);
-  node->lhs = unary();
+  // cast-expression is right-associative: (T) cast-expression
+  node->lhs = type_cast();
   node->type = type;
   if (type->ty == TY_VOID) {
     // void型へのキャストは評価のみ
