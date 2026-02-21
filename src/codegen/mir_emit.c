@@ -3,6 +3,7 @@
 #include "regalloc.h"
 #include "platform.h"
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -19,6 +20,8 @@ typedef struct MirAsmCtx MirAsmCtx;
 struct MirAsmCtx {
   const MirFunction *mf;
   const RegAllocResult *ra;
+  const unsigned char *single_def_imm_known;
+  const long *single_def_imm_value;
   const char *epilogue_label;
   int pending_jmp_label;
   int has_pending_jmp;
@@ -431,6 +434,91 @@ static void emit_typed_imm_to_stack_direct(Type *type, int off, long imm) {
   write_file("  mov QWORD PTR [rbp - %d], r11\n", off);
 }
 
+static long typed_imm_canonical_value(Type *type, long imm) {
+  if (!type)
+    return imm;
+  switch (type->ty) {
+  case TY_BOOL:
+    return imm ? 1 : 0;
+  case TY_CHAR:
+    if (type->is_unsigned)
+      return (long)(unsigned char)imm;
+    return (long)(signed char)(unsigned char)imm;
+  case TY_SHORT:
+    if (type->is_unsigned)
+      return (long)(unsigned short)imm;
+    return (long)(short)(unsigned short)imm;
+  case TY_INT:
+    if (type->is_unsigned)
+      return (long)(unsigned int)imm;
+    return (long)(int)(unsigned int)imm;
+  case TY_LONG:
+  case TY_LONGLONG:
+  case TY_PTR:
+  case TY_ARGARR:
+  case TY_ARR:
+  case TY_VOID:
+    if (type->is_unsigned)
+      return (long)(unsigned long)imm;
+    return imm;
+  default:
+    return imm;
+  }
+}
+
+static int is_signext_i32(long v) { return (long)(int)(unsigned int)v == v; }
+
+static void build_single_def_imm_info(const MirFunction *mf, unsigned char *known, long *value) {
+  if (!mf || mf->next_vreg <= 0 || !known || !value)
+    return;
+
+  int *def_count = calloc(mf->next_vreg, sizeof(int));
+  if (!def_count)
+    error("memory allocation failed [in build_single_def_imm_info]");
+
+  for (int v = 0; v < mf->next_vreg; v++) {
+    known[v] = 0;
+    value[v] = 0;
+  }
+
+  for (int i = 0; i < mf->inst_len; i++) {
+    const MirInst *in = &mf->insts[i];
+    if (in->dst < 0 || in->dst >= mf->next_vreg)
+      continue;
+    int v = in->dst;
+    def_count[v]++;
+    if (def_count[v] != 1) {
+      known[v] = 0;
+      continue;
+    }
+    if (in->op == MIR_OP_IMM) {
+      known[v] = 1;
+      value[v] = typed_imm_canonical_value(in->type, in->imm);
+    } else {
+      known[v] = 0;
+    }
+  }
+
+  for (int v = 0; v < mf->next_vreg; v++) {
+    if (def_count[v] != 1)
+      known[v] = 0;
+  }
+
+  free(def_count);
+}
+
+static int vreg_single_def_imm(const MirAsmCtx *ctx, VReg vreg, long *imm) {
+  if (!ctx || !ctx->single_def_imm_known || !ctx->single_def_imm_value)
+    return 0;
+  if (!ctx->mf || vreg < 0 || vreg >= ctx->mf->next_vreg)
+    return 0;
+  if (!ctx->single_def_imm_known[vreg])
+    return 0;
+  if (imm)
+    *imm = ctx->single_def_imm_value[vreg];
+  return 1;
+}
+
 static void emit_mir_label(const MirFunction *mf, int label) {
   write_file(".Lmir.%.*s.%d:\n", mf->fn->len, mf->fn->name, label);
 }
@@ -497,6 +585,32 @@ static void emit_cmp_reg_reg(Type *type, const char *lhs_reg64, const char *rhs_
   }
 }
 
+static int cmp_imm_encodable(int sz, long imm) {
+  if (sz == 1)
+    return (long)(signed char)(unsigned char)imm == imm || (long)(unsigned char)imm == imm;
+  if (sz == 2)
+    return (long)(short)(unsigned short)imm == imm || (long)(unsigned short)imm == imm;
+  if (sz == 4)
+    return (long)(int)(unsigned int)imm == imm || (long)(unsigned int)imm == imm;
+  return is_signext_i32(imm);
+}
+
+static int emit_cmp_reg_imm(Type *type, const char *lhs_reg64, long imm) {
+  int sz = cmp_operand_size(type);
+  if (!cmp_imm_encodable(sz, imm))
+    return 0;
+  if (sz == 1) {
+    write_file("  cmp %s, %ld\n", reg8_name(lhs_reg64), imm);
+  } else if (sz == 2) {
+    write_file("  cmp %s, %ld\n", reg16_name(lhs_reg64), imm);
+  } else if (sz == 4) {
+    write_file("  cmp %s, %ld\n", reg32_name(lhs_reg64), imm);
+  } else {
+    write_file("  cmp %s, %ld\n", lhs_reg64, imm);
+  }
+  return 1;
+}
+
 static void emit_cmp_reg_zero(Type *type, const char *reg64) {
   int sz = cmp_operand_size(type);
   if (sz == 1) {
@@ -549,15 +663,32 @@ static void emit_binop(const MirAsmCtx *ctx, const MirInst *in, const char *op, 
   const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
   VReg lhs_v = in->src1;
   VReg rhs_v = in->src2;
+  long rhs_imm = 0;
+  int rhs_is_imm = vreg_single_def_imm(ctx, rhs_v, &rhs_imm);
+  if (!rhs_is_imm && commutative) {
+    long lhs_imm = 0;
+    if (vreg_single_def_imm(ctx, lhs_v, &lhs_imm)) {
+      VReg t = lhs_v;
+      lhs_v = rhs_v;
+      rhs_v = t;
+      rhs_is_imm = 1;
+      rhs_imm = lhs_imm;
+    }
+  }
   const char *lhs_reg = vreg_assigned_reg64(ctx, lhs_v);
   const char *rhs_reg = vreg_assigned_reg64(ctx, rhs_v);
   const char *work = dst_reg ? dst_reg : "rax";
 
-  if (dst_reg && reg_eq(dst_reg, rhs_reg) && !reg_eq(dst_reg, lhs_reg)) {
+  if (!rhs_is_imm && dst_reg && reg_eq(dst_reg, rhs_reg) && !reg_eq(dst_reg, lhs_reg)) {
     if (commutative) {
       VReg t_v = lhs_v;
       lhs_v = rhs_v;
       rhs_v = t_v;
+      long t_imm = rhs_imm;
+      rhs_imm = 0;
+      rhs_is_imm = vreg_single_def_imm(ctx, rhs_v, &rhs_imm);
+      if (!rhs_is_imm)
+        rhs_imm = t_imm;
       const char *t_r = lhs_reg;
       lhs_reg = rhs_reg;
       rhs_reg = t_r;
@@ -567,7 +698,12 @@ static void emit_binop(const MirAsmCtx *ctx, const MirInst *in, const char *op, 
   }
 
   load_vreg_to_reg(ctx, lhs_v, work);
-  if (rhs_reg) {
+
+  int can_use_imm = rhs_is_imm && (strcmp(op, "add") == 0 || strcmp(op, "sub") == 0 || strcmp(op, "imul") == 0) &&
+                    is_signext_i32(rhs_imm);
+  if (can_use_imm) {
+    write_file("  %s %s, %ld\n", op, work, rhs_imm);
+  } else if (rhs_reg) {
     write_file("  %s %s, %s\n", op, work, rhs_reg);
   } else {
     int off = vreg_stack_offset_or_neg1(ctx, rhs_v);
@@ -865,16 +1001,32 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
   case MIR_OP_NE:
   case MIR_OP_LT:
   case MIR_OP_LE: {
-    const char *lhs_reg = vreg_assigned_reg64(ctx, in->src1);
-    const char *rhs_reg = vreg_assigned_reg64(ctx, in->src2);
+    VReg lhs_v = in->src1;
+    VReg rhs_v = in->src2;
+    long rhs_imm = 0;
+    int rhs_is_imm = vreg_single_def_imm(ctx, rhs_v, &rhs_imm);
+    if (!rhs_is_imm && (in->op == MIR_OP_EQ || in->op == MIR_OP_NE)) {
+      long lhs_imm = 0;
+      if (vreg_single_def_imm(ctx, lhs_v, &lhs_imm)) {
+        lhs_v = in->src2;
+        rhs_v = in->src1;
+        rhs_is_imm = 1;
+        rhs_imm = lhs_imm;
+      }
+    }
+
+    const char *lhs_reg = vreg_assigned_reg64(ctx, lhs_v);
+    const char *rhs_reg = vreg_assigned_reg64(ctx, rhs_v);
     const char *lhs_work = lhs_reg ? lhs_reg : "rax";
     const char *rhs_work = rhs_reg ? rhs_reg : "rdi";
     if (reg_eq(lhs_work, rhs_work))
       rhs_work = "r11";
 
-    load_vreg_to_reg(ctx, in->src1, lhs_work);
-    load_vreg_to_reg(ctx, in->src2, rhs_work);
-    emit_cmp_reg_reg(in->type, lhs_work, rhs_work);
+    load_vreg_to_reg(ctx, lhs_v, lhs_work);
+    if (!(rhs_is_imm && emit_cmp_reg_imm(in->type, lhs_work, rhs_imm))) {
+      load_vreg_to_reg(ctx, rhs_v, rhs_work);
+      emit_cmp_reg_reg(in->type, lhs_work, rhs_work);
+    }
 
     const char *res_reg = vreg_assigned_reg64(ctx, in->dst);
     const char *res_work = res_reg ? res_reg : "rax";
@@ -911,29 +1063,66 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
   case MIR_OP_SHR: {
     const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
     const char *src2_reg = vreg_assigned_reg64(ctx, in->src2);
-    const char *work = dst_reg && !reg_eq(dst_reg, src2_reg) ? dst_reg : "rax";
+    long shift_imm = 0;
+    int shift_is_imm = vreg_single_def_imm(ctx, in->src2, &shift_imm) && shift_imm >= 0 && shift_imm <= 255;
+    const char *work = (shift_is_imm || (dst_reg && !reg_eq(dst_reg, src2_reg))) && dst_reg ? dst_reg : "rax";
     load_vreg_to_reg(ctx, in->src1, work);
-    if (src2_reg) {
+    if (shift_is_imm) {
+      if (in->type && type_size(in->type) == 4) {
+        if (in->op == MIR_OP_SHL) {
+          write_file("  shl %s, %ld\n", reg32_name(work), shift_imm);
+        } else if (in->type->is_unsigned) {
+          write_file("  shr %s, %ld\n", reg32_name(work), shift_imm);
+        } else {
+          write_file("  sar %s, %ld\n", reg32_name(work), shift_imm);
+        }
+      } else {
+        if (in->op == MIR_OP_SHL) {
+          write_file("  shl %s, %ld\n", work, shift_imm);
+        } else if (in->type && in->type->is_unsigned) {
+          write_file("  shr %s, %ld\n", work, shift_imm);
+        } else {
+          write_file("  sar %s, %ld\n", work, shift_imm);
+        }
+      }
+    } else if (src2_reg) {
       if (strcmp(src2_reg, "rcx"))
         write_file("  mov rcx, %s\n", src2_reg);
-    } else {
-      load_vreg_to_reg(ctx, in->src2, "rcx");
-    }
-    if (in->type && type_size(in->type) == 4) {
-      if (in->op == MIR_OP_SHL) {
-        write_file("  shl %s, cl\n", reg32_name(work));
-      } else if (in->type->is_unsigned) {
-        write_file("  shr %s, cl\n", reg32_name(work));
+      if (in->type && type_size(in->type) == 4) {
+        if (in->op == MIR_OP_SHL) {
+          write_file("  shl %s, cl\n", reg32_name(work));
+        } else if (in->type->is_unsigned) {
+          write_file("  shr %s, cl\n", reg32_name(work));
+        } else {
+          write_file("  sar %s, cl\n", reg32_name(work));
+        }
       } else {
-        write_file("  sar %s, cl\n", reg32_name(work));
+        if (in->op == MIR_OP_SHL) {
+          write_file("  shl %s, cl\n", work);
+        } else if (in->type && in->type->is_unsigned) {
+          write_file("  shr %s, cl\n", work);
+        } else {
+          write_file("  sar %s, cl\n", work);
+        }
       }
     } else {
-      if (in->op == MIR_OP_SHL) {
-        write_file("  shl %s, cl\n", work);
-      } else if (in->type && in->type->is_unsigned) {
-        write_file("  shr %s, cl\n", work);
+      load_vreg_to_reg(ctx, in->src2, "rcx");
+      if (in->type && type_size(in->type) == 4) {
+        if (in->op == MIR_OP_SHL) {
+          write_file("  shl %s, cl\n", reg32_name(work));
+        } else if (in->type->is_unsigned) {
+          write_file("  shr %s, cl\n", reg32_name(work));
+        } else {
+          write_file("  sar %s, cl\n", reg32_name(work));
+        }
       } else {
-        write_file("  sar %s, cl\n", work);
+        if (in->op == MIR_OP_SHL) {
+          write_file("  shl %s, cl\n", work);
+        } else if (in->type && in->type->is_unsigned) {
+          write_file("  shr %s, cl\n", work);
+        } else {
+          write_file("  sar %s, cl\n", work);
+        }
       }
     }
     if (!dst_reg || strcmp(work, dst_reg))
@@ -963,6 +1152,8 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     return;
   }
   case MIR_OP_JCC: {
+    long rhs_imm = 0;
+    int rhs_is_imm = vreg_single_def_imm(ctx, in->src2, &rhs_imm);
     const char *lhs_reg = vreg_assigned_reg64(ctx, in->src1);
     const char *rhs_reg = vreg_assigned_reg64(ctx, in->src2);
     const char *lhs_work = lhs_reg ? lhs_reg : "rax";
@@ -971,8 +1162,10 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
       rhs_work = "r11";
 
     load_vreg_to_reg(ctx, in->src1, lhs_work);
-    load_vreg_to_reg(ctx, in->src2, rhs_work);
-    emit_cmp_reg_reg(in->type, lhs_work, rhs_work);
+    if (!(rhs_is_imm && emit_cmp_reg_imm(in->type, lhs_work, rhs_imm))) {
+      load_vreg_to_reg(ctx, in->src2, rhs_work);
+      emit_cmp_reg_reg(in->type, lhs_work, rhs_work);
+    }
     write_file("  %s .Lmir.%.*s.%d\n", jcc_mnemonic(in->imm, in->type), ctx->mf->fn->len, ctx->mf->fn->name,
                in->label);
     return;
@@ -1058,10 +1251,21 @@ void emit_mir_function(const MirFunction *mf) {
 
   RegAllocResult ra = {0};
   regalloc_run(mf, &ra);
+  unsigned char *single_def_imm_known = NULL;
+  long *single_def_imm_value = NULL;
+  if (mf->next_vreg > 0) {
+    single_def_imm_known = calloc(mf->next_vreg, sizeof(unsigned char));
+    single_def_imm_value = calloc(mf->next_vreg, sizeof(long));
+    if (!single_def_imm_known || !single_def_imm_value)
+      error("memory allocation failed [in emit_mir_function single-def imm info]");
+    build_single_def_imm_info(mf, single_def_imm_known, single_def_imm_value);
+  }
 
   MirAsmCtx ctx = {0};
   ctx.mf = mf;
   ctx.ra = &ra;
+  ctx.single_def_imm_known = single_def_imm_known;
+  ctx.single_def_imm_value = single_def_imm_value;
   ctx.spill_base = align_up(mf->fn->offset, 8);
   int save_count = count_saved_mask_bits(ra.used_reg_mask);
   ctx.save_base = ctx.spill_base + (ra.spill_count * 8);
@@ -1134,5 +1338,7 @@ void emit_mir_function(const MirFunction *mf) {
   write_file("  pop rbp\n");
   write_file("  ret\n");
 
+  free(single_def_imm_value);
+  free(single_def_imm_known);
   regalloc_free(&ra);
 }
