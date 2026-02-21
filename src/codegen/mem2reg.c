@@ -282,6 +282,40 @@ static int is_trivial_dead_def_candidate(MirOp op) {
   return op == MIR_OP_MOV || op == MIR_OP_IMM || op == MIR_OP_CAST;
 }
 
+static void run_mem2reg_prune_unreferenced_labels(MirInst **insts, int *inst_len, int *inst_cap, int next_label) {
+  if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_label <= 0)
+    return;
+
+  unsigned char *referenced = calloc(next_label, sizeof(unsigned char));
+  if (!referenced)
+    error("memory allocation failed [in mem2reg prune labels]");
+
+  for (int i = 0; i < *inst_len; i++) {
+    MirInst *in = &(*insts)[i];
+    if (in->op != MIR_OP_JMP && in->op != MIR_OP_JZ && in->op != MIR_OP_JCC)
+      continue;
+    if (in->label < 0 || in->label >= next_label)
+      continue;
+    referenced[in->label] = 1;
+  }
+
+  int out = 0;
+  for (int i = 0; i < *inst_len; i++) {
+    MirInst *in = &(*insts)[i];
+    if (in->op == MIR_OP_LABEL) {
+      if (in->label >= 0 && in->label < next_label && !referenced[in->label])
+        continue;
+    }
+    if (out != i)
+      (*insts)[out] = (*insts)[i];
+    out++;
+  }
+  *inst_len = out;
+  *inst_cap = out;
+
+  free(referenced);
+}
+
 static void run_mem2reg_copyprop_and_dce(MirInst **insts, int *inst_len, int *inst_cap, int next_vreg) {
   if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
     return;
@@ -554,6 +588,7 @@ void optimize_mir_mem2reg(MirFunction *mf) {
   mf->inst_len = out_len;
   mf->inst_cap = out_cap;
   run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
+  run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
 
   free(state);
   free(remaining_reads);
