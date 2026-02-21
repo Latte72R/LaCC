@@ -62,6 +62,27 @@ static int align_frame_size_for_calls(int size) {
   return aligned;
 }
 
+static int compute_required_local_stack(const MirFunction *mf) {
+  if (!mf)
+    return 0;
+
+  int max_off = 0;
+  for (int i = 0; i < mf->inst_len; i++) {
+    const MirInst *in = &mf->insts[i];
+    if (in->op != MIR_OP_LOAD_LOCAL && in->op != MIR_OP_STORE_LOCAL && in->op != MIR_OP_ADDR_LOCAL)
+      continue;
+    if (in->offset > max_off)
+      max_off = in->offset;
+  }
+
+  // Parameter spill-to-local in prologue still uses param offsets.
+  for (int i = 0; i < mf->param_count; i++) {
+    if (mf->param_offsets[i] > max_off)
+      max_off = mf->param_offsets[i];
+  }
+  return max_off;
+}
+
 static const RaVRegLoc *vreg_loc(const MirAsmCtx *ctx, VReg vreg) {
   if (!ctx || !ctx->ra || !ctx->ra->locs || vreg < 0 || vreg >= ctx->ra->vreg_count)
     error("invalid virtual register [in vreg_loc]");
@@ -1645,7 +1666,7 @@ void emit_mir_function(const MirFunction *mf) {
   ctx.single_def_imm_value = single_def_imm_value;
   ctx.skip_emit_addr_local = skip_emit_addr_local;
   ctx.skip_emit_imm = skip_emit_imm;
-  ctx.spill_base = align_up(mf->fn->offset, 8);
+  ctx.spill_base = align_up(compute_required_local_stack(mf), 8);
   int save_count = count_saved_mask_bits(ra.used_reg_mask);
   ctx.save_base = ctx.spill_base + (ra.spill_count * 8);
   int frame_payload = ctx.save_base + (save_count * 8);

@@ -282,6 +282,75 @@ static int is_trivial_dead_def_candidate(MirOp op) {
   return op == MIR_OP_MOV || op == MIR_OP_IMM || op == MIR_OP_CAST;
 }
 
+static void mark_vreg_live(unsigned char *live, int vreg_count, VReg v) {
+  if (!live || vreg_count <= 0 || v < 0 || v >= vreg_count)
+    return;
+  live[v] = 1;
+}
+
+static void remap_inst_vreg(VReg *v, const int *map, int old_vreg_count) {
+  if (!v || !map || old_vreg_count <= 0 || *v == MIR_INVALID_VREG)
+    return;
+  if (*v < 0 || *v >= old_vreg_count)
+    error("invalid vreg index [in mem2reg compact remap]");
+  int nv = map[*v];
+  if (nv < 0)
+    error("missing vreg remap entry [in mem2reg compact remap]");
+  *v = nv;
+}
+
+static void run_mem2reg_compact_vregs(MirFunction *mf) {
+  if (!mf || mf->inst_len <= 0 || mf->next_vreg <= 0)
+    return;
+
+  int old_vreg_count = mf->next_vreg;
+  unsigned char *live = calloc(old_vreg_count, sizeof(unsigned char));
+  int *map = malloc(sizeof(int) * old_vreg_count);
+  if (!live || !map)
+    error("memory allocation failed [in mem2reg compact vregs]");
+  for (int v = 0; v < old_vreg_count; v++)
+    map[v] = -1;
+
+  for (int i = 0; i < mf->inst_len; i++) {
+    MirInst *in = &mf->insts[i];
+    mark_vreg_live(live, old_vreg_count, in->dst);
+    mark_vreg_live(live, old_vreg_count, in->src1);
+    mark_vreg_live(live, old_vreg_count, in->src2);
+    if (in->op == MIR_OP_CALL) {
+      for (int a = 0; a < in->argc; a++)
+        mark_vreg_live(live, old_vreg_count, in->args[a]);
+    }
+  }
+
+  int new_vreg_count = 0;
+  for (int v = 0; v < old_vreg_count; v++) {
+    if (!live[v])
+      continue;
+    map[v] = new_vreg_count++;
+  }
+
+  if (new_vreg_count == old_vreg_count) {
+    free(map);
+    free(live);
+    return;
+  }
+
+  for (int i = 0; i < mf->inst_len; i++) {
+    MirInst *in = &mf->insts[i];
+    remap_inst_vreg(&in->dst, map, old_vreg_count);
+    remap_inst_vreg(&in->src1, map, old_vreg_count);
+    remap_inst_vreg(&in->src2, map, old_vreg_count);
+    if (in->op == MIR_OP_CALL) {
+      for (int a = 0; a < in->argc; a++)
+        remap_inst_vreg(&in->args[a], map, old_vreg_count);
+    }
+  }
+  mf->next_vreg = new_vreg_count;
+
+  free(map);
+  free(live);
+}
+
 static void run_mem2reg_prune_unreferenced_labels(MirInst **insts, int *inst_len, int *inst_cap, int next_label) {
   if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_label <= 0)
     return;
@@ -432,6 +501,7 @@ void optimize_mir_mem2reg(MirFunction *mf) {
     }
   }
   if (slot_len == 0) {
+    run_mem2reg_compact_vregs(mf);
     free(addr_slot_of_vreg);
     free(slots);
     return;
@@ -487,6 +557,7 @@ void optimize_mir_mem2reg(MirFunction *mf) {
     }
   }
   if (!any_promotable) {
+    run_mem2reg_compact_vregs(mf);
     free(addr_slot_of_vreg);
     free(slots);
     return;
@@ -589,6 +660,7 @@ void optimize_mir_mem2reg(MirFunction *mf) {
   mf->inst_cap = out_cap;
   run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
   run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
+  run_mem2reg_compact_vregs(mf);
 
   free(state);
   free(remaining_reads);
