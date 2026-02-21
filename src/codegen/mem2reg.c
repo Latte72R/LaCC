@@ -120,10 +120,15 @@ static void append_cast(MirInst **out_insts, int *out_len, int *out_cap, VReg ds
 }
 
 static void flush_dirty_locals(MirInst **out_insts, int *out_len, int *out_cap, LocalSlot *slots, int slot_len,
-                               LocalState *state) {
+                               LocalState *state, const int *remaining_reads, int allow_dead_store_elim) {
   for (int i = 0; i < slot_len; i++) {
     if (!slots[i].promotable || !state[i].dirty)
       continue;
+    if (allow_dead_store_elim && remaining_reads && remaining_reads[i] <= 0) {
+      // No future read can observe this local value; skip dead store.
+      state[i].dirty = 0;
+      continue;
+    }
     append_store_local(out_insts, out_len, out_cap, slots[i].offset, slots[i].type, state[i].value);
     state[i].dirty = 0;
   }
@@ -139,6 +144,31 @@ static void invalidate_all_states(LocalState *state, int slot_len) {
 
 static int is_control_barrier(MirOp op) {
   return op == MIR_OP_LABEL || op == MIR_OP_JMP || op == MIR_OP_JZ || op == MIR_OP_JCC || op == MIR_OP_RET;
+}
+
+static int local_read_slot_index(const MirInst *in, LocalSlot *slots, int slot_len, const int *addr_slot_of_vreg,
+                                 int vreg_count) {
+  if (!in || !slots || slot_len <= 0)
+    return -1;
+  if (in->op == MIR_OP_LOAD) {
+    if (in->src1 < 0 || in->src1 >= vreg_count || !addr_slot_of_vreg)
+      return -1;
+    int s = addr_slot_of_vreg[in->src1];
+    if (s < 0 || s >= slot_len)
+      return -1;
+    if (!slots[s].promotable || !local_access_compatible(slots[s].type, in->type))
+      return -1;
+    return s;
+  }
+  if (in->op == MIR_OP_LOAD_LOCAL) {
+    int s = find_slot(slots, slot_len, in->offset);
+    if (s < 0 || s >= slot_len)
+      return -1;
+    if (!slots[s].promotable || !local_access_compatible(slots[s].type, in->type))
+      return -1;
+    return s;
+  }
+  return -1;
 }
 
 static int same_scalar_type(Type *a, Type *b) {
@@ -429,18 +459,25 @@ void optimize_mir_mem2reg(MirFunction *mf) {
   }
 
   LocalState *state = calloc(slot_len, sizeof(LocalState));
+  int *remaining_reads = calloc(slot_len, sizeof(int));
   MirInst *out_insts = NULL;
   int out_len = 0;
   int out_cap = 0;
-  if (!state)
+  if (!state || !remaining_reads)
     error("memory allocation failed [in optimize_mir_mem2reg state]");
   for (int i = 0; i < slot_len; i++)
     state[i].value = MIR_INVALID_VREG;
+  for (int i = 0; i < mf->inst_len; i++) {
+    int s = local_read_slot_index(&mf->insts[i], slots, slot_len, addr_slot_of_vreg, mf->next_vreg);
+    if (s >= 0)
+      remaining_reads[s]++;
+  }
 
   for (int i = 0; i < mf->inst_len; i++) {
     MirInst in = mf->insts[i];
+    int read_slot = local_read_slot_index(&in, slots, slot_len, addr_slot_of_vreg, mf->next_vreg);
     if (is_control_barrier(in.op))
-      flush_dirty_locals(&out_insts, &out_len, &out_cap, slots, slot_len, state);
+      flush_dirty_locals(&out_insts, &out_len, &out_cap, slots, slot_len, state, remaining_reads, in.op == MIR_OP_RET);
 
     // 昇格できるなら ADDR_LOCAL は不要なので出力しない
     if (in.op == MIR_OP_ADDR_LOCAL && in.dst >= 0 && in.dst < mf->next_vreg) {
@@ -508,6 +545,8 @@ void optimize_mir_mem2reg(MirFunction *mf) {
   post_barrier:
     if (in.op == MIR_OP_LABEL || in.op == MIR_OP_JMP || in.op == MIR_OP_RET)
       invalidate_all_states(state, slot_len);
+    if (read_slot >= 0 && read_slot < slot_len && remaining_reads[read_slot] > 0)
+      remaining_reads[read_slot]--;
   }
 
   free(mf->insts);
@@ -517,6 +556,7 @@ void optimize_mir_mem2reg(MirFunction *mf) {
   run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
 
   free(state);
+  free(remaining_reads);
   free(addr_slot_of_vreg);
   free(slots);
 }
