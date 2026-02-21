@@ -548,9 +548,20 @@ static long typed_imm_canonical_value(Type *type, long imm) {
 
 static int is_signext_i32(long v) { return v >= (-2147483647L - 1L) && v <= 2147483647L; }
 
+static int can_emit_typed_imm_to_local_direct(Type *type, long imm) {
+  if (!type)
+    return 0;
+  if (type->ty == TY_BOOL || type->ty == TY_CHAR || type->ty == TY_SHORT || type->ty == TY_INT)
+    return 1;
+  if (type->ty == TY_LONG || type->ty == TY_LONGLONG || type->ty == TY_PTR || type->ty == TY_ARGARR ||
+      type->ty == TY_ARR)
+    return is_signext_i32(typed_imm_canonical_value(type, imm));
+  return 0;
+}
+
 static int emit_typed_imm_to_local_direct(Type *type, int off, long imm) {
   long v = typed_imm_canonical_value(type, imm);
-  if (!type)
+  if (!can_emit_typed_imm_to_local_direct(type, imm))
     return 0;
   switch (type->ty) {
   case TY_BOOL:
@@ -570,8 +581,6 @@ static int emit_typed_imm_to_local_direct(Type *type, int off, long imm) {
   case TY_PTR:
   case TY_ARGARR:
   case TY_ARR:
-    if (!is_signext_i32(v))
-      return 0;
     write_file("  mov QWORD PTR [rbp - %d], %ld\n", off, v);
     return 1;
   default:
@@ -726,6 +735,16 @@ static int is_direct_local_store_pattern(const MirFunction *mf, const unsigned c
   return single_def_meta_op[in->src1] == MIR_OP_ADDR_LOCAL;
 }
 
+static int can_consume_imm_use_without_materialize(const MirInst *in, int is_src1, long imm) {
+  if (!in)
+    return 0;
+  if (in->op == MIR_OP_ADD || in->op == MIR_OP_SUB || in->op == MIR_OP_MUL)
+    return 1;
+  if (in->op == MIR_OP_STORE_LOCAL && is_src1)
+    return can_emit_typed_imm_to_local_direct(in->type, imm);
+  return 0;
+}
+
 static void consume_vreg_for_skip_emit(const MirFunction *mf, unsigned char *skip_emit_addr_local,
                                        unsigned char *skip_emit_imm, VReg vreg, int keep_addr_local,
                                        int keep_imm, const char *role) {
@@ -740,10 +759,11 @@ static void consume_vreg_for_skip_emit(const MirFunction *mf, unsigned char *ski
 }
 
 static void build_skip_emit_info(const MirFunction *mf, const unsigned char *single_def_meta_known,
-                                 const MirOp *single_def_meta_op, unsigned char *skip_emit_addr_local,
+                                 const MirOp *single_def_meta_op, const unsigned char *single_def_imm_known,
+                                 const long *single_def_imm_value, unsigned char *skip_emit_addr_local,
                                  unsigned char *skip_emit_imm) {
   if (!mf || mf->next_vreg <= 0 || !single_def_meta_known || !single_def_meta_op || !skip_emit_addr_local ||
-      !skip_emit_imm)
+      !skip_emit_imm || !single_def_imm_known || !single_def_imm_value)
     return;
 
   for (int v = 0; v < mf->next_vreg; v++) {
@@ -761,13 +781,20 @@ static void build_skip_emit_info(const MirFunction *mf, const unsigned char *sin
     const MirInst *in = &mf->insts[i];
     int allow_direct_local_store_use = is_direct_local_store_pattern(mf, single_def_meta_known, single_def_meta_op, in);
 
-    if (in->src1 != MIR_INVALID_VREG)
+    if (in->src1 != MIR_INVALID_VREG) {
+      int keep_imm = 0;
+      if (in->src1 >= 0 && in->src1 < mf->next_vreg && single_def_imm_known[in->src1])
+        keep_imm = can_consume_imm_use_without_materialize(in, 1, single_def_imm_value[in->src1]);
       consume_vreg_for_skip_emit(mf, skip_emit_addr_local, skip_emit_imm, in->src1,
-                                 in->op == MIR_OP_LOAD || allow_direct_local_store_use, 0, "src1");
+                                 in->op == MIR_OP_LOAD || allow_direct_local_store_use, keep_imm, "src1");
+    }
 
-    if (in->src2 != MIR_INVALID_VREG)
-      consume_vreg_for_skip_emit(mf, skip_emit_addr_local, skip_emit_imm, in->src2, 0, allow_direct_local_store_use,
-                                 "src2");
+    if (in->src2 != MIR_INVALID_VREG) {
+      int keep_imm = allow_direct_local_store_use;
+      if (in->src2 >= 0 && in->src2 < mf->next_vreg && single_def_imm_known[in->src2])
+        keep_imm = keep_imm || can_consume_imm_use_without_materialize(in, 0, single_def_imm_value[in->src2]);
+      consume_vreg_for_skip_emit(mf, skip_emit_addr_local, skip_emit_imm, in->src2, 0, keep_imm, "src2");
+    }
 
     if (in->op == MIR_OP_CALL) {
       for (int a = 0; a < in->argc; a++)
@@ -920,16 +947,19 @@ static void emit_binop(const MirAsmCtx *ctx, const MirInst *in, const char *op, 
   const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
   VReg lhs_v = in->src1;
   VReg rhs_v = in->src2;
+  long lhs_imm = 0;
+  int lhs_is_imm = vreg_single_def_imm(ctx, lhs_v, &lhs_imm);
   long rhs_imm = 0;
   int rhs_is_imm = vreg_single_def_imm(ctx, rhs_v, &rhs_imm);
   if (!rhs_is_imm && commutative) {
-    long lhs_imm = 0;
-    if (vreg_single_def_imm(ctx, lhs_v, &lhs_imm)) {
+    if (lhs_is_imm) {
       VReg t = lhs_v;
       lhs_v = rhs_v;
       rhs_v = t;
       rhs_is_imm = 1;
       rhs_imm = lhs_imm;
+      lhs_is_imm = 0;
+      lhs_imm = 0;
     }
   }
   const char *lhs_reg = vreg_assigned_reg64(ctx, lhs_v);
@@ -946,6 +976,7 @@ static void emit_binop(const MirAsmCtx *ctx, const MirInst *in, const char *op, 
       rhs_is_imm = vreg_single_def_imm(ctx, rhs_v, &rhs_imm);
       if (!rhs_is_imm)
         rhs_imm = t_imm;
+      lhs_is_imm = vreg_single_def_imm(ctx, lhs_v, &lhs_imm);
       const char *t_r = lhs_reg;
       lhs_reg = rhs_reg;
       rhs_reg = t_r;
@@ -954,12 +985,19 @@ static void emit_binop(const MirAsmCtx *ctx, const MirInst *in, const char *op, 
     }
   }
 
-  load_vreg_to_reg(ctx, lhs_v, work);
+  if (lhs_is_imm)
+    emit_typed_imm_to_reg(in->type, work, lhs_imm);
+  else
+    load_vreg_to_reg(ctx, lhs_v, work);
 
   int can_use_imm = rhs_is_imm && (strcmp(op, "add") == 0 || strcmp(op, "sub") == 0 || strcmp(op, "imul") == 0) &&
                     is_signext_i32(rhs_imm);
   if (can_use_imm) {
     write_file("  %s %s, %ld\n", op, work, rhs_imm);
+  } else if (rhs_is_imm) {
+    const char *rhs_work = reg_eq(work, "r11") ? "rdi" : "r11";
+    emit_typed_imm_to_reg(in->type, rhs_work, rhs_imm);
+    write_file("  %s %s, %s\n", op, work, rhs_work);
   } else if (rhs_reg) {
     write_file("  %s %s, %s\n", op, work, rhs_reg);
   } else {
@@ -1051,6 +1089,9 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     return;
   }
   case MIR_OP_STORE_LOCAL: {
+    long imm = 0;
+    if (vreg_single_def_imm(ctx, in->src1, &imm) && emit_typed_imm_to_local_direct(in->type, in->offset, imm))
+      return;
     const char *src_reg = vreg_assigned_reg64(ctx, in->src1);
     if (src_reg) {
       store_reg_to_local_by64(in->offset, in->type, src_reg);
@@ -1565,7 +1606,8 @@ void emit_mir_function(const MirFunction *mf) {
     build_single_def_meta_info(mf, single_def_meta_known, single_def_meta_op, single_def_meta_type,
                                single_def_meta_offset);
     build_single_def_imm_info(mf, single_def_imm_known, single_def_imm_value);
-    build_skip_emit_info(mf, single_def_meta_known, single_def_meta_op, skip_emit_addr_local, skip_emit_imm);
+    build_skip_emit_info(mf, single_def_meta_known, single_def_meta_op, single_def_imm_known, single_def_imm_value,
+                         skip_emit_addr_local, skip_emit_imm);
   }
 
   MirAsmCtx ctx = {0};
