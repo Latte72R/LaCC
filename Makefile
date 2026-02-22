@@ -147,30 +147,29 @@ sanitize: clean bootstrap selfhost clean
 
 .NOTPARALLEL: sanitize
 
-asmcmp: $(SELFHOST) | $(BUILD_DIR) ## Compare asm line counts: lacc/clang x -O0/-O1 (default: all src/*.c, optional: FILE=path/to/file.c)
+asmcmp: $(SELFHOST) | $(BUILD_DIR) ## Compare asm line counts: lacc/cc x -O0/-O1 (default: all src/*.c, optional: FILE=path/to/file.c)
 	@set -eu; \
-	command -v clang >/dev/null 2>&1 || { echo "clang not found"; exit 1; }; \
 	files="$(FILE)"; \
 	if [ -z "$$files" ]; then \
 	  files="$(SRCS)"; \
 	fi; \
-	outdir="$(BUILD_DIR)/asmlinecmp"; \
+	outdir="$(BUILD_DIR)/asmcmp"; \
 	mkdir -p "$$outdir"; \
 	t_l0=0; t_l1=0; t_c0=0; t_c1=0; \
-	printf '%-40s %8s %8s %8s %8s\n' "file" "lacc-O0" "lacc-O1" "clang-O0" "clang-O1"; \
-	printf '%-40s %8s %8s %8s %8s\n' "----" "-------" "-------" "--------" "--------"; \
+	printf '%-40s %8s %8s %8s %8s\n' "file" "lacc-O0" "lacc-O1" "cc-O0" "cc-O1"; \
+	printf '%-40s %8s %8s %8s %8s\n' "----" "-------" "-------" "-----" "-----"; \
 	for f in $$files; do \
 	  rel=$${f#./}; \
 	  base=$${rel%.c}; \
 	  l0="$$outdir/$${base}.lacc.O0.s"; \
 	  l1="$$outdir/$${base}.lacc.O1.s"; \
-	  c0="$$outdir/$${base}.clang.O0.s"; \
-	  c1="$$outdir/$${base}.clang.O1.s"; \
+	  c0="$$outdir/$${base}.cc.O0.s"; \
+	  c1="$$outdir/$${base}.cc.O1.s"; \
 	  mkdir -p "$$(dirname "$$l0")"; \
 	  $(SELFHOST) $(LACC_FLAGS) -O0 "$$f" -S -o "$$l0"; \
 	  $(SELFHOST) $(LACC_FLAGS) -O1 "$$f" -S -o "$$l1"; \
-	  clang -std=c99 -I $(INCLUDE_DIR) -w -O0 -S "$$f" -o "$$c0"; \
-	  clang -std=c99 -I $(INCLUDE_DIR) -w -O1 -S "$$f" -o "$$c1"; \
+	  $(CC) -std=c99 -I $(INCLUDE_DIR) -w -O0 -S -masm=intel -fno-verbose-asm "$$f" -o "$$c0"; \
+	  $(CC) -std=c99 -I $(INCLUDE_DIR) -w -O1 -S -masm=intel -fno-verbose-asm "$$f" -o "$$c1"; \
 	  n_l0=$$(wc -l < "$$l0" | tr -d ' '); \
 	  n_l1=$$(wc -l < "$$l1" | tr -d ' '); \
 	  n_c0=$$(wc -l < "$$c0" | tr -d ' '); \

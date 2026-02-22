@@ -231,6 +231,8 @@ int main(int argc, char **argv) {
       optimize_level = 0;
     } else if (!strncmp(argv[i], "-O1", 3) && argv[i][3] == '\0') {
       optimize_level = 1;
+    } else if (!strncmp(argv[i], "-O", 2) && argv[i][2] == '\0') {
+      optimize_level = 1;
     } else if (!strncmp(argv[i], "-w", 2)) {
       show_warning = false;
     } else if (!strncmp(argv[i], "-H", 2)) {
