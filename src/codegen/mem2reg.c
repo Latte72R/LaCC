@@ -1154,6 +1154,223 @@ static void run_mem2reg_prune_unreachable_blocks(MirInst **insts, int *inst_len,
   free(label_to_inst);
 }
 
+typedef struct {
+  int start;
+  int end;
+  int succ[2];
+  int succ_cnt;
+} Mem2regBlock;
+
+static int is_cfg_terminator(MirOp op) { return op == MIR_OP_JMP || op == MIR_OP_JZ || op == MIR_OP_JCC || op == MIR_OP_RET; }
+
+static void add_cfg_succ(Mem2regBlock *bb, int succ) {
+  if (!bb || succ < 0)
+    return;
+  for (int i = 0; i < bb->succ_cnt; i++) {
+    if (bb->succ[i] == succ)
+      return;
+  }
+  if (bb->succ_cnt < 2)
+    bb->succ[bb->succ_cnt++] = succ;
+}
+
+static void build_mem2reg_cfg(const MirFunction *mf, Mem2regBlock **out_blocks, int *out_block_len) {
+  if (!mf || !out_blocks || !out_block_len)
+    error("invalid cfg builder args [in mem2reg cfg]");
+
+  int n = mf->inst_len;
+  unsigned char *is_block_start = calloc(n > 0 ? n : 1, sizeof(unsigned char));
+  if (!is_block_start)
+    error("memory allocation failed [in mem2reg cfg starts]");
+
+  if (n > 0)
+    is_block_start[0] = 1;
+  for (int i = 1; i < n; i++) {
+    if (mf->insts[i].op == MIR_OP_LABEL || is_cfg_terminator(mf->insts[i - 1].op))
+      is_block_start[i] = 1;
+  }
+
+  int block_len = 0;
+  for (int i = 0; i < n; i++) {
+    if (is_block_start[i])
+      block_len++;
+  }
+  if (block_len <= 0)
+    block_len = 1;
+
+  Mem2regBlock *blocks = calloc(block_len, sizeof(Mem2regBlock));
+  int *label_to_block = malloc(sizeof(int) * (mf->next_label > 0 ? mf->next_label : 1));
+  if (!blocks || !label_to_block)
+    error("memory allocation failed [in mem2reg cfg alloc]");
+
+  for (int l = 0; l < mf->next_label; l++)
+    label_to_block[l] = -1;
+
+  int b = 0;
+  for (int i = 0; i < n; i++) {
+    if (!is_block_start[i])
+      continue;
+    blocks[b].start = i;
+    blocks[b].end = n;
+    blocks[b].succ[0] = -1;
+    blocks[b].succ[1] = -1;
+    blocks[b].succ_cnt = 0;
+    if (b > 0)
+      blocks[b - 1].end = i;
+    b++;
+  }
+
+  for (int bi = 0; bi < block_len; bi++) {
+    MirInst *first = &mf->insts[blocks[bi].start];
+    if (first->op == MIR_OP_LABEL && first->label >= 0 && first->label < mf->next_label)
+      label_to_block[first->label] = bi;
+  }
+
+  for (int bi = 0; bi < block_len; bi++) {
+    Mem2regBlock *bb = &blocks[bi];
+    if (bb->start >= bb->end)
+      continue;
+    MirInst *term = &mf->insts[bb->end - 1];
+    int fallthrough = (bi + 1 < block_len) ? (bi + 1) : -1;
+    if (term->op == MIR_OP_JMP) {
+      if (term->label >= 0 && term->label < mf->next_label)
+        add_cfg_succ(bb, label_to_block[term->label]);
+      continue;
+    }
+    if (term->op == MIR_OP_JZ || term->op == MIR_OP_JCC) {
+      if (term->label >= 0 && term->label < mf->next_label)
+        add_cfg_succ(bb, label_to_block[term->label]);
+      add_cfg_succ(bb, fallthrough);
+      continue;
+    }
+    if (term->op == MIR_OP_RET)
+      continue;
+    add_cfg_succ(bb, fallthrough);
+  }
+
+  free(is_block_start);
+  free(label_to_block);
+  *out_blocks = blocks;
+  *out_block_len = block_len;
+}
+
+static void transfer_mem2reg_state_over_block(const MirFunction *mf, const Mem2regBlock *bb, LocalSlot *slots, int slot_len,
+                                              const int *addr_slot_of_vreg, LocalState *state) {
+  if (!mf || !bb || !slots || slot_len <= 0 || !addr_slot_of_vreg || !state)
+    return;
+
+  for (int i = bb->start; i < bb->end; i++) {
+    const MirInst *in = &mf->insts[i];
+    if ((in->op == MIR_OP_LOAD || in->op == MIR_OP_STORE) && in->src1 >= 0 && in->src1 < mf->next_vreg) {
+      int s = addr_slot_of_vreg[in->src1];
+      if (s >= 0 && s < slot_len && slots[s].promotable) {
+        if (in->op == MIR_OP_LOAD) {
+          if (!state[s].valid) {
+            state[s].valid = 1;
+            state[s].value = in->dst;
+            state[s].dirty = 0;
+          }
+        } else {
+          state[s].valid = 1;
+          state[s].value = in->src2;
+          state[s].dirty = 0;
+        }
+      }
+      continue;
+    }
+
+    if (in->op == MIR_OP_LOAD_LOCAL) {
+      int s = find_slot(slots, slot_len, in->offset);
+      if (s >= 0 && slots[s].promotable && local_access_compatible(slots[s].type, in->type)) {
+        if (!state[s].valid) {
+          state[s].valid = 1;
+          state[s].value = in->dst;
+          state[s].dirty = 0;
+        }
+      }
+      continue;
+    }
+
+    if (in->op == MIR_OP_STORE_LOCAL) {
+      int s = find_slot(slots, slot_len, in->offset);
+      if (s >= 0 && slots[s].promotable && local_access_compatible(slots[s].type, in->type)) {
+        state[s].valid = 1;
+        state[s].value = in->src1;
+        state[s].dirty = 0;
+      }
+    }
+  }
+}
+
+static void compute_mem2reg_cfg_in_state(const MirFunction *mf, LocalSlot *slots, int slot_len, const int *addr_slot_of_vreg,
+                                         const Mem2regBlock *blocks, int block_len, unsigned char *block_reachable,
+                                         unsigned char *in_valid, VReg *in_value) {
+  if (!mf || !slots || slot_len <= 0 || !addr_slot_of_vreg || !blocks || block_len <= 0 || !block_reachable || !in_valid ||
+      !in_value)
+    return;
+
+  LocalState *tmp_state = calloc(slot_len, sizeof(LocalState));
+  if (!tmp_state)
+    error("memory allocation failed [in mem2reg cfg dataflow tmp]");
+  for (int s = 0; s < slot_len; s++)
+    tmp_state[s].value = MIR_INVALID_VREG;
+
+  for (int i = 0; i < block_len; i++) {
+    block_reachable[i] = 0;
+    for (int s = 0; s < slot_len; s++) {
+      in_valid[i * slot_len + s] = 0;
+      in_value[i * slot_len + s] = MIR_INVALID_VREG;
+    }
+  }
+  block_reachable[0] = 1;
+
+  int changed = 1;
+  while (changed) {
+    changed = 0;
+    for (int bi = 0; bi < block_len; bi++) {
+      if (!block_reachable[bi])
+        continue;
+
+      for (int s = 0; s < slot_len; s++) {
+        int idx = bi * slot_len + s;
+        tmp_state[s].valid = in_valid[idx];
+        tmp_state[s].dirty = 0;
+        tmp_state[s].value = in_value[idx];
+      }
+      transfer_mem2reg_state_over_block(mf, &blocks[bi], slots, slot_len, addr_slot_of_vreg, tmp_state);
+
+      for (int k = 0; k < blocks[bi].succ_cnt; k++) {
+        int succ = blocks[bi].succ[k];
+        if (succ < 0 || succ >= block_len)
+          continue;
+        if (!block_reachable[succ]) {
+          block_reachable[succ] = 1;
+          changed = 1;
+          for (int s = 0; s < slot_len; s++) {
+            int idx = succ * slot_len + s;
+            in_valid[idx] = tmp_state[s].valid ? 1 : 0;
+            in_value[idx] = tmp_state[s].valid ? tmp_state[s].value : MIR_INVALID_VREG;
+          }
+          continue;
+        }
+
+        for (int s = 0; s < slot_len; s++) {
+          int idx = succ * slot_len + s;
+          if (!in_valid[idx])
+            continue;
+          if (!tmp_state[s].valid || in_value[idx] != tmp_state[s].value) {
+            in_valid[idx] = 0;
+            in_value[idx] = MIR_INVALID_VREG;
+            changed = 1;
+          }
+        }
+      }
+    }
+  }
+
+  free(tmp_state);
+}
+
 void optimize_mir_inline_cleanup(MirFunction *mf) {
   if (!mf || mf->inst_len <= 0 || mf->next_vreg <= 0)
     return;
@@ -1253,6 +1470,18 @@ void optimize_mir_mem2reg(MirFunction *mf) {
     return;
   }
 
+  Mem2regBlock *blocks = NULL;
+  int block_len = 0;
+  build_mem2reg_cfg(mf, &blocks, &block_len);
+
+  unsigned char *block_reachable = calloc(block_len > 0 ? block_len : 1, sizeof(unsigned char));
+  unsigned char *cfg_in_valid = calloc((size_t)(block_len > 0 ? block_len : 1) * (size_t)slot_len, sizeof(unsigned char));
+  VReg *cfg_in_value = malloc(sizeof(VReg) * (size_t)(block_len > 0 ? block_len : 1) * (size_t)slot_len);
+  if (!block_reachable || !cfg_in_valid || !cfg_in_value)
+    error("memory allocation failed [in optimize_mir_mem2reg cfg state]");
+  compute_mem2reg_cfg_in_state(mf, slots, slot_len, addr_slot_of_vreg, blocks, block_len, block_reachable, cfg_in_valid,
+                               cfg_in_value);
+
   LocalState *state = calloc(slot_len, sizeof(LocalState));
   int *remaining_reads = calloc(slot_len, sizeof(int));
   MirInst *out_insts = NULL;
@@ -1268,80 +1497,91 @@ void optimize_mir_mem2reg(MirFunction *mf) {
       remaining_reads[s]++;
   }
 
-  for (int i = 0; i < mf->inst_len; i++) {
-    MirInst in = mf->insts[i];
-    int read_slot = local_read_slot_index(&in, slots, slot_len, addr_slot_of_vreg, mf->next_vreg);
-    if (is_control_barrier(in.op))
-      flush_dirty_locals(&out_insts, &out_len, &out_cap, slots, slot_len, state, remaining_reads, in.op == MIR_OP_RET);
-
-    // 昇格できるなら ADDR_LOCAL は不要なので出力しない
-    if (in.op == MIR_OP_ADDR_LOCAL && in.dst >= 0 && in.dst < mf->next_vreg) {
-      int s = addr_slot_of_vreg[in.dst];
-      if (s >= 0 && slots[s].promotable)
-        goto post_barrier;
+  for (int bi = 0; bi < block_len; bi++) {
+    for (int s = 0; s < slot_len; s++) {
+      int idx = bi * slot_len + s;
+      state[s].valid = (block_reachable[bi] ? cfg_in_valid[idx] : 0);
+      state[s].dirty = 0;
+      state[s].value = (state[s].valid ? cfg_in_value[idx] : MIR_INVALID_VREG);
     }
 
-    // LOAD はレジスタからの MOV に、STORE は状態の更新にそれぞれ置き換える
-    if ((in.op == MIR_OP_LOAD || in.op == MIR_OP_STORE) && in.src1 >= 0 && in.src1 < mf->next_vreg) {
-      int s = addr_slot_of_vreg[in.src1];
-      if (s >= 0 && slots[s].promotable) {
-        if (in.op == MIR_OP_LOAD) {
+    for (int i = blocks[bi].start; i < blocks[bi].end; i++) {
+      MirInst in = mf->insts[i];
+      int read_slot = local_read_slot_index(&in, slots, slot_len, addr_slot_of_vreg, mf->next_vreg);
+      if (in.op == MIR_OP_JMP || in.op == MIR_OP_JZ || in.op == MIR_OP_JCC || in.op == MIR_OP_RET)
+        flush_dirty_locals(&out_insts, &out_len, &out_cap, slots, slot_len, state, remaining_reads, in.op == MIR_OP_RET);
+
+      // 昇格できるなら ADDR_LOCAL は不要なので出力しない
+      if (in.op == MIR_OP_ADDR_LOCAL && in.dst >= 0 && in.dst < mf->next_vreg) {
+        int s = addr_slot_of_vreg[in.dst];
+        if (s >= 0 && slots[s].promotable)
+          goto post_inst;
+      }
+
+      // LOAD はレジスタからの MOV に、STORE は状態の更新にそれぞれ置き換える
+      if ((in.op == MIR_OP_LOAD || in.op == MIR_OP_STORE) && in.src1 >= 0 && in.src1 < mf->next_vreg) {
+        int s = addr_slot_of_vreg[in.src1];
+        if (s >= 0 && slots[s].promotable) {
+          if (in.op == MIR_OP_LOAD) {
+            if (state[s].valid) {
+              append_cast(&out_insts, &out_len, &out_cap, in.dst, state[s].value, in.type);
+            } else {
+              in.op = MIR_OP_LOAD_LOCAL;
+              in.src1 = MIR_INVALID_VREG;
+              in.src2 = MIR_INVALID_VREG;
+              in.offset = slots[s].offset;
+              append_inst(&out_insts, &out_len, &out_cap, &in);
+              state[s].valid = 1;
+              state[s].dirty = 0;
+              state[s].value = in.dst;
+            }
+          } else {
+            // MIR_OP_STORE
+            state[s].valid = 1;
+            state[s].dirty = 1;
+            state[s].value = in.src2;
+          }
+          goto post_inst;
+        }
+      }
+
+      // 既にキャッシュがあれば MOV に置換、なければそのまま出してキャッシュ化
+      if (in.op == MIR_OP_LOAD_LOCAL) {
+        int s = find_slot(slots, slot_len, in.offset);
+        if (s >= 0 && slots[s].promotable && local_access_compatible(slots[s].type, in.type)) {
           if (state[s].valid) {
             append_cast(&out_insts, &out_len, &out_cap, in.dst, state[s].value, in.type);
           } else {
-            in.op = MIR_OP_LOAD_LOCAL;
-            in.src1 = MIR_INVALID_VREG;
-            in.src2 = MIR_INVALID_VREG;
-            in.offset = slots[s].offset;
             append_inst(&out_insts, &out_len, &out_cap, &in);
             state[s].valid = 1;
             state[s].dirty = 0;
             state[s].value = in.dst;
           }
-        } else {
-          // MIR_OP_STORE
+          goto post_inst;
+        }
+      }
+
+      // 即ストアせず state を dirty 更新だけにする
+      if (in.op == MIR_OP_STORE_LOCAL) {
+        int s = find_slot(slots, slot_len, in.offset);
+        if (s >= 0 && slots[s].promotable && local_access_compatible(slots[s].type, in.type)) {
           state[s].valid = 1;
           state[s].dirty = 1;
-          state[s].value = in.src2;
+          state[s].value = in.src1;
+          goto post_inst;
         }
-        goto post_barrier;
       }
+
+      append_inst(&out_insts, &out_len, &out_cap, &in);
+
+    post_inst:
+      if (read_slot >= 0 && read_slot < slot_len && remaining_reads[read_slot] > 0)
+        remaining_reads[read_slot]--;
     }
 
-    // 既にキャッシュがあれば MOV に置換、なければそのまま出してキャッシュ化
-    if (in.op == MIR_OP_LOAD_LOCAL) {
-      int s = find_slot(slots, slot_len, in.offset);
-      if (s >= 0 && slots[s].promotable && local_access_compatible(slots[s].type, in.type)) {
-        if (state[s].valid) {
-          append_cast(&out_insts, &out_len, &out_cap, in.dst, state[s].value, in.type);
-        } else {
-          append_inst(&out_insts, &out_len, &out_cap, &in);
-          state[s].valid = 1;
-          state[s].dirty = 0;
-          state[s].value = in.dst;
-        }
-        goto post_barrier;
-      }
-    }
-
-    // 即ストアせず state を dirty 更新だけにする
-    if (in.op == MIR_OP_STORE_LOCAL) {
-      int s = find_slot(slots, slot_len, in.offset);
-      if (s >= 0 && slots[s].promotable && local_access_compatible(slots[s].type, in.type)) {
-        state[s].valid = 1;
-        state[s].dirty = 1;
-        state[s].value = in.src1;
-        goto post_barrier;
-      }
-    }
-
-    append_inst(&out_insts, &out_len, &out_cap, &in);
-
-  post_barrier:
-    if (in.op == MIR_OP_LABEL || in.op == MIR_OP_JMP || in.op == MIR_OP_RET)
-      invalidate_all_states(state, slot_len);
-    if (read_slot >= 0 && read_slot < slot_len && remaining_reads[read_slot] > 0)
-      remaining_reads[read_slot]--;
+    // fallthrough で LABEL ブロックへ入る境界では stack を同期しておく
+    if (bi + 1 < block_len && mf->insts[blocks[bi + 1].start].op == MIR_OP_LABEL)
+      flush_dirty_locals(&out_insts, &out_len, &out_cap, slots, slot_len, state, remaining_reads, 0);
   }
 
   free(mf->insts);
@@ -1357,6 +1597,10 @@ void optimize_mir_mem2reg(MirFunction *mf) {
   run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
   run_mem2reg_compact_vregs(mf);
 
+  free(cfg_in_value);
+  free(cfg_in_valid);
+  free(block_reachable);
+  free(blocks);
   free(state);
   free(remaining_reads);
   free(addr_slot_of_vreg);
