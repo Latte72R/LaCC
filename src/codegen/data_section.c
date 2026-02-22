@@ -57,20 +57,44 @@ static void write_struct_data(StructLiteral *lit) {
   }
 }
 
+static void emit_rodata_section_once(int *emitted) {
+  if (!emitted || *emitted)
+    return;
+#if LACC_PLATFORM_APPLE
+  write_file("  .section __TEXT,__cstring,cstring_literals\n");
+#else
+  write_file("  .section .rodata\n");
+#endif
+  *emitted = 1;
+}
+
+static void emit_data_section_once(int *emitted) {
+  if (!emitted || *emitted)
+    return;
+#if LACC_PLATFORM_APPLE
+  write_file("  .section __DATA,__data\n");
+#else
+  write_file("  .data\n");
+#endif
+  *emitted = 1;
+}
+
 // 文字列リテラルの生成
-void gen_string_literal() {
+static void gen_string_literal(int *rodata_emitted) {
   for (String *str = strings; str; str = str->next) {
+    emit_rodata_section_once(rodata_emitted);
     write_file(".L.str%d:\n", str->id);
     write_file("  .asciz \"%.*s\"\n", str->len, str->text);
   }
 }
 
 // グローバル変数の生成
-void gen_global_variables() {
+static void gen_global_variables(int *data_emitted) {
   for (LVar *var = globals; var; var = var->next) {
     if (var->is_extern) {
       continue;
     }
+    emit_data_section_once(data_emitted);
 #if !LACC_PLATFORM_APPLE
     if (var->is_static) {
       write_file("  .local " ASM_SYM_FMT "\n", ASM_SYM_ARGS(var->len, var->name));
@@ -107,8 +131,9 @@ void gen_global_variables() {
 }
 
 // staticな変数の生成
-void gen_static_variables() {
+static void gen_static_variables(int *data_emitted) {
   for (LVar *var = statics; var; var = var->next) {
+    emit_data_section_once(data_emitted);
 #if !LACC_PLATFORM_APPLE
     write_file("  .local %s%.*s.%d\n", ASM_PREFIX, var->len, var->name, var->block);
 #endif
@@ -137,39 +162,33 @@ void gen_static_variables() {
 }
 
 // 配列リテラルの生成
-void gen_array_literals() {
+static void gen_array_literals(int *data_emitted) {
   for (Array *arr = arrays; arr; arr = arr->next) {
+    emit_data_section_once(data_emitted);
     write_file(".L.arr%d:\n", arr->id);
     write_array_data(arr);
   }
 }
 
-static void gen_struct_literals() {
+static void gen_struct_literals(int *data_emitted) {
   for (StructLiteral *lit = struct_literals; lit; lit = lit->next) {
     if (!lit->needs_label)
       continue;
+    emit_data_section_once(data_emitted);
     write_file(".L.struct%d:\n", lit->id);
     write_struct_data(lit);
   }
 }
 
 void gen_rodata_section() {
-#if LACC_PLATFORM_APPLE
-  write_file("  .section __TEXT,__cstring,cstring_literals\n");
-#else
-  write_file("  .section .rodata\n");
-#endif
-  gen_string_literal();
+  int rodata_emitted = 0;
+  gen_string_literal(&rodata_emitted);
 }
 
 void gen_data_section() {
-#if LACC_PLATFORM_APPLE
-  write_file("  .section __DATA,__data\n");
-#else
-  write_file("  .data\n");
-#endif
-  gen_global_variables();
-  gen_static_variables();
-  gen_array_literals();
-  gen_struct_literals();
+  int data_emitted = 0;
+  gen_global_variables(&data_emitted);
+  gen_static_variables(&data_emitted);
+  gen_array_literals(&data_emitted);
+  gen_struct_literals(&data_emitted);
 }
