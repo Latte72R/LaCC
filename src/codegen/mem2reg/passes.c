@@ -686,6 +686,61 @@ void run_mem2reg_const_fold(MirInst **insts, int *inst_len, int next_vreg) {
   free(def_count);
 }
 
+static int is_commutative_imm_rhs_op(MirOp op) {
+  switch (op) {
+  case MIR_OP_ADD:
+  case MIR_OP_MUL:
+  case MIR_OP_BITAND:
+  case MIR_OP_BITOR:
+  case MIR_OP_BITXOR:
+  case MIR_OP_EQ:
+  case MIR_OP_NE:
+    return 1;
+  default:
+    return 0;
+  }
+}
+
+void run_mem2reg_canonicalize_commutative_imm_rhs(MirInst **insts, int *inst_len, int next_vreg) {
+  if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
+    return;
+
+  int *def_count = calloc(next_vreg, sizeof(int));
+  MirOp *def_op = calloc(next_vreg, sizeof(MirOp));
+  long *def_imm = calloc(next_vreg, sizeof(long));
+  if (!def_count || !def_op || !def_imm)
+    error("memory allocation failed [in mem2reg commutative canonicalize setup]");
+
+  for (int i = 0; i < *inst_len; i++) {
+    MirInst *in = &(*insts)[i];
+    if (in->dst < 0 || in->dst >= next_vreg)
+      continue;
+    def_count[in->dst]++;
+    def_op[in->dst] = in->op;
+    def_imm[in->dst] = in->imm;
+  }
+
+  for (int i = 0; i < *inst_len; i++) {
+    MirInst *in = &(*insts)[i];
+    if (!is_commutative_imm_rhs_op(in->op))
+      continue;
+    if (in->src1 < 0 || in->src1 >= next_vreg || in->src2 < 0 || in->src2 >= next_vreg)
+      continue;
+
+    int src1_is_imm = get_single_def_imm(in->src1, next_vreg, def_count, def_op, def_imm, NULL);
+    int src2_is_imm = get_single_def_imm(in->src2, next_vreg, def_count, def_op, def_imm, NULL);
+    if (src1_is_imm && !src2_is_imm) {
+      VReg t = in->src1;
+      in->src1 = in->src2;
+      in->src2 = t;
+    }
+  }
+
+  free(def_imm);
+  free(def_op);
+  free(def_count);
+}
+
 static void clear_inst_to_nop(MirInst *in) {
   if (!in)
     return;
@@ -1581,6 +1636,7 @@ void mem2reg_run_promote(MirFunction *mf) {
   run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
   run_mem2reg_const_fold(&mf->insts, &mf->inst_len, mf->next_vreg);
   run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
+  run_mem2reg_canonicalize_commutative_imm_rhs(&mf->insts, &mf->inst_len, mf->next_vreg);
   run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
   run_mem2reg_compact_vregs(mf);
 
