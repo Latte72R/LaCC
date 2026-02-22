@@ -102,6 +102,29 @@ static int cmp_active_end(const void *a, const void *b) {
   return ia->end - ib->end;
 }
 
+static int can_coalesce_with_src1(MirOp op) {
+  switch (op) {
+  case MIR_OP_MOV:
+  case MIR_OP_CAST:
+  case MIR_OP_ADD:
+  case MIR_OP_SUB:
+  case MIR_OP_MUL:
+  case MIR_OP_BITAND:
+  case MIR_OP_BITOR:
+  case MIR_OP_BITXOR:
+  case MIR_OP_SHL:
+  case MIR_OP_SHR:
+  case MIR_OP_BITNOT:
+  case MIR_OP_EQ:
+  case MIR_OP_NE:
+  case MIR_OP_LT:
+  case MIR_OP_LE:
+    return 1;
+  default:
+    return 0;
+  }
+}
+
 static int alloc_free_preg(const int *preg_in_use, unsigned allowed_mask, const int *pref_order) {
   for (int i = 0; i < RA_PREG_COUNT; i++) {
     int p = pref_order[i];
@@ -270,7 +293,8 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   int *end = malloc(sizeof(int) * mf->next_vreg);
   int *copy_src_at_start = malloc(sizeof(int) * mf->next_vreg);
   int *crosses_call = calloc(mf->next_vreg, sizeof(int));
-  if (!start || !end || !copy_src_at_start || !crosses_call)
+  int *use_site_count = calloc(mf->next_vreg, sizeof(int));
+  if (!start || !end || !copy_src_at_start || !crosses_call || !use_site_count)
     error("memory allocation failed [in regalloc_run ranges]");
   for (int v = 0; v < mf->next_vreg; v++) {
     start[v] = -1;
@@ -298,6 +322,11 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   }
 
   for (int i = 0; i < ninst; i++) {
+    const unsigned long long *use_i = cbit_row(use, i, words);
+    for (int v = 0; v < mf->next_vreg; v++) {
+      if (bit_get(use_i, v))
+        use_site_count[v]++;
+    }
     if (mf->insts[i].op != MIR_OP_CALL)
       continue;
     const unsigned long long *in_i = cbit_row(in, i, words);
@@ -314,20 +343,18 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
       interval_cnt++;
   }
 
-  // copy coalescing hint:
-  // if interval v starts with "v <- src" and src dies at this instruction,
-  // prefer assigning the same physical register to v.
-  // MIR_OP_CAST is included as a two-address friendly op; when coalesced it
-  // can run in-place on the source register.
+  // coalescing hint:
+  // if interval v starts with a src1-dominant op and src1 dies at this
+  // instruction, prefer assigning the same physical register to v.
   for (int v = 0; v < mf->next_vreg; v++) {
     int s = start[v];
     if (s < 0 || s >= ninst)
       continue;
     MirInst *in_s = &mf->insts[s];
-    if ((in_s->op != MIR_OP_MOV && in_s->op != MIR_OP_CAST) || in_s->dst != v || in_s->src1 == MIR_INVALID_VREG)
+    if (!can_coalesce_with_src1(in_s->op) || in_s->dst != v || in_s->src1 == MIR_INVALID_VREG)
       continue;
     if (in_s->src1 < 0 || in_s->src1 >= mf->next_vreg)
-      error("invalid MOV src vreg for copy coalescing hint");
+      error("invalid src1 vreg for copy coalescing hint");
     copy_src_at_start[v] = in_s->src1;
   }
 
@@ -415,6 +442,11 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
       if (cand >= 0 && (allowed_mask & (1u << cand)) && !preg_in_use[cand])
         preferred_preg = cand;
     }
+
+    int prefer_spill_for_tiny_cross_call =
+        crosses_call[cur->vreg] && use_site_count[cur->vreg] <= 3 && (cur->end - cur->start) <= 16;
+    if (prefer_spill_for_tiny_cross_call)
+      allowed_mask = 0;
 
     int preg = -1;
     if (preferred_preg >= 0 && preferred_preg < RA_PREG_COUNT && (allowed_mask & (1u << preferred_preg)) &&
@@ -510,6 +542,7 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   free(reg_for_vreg);
   free(preg_in_use);
   free(intervals);
+  free(use_site_count);
   free(crosses_call);
   free(copy_src_at_start);
   free(end);
