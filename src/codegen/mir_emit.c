@@ -36,6 +36,7 @@ struct MirAsmCtx {
   int save_slot[RA_PREG_COUNT];
   int frame_size;
   int omit_frame;
+  VReg pending_ret_rax_vreg;
 };
 
 static int align_up(int n, int align) {
@@ -787,6 +788,8 @@ static int can_consume_imm_use_without_materialize(const MirInst *in, int is_src
     return 0;
   if (in->op == MIR_OP_ADD || in->op == MIR_OP_SUB || in->op == MIR_OP_MUL)
     return 1;
+  if (in->op == MIR_OP_RET && is_src1)
+    return 1;
   if (in->op == MIR_OP_STORE_LOCAL && is_src1)
     return can_emit_typed_imm_to_local_direct(in->type, imm);
   return 0;
@@ -878,6 +881,13 @@ static int can_ret_fallthrough_to_epilogue(const MirFunction *mf, int inst_idx) 
     return 0;
   }
   return 1;
+}
+
+static int ret_uses_vreg_immediately(const MirFunction *mf, int inst_idx, VReg vreg) {
+  if (!mf || inst_idx < 0 || inst_idx + 1 >= mf->inst_len || vreg == MIR_INVALID_VREG)
+    return 0;
+  const MirInst *next = &mf->insts[inst_idx + 1];
+  return next->op == MIR_OP_RET && next->src1 == vreg;
 }
 
 static int needs_epilogue_label(const MirFunction *mf) {
@@ -1002,7 +1012,7 @@ static const char *jcc_mnemonic(long cc, Type *type) {
 
 static int reg_eq(const char *a, const char *b) { return a && b && !strcmp(a, b); }
 
-static void emit_binop(const MirAsmCtx *ctx, const MirInst *in, const char *op, int commutative) {
+static void emit_binop(MirAsmCtx *ctx, const MirInst *in, const char *op, int commutative, int inst_idx) {
   const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
   VReg lhs_v = in->src1;
   VReg rhs_v = in->src2;
@@ -1024,6 +1034,9 @@ static void emit_binop(const MirAsmCtx *ctx, const MirInst *in, const char *op, 
   const char *lhs_reg = vreg_assigned_reg64(ctx, lhs_v);
   const char *rhs_reg = vreg_assigned_reg64(ctx, rhs_v);
   const char *work = dst_reg ? dst_reg : "rax";
+  int forward_ret_to_rax = ret_uses_vreg_immediately(ctx->mf, inst_idx, in->dst);
+  if (forward_ret_to_rax)
+    work = "rax";
 
   if (!rhs_is_imm && dst_reg && reg_eq(dst_reg, rhs_reg) && !reg_eq(dst_reg, lhs_reg)) {
     if (commutative) {
@@ -1066,13 +1079,19 @@ static void emit_binop(const MirAsmCtx *ctx, const MirInst *in, const char *op, 
     write_file("  %s %s, QWORD PTR [rbp - %d]\n", op, work, off);
   }
 
-  if (!dst_reg || strcmp(work, dst_reg))
+  if (!forward_ret_to_rax && (!dst_reg || strcmp(work, dst_reg)))
     store_reg_to_vreg(ctx, in->dst, work);
+  if (forward_ret_to_rax)
+    ctx->pending_ret_rax_vreg = in->dst;
 }
 
 static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
   if (!ctx || !ctx->mf || !ctx->mf->fn || !in)
     error("invalid MIR emit context");
+  int can_consume_pending_ret_rax =
+      in->op == MIR_OP_RET && in->src1 != MIR_INVALID_VREG && in->src1 == ctx->pending_ret_rax_vreg;
+  if (!can_consume_pending_ret_rax)
+    ctx->pending_ret_rax_vreg = MIR_INVALID_VREG;
 
   if (in->op == MIR_OP_LABEL) {
     if (ctx->has_pending_jmp && ctx->pending_jmp_label == in->label) {
@@ -1099,6 +1118,11 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     write_file("  nop\n");
     return;
   case MIR_OP_IMM: {
+    if (inst_idx + 1 < ctx->mf->inst_len) {
+      const MirInst *next = &ctx->mf->insts[inst_idx + 1];
+      if (next->op == MIR_OP_RET && next->src1 == in->dst)
+        return;
+    }
     if (ctx->skip_emit_imm && in->dst >= 0 && in->dst < ctx->mf->next_vreg && ctx->skip_emit_imm[in->dst])
       return;
     const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
@@ -1113,6 +1137,17 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     return;
   }
   case MIR_OP_MOV: {
+    if (ret_uses_vreg_immediately(ctx->mf, inst_idx, in->dst)) {
+      const char *src_reg = vreg_assigned_reg64(ctx, in->src1);
+      if (src_reg) {
+        if (strcmp(src_reg, "rax"))
+          write_file("  mov rax, %s\n", src_reg);
+      } else {
+        load_vreg_to_reg(ctx, in->src1, "rax");
+      }
+      ctx->pending_ret_rax_vreg = in->dst;
+      return;
+    }
     const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
     const char *src_reg = vreg_assigned_reg64(ctx, in->src1);
     if (dst_reg && src_reg) {
@@ -1327,6 +1362,20 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     return;
   }
   case MIR_OP_CAST: {
+    if (ret_uses_vreg_immediately(ctx->mf, inst_idx, in->dst)) {
+      const char *src_reg = vreg_assigned_reg64(ctx, in->src1);
+      if (src_reg && cast_source_is_known_canonical(ctx, in->src1, in->type)) {
+        if (strcmp("rax", src_reg))
+          write_file("  mov rax, %s\n", src_reg);
+      } else if (src_reg) {
+        emit_cast_reg_from_reg(in->type, "rax", src_reg);
+      } else {
+        load_vreg_to_reg(ctx, in->src1, "rax");
+        emit_cast_reg(in->type, "rax");
+      }
+      ctx->pending_ret_rax_vreg = in->dst;
+      return;
+    }
     const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
     const char *src_reg = vreg_assigned_reg64(ctx, in->src1);
     const char *work = dst_reg ? dst_reg : "rax";
@@ -1344,13 +1393,13 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     return;
   }
   case MIR_OP_ADD:
-    emit_binop(ctx, in, "add", 1);
+    emit_binop(ctx, in, "add", 1, inst_idx);
     return;
   case MIR_OP_SUB:
-    emit_binop(ctx, in, "sub", 0);
+    emit_binop(ctx, in, "sub", 0, inst_idx);
     return;
   case MIR_OP_MUL:
-    emit_binop(ctx, in, "imul", 1);
+    emit_binop(ctx, in, "imul", 1, inst_idx);
     return;
   case MIR_OP_SDIV:
   case MIR_OP_SMOD:
@@ -1444,13 +1493,13 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     return;
   }
   case MIR_OP_BITAND:
-    emit_binop(ctx, in, "and", 1);
+    emit_binop(ctx, in, "and", 1, inst_idx);
     return;
   case MIR_OP_BITOR:
-    emit_binop(ctx, in, "or", 1);
+    emit_binop(ctx, in, "or", 1, inst_idx);
     return;
   case MIR_OP_BITXOR:
-    emit_binop(ctx, in, "xor", 1);
+    emit_binop(ctx, in, "xor", 1, inst_idx);
     return;
   case MIR_OP_SHL:
   case MIR_OP_SHR: {
@@ -1620,14 +1669,39 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
 
     if (stack_argc > 0 || align_pad)
       write_file("  add rsp, %d\n", (stack_argc * 8) + (align_pad ? 8 : 0));
-    if (in->dst != MIR_INVALID_VREG)
-      store_reg_to_vreg(ctx, in->dst, "rax");
+    if (in->dst != MIR_INVALID_VREG) {
+      if (ret_uses_vreg_immediately(ctx->mf, inst_idx, in->dst)) {
+        ctx->pending_ret_rax_vreg = in->dst;
+      } else {
+        store_reg_to_vreg(ctx, in->dst, "rax");
+      }
+    }
     return;
   }
   case MIR_OP_RET:
-    if (in->src1 != MIR_INVALID_VREG)
-      load_vreg_to_reg(ctx, in->src1, "rax");
-    if (in->type && in->type->ty == TY_BOOL) {
+    if (in->src1 != MIR_INVALID_VREG && !can_consume_pending_ret_rax) {
+      if (inst_idx > 0 && ctx->mf->insts[inst_idx - 1].op == MIR_OP_IMM && ctx->mf->insts[inst_idx - 1].dst == in->src1) {
+        long imm = ctx->mf->insts[inst_idx - 1].imm;
+        Type *imm_type = in->type ? in->type : ctx->mf->insts[inst_idx - 1].type;
+        if (imm_type) {
+          emit_typed_imm_to_reg(imm_type, "rax", imm);
+        } else {
+          write_file("  mov rax, %ld\n", imm);
+        }
+      } else {
+        long imm = 0;
+        if (vreg_single_def_imm(ctx, in->src1, &imm)) {
+          if (in->type) {
+            emit_typed_imm_to_reg(in->type, "rax", imm);
+          } else {
+            write_file("  mov rax, %ld\n", imm);
+          }
+        } else {
+          load_vreg_to_reg(ctx, in->src1, "rax");
+        }
+      }
+    }
+    if (in->type && in->type->ty == TY_BOOL && in->src1 != MIR_INVALID_VREG) {
       write_file("  cmp rax, 0\n");
       write_file("  setne al\n");
       write_file("  movzx eax, al\n");
