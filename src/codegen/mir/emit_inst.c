@@ -27,6 +27,7 @@ struct MirAsmCtx {
   const long *single_def_imm_value;
   const unsigned char *skip_emit_addr_local;
   const unsigned char *skip_emit_imm;
+  const unsigned char *vreg_has_use;
   const char *epilogue_label;
   int pending_jmp_label;
   int has_pending_jmp;
@@ -36,6 +37,14 @@ struct MirAsmCtx {
   int frame_size;
   int omit_frame;
 };
+
+static int vreg_is_used_somewhere(const MirAsmCtx *ctx, VReg vreg) {
+  if (!ctx || !ctx->mf || !ctx->vreg_has_use)
+    return 1;
+  if (vreg < 0 || vreg >= ctx->mf->next_vreg)
+    return 1;
+  return ctx->vreg_has_use[vreg] != 0;
+}
 
 static int align_up(int n, int align) {
   if (align <= 0)
@@ -210,6 +219,8 @@ static void load_vreg_to_reg(const MirAsmCtx *ctx, VReg vreg, const char *reg64)
 }
 
 static void store_reg_to_vreg(const MirAsmCtx *ctx, VReg vreg, const char *reg64) {
+  if (!vreg_is_used_somewhere(ctx, vreg))
+    return;
   const RaVRegLoc *loc = vreg_loc(ctx, vreg);
   if (loc->kind == RA_LOC_REG) {
     const char *dst = ra_preg64(loc->reg);
@@ -1678,6 +1689,7 @@ void emit_mir_function_codegen(const MirFunction *mf) {
   long *single_def_imm_value = NULL;
   unsigned char *skip_emit_addr_local = NULL;
   unsigned char *skip_emit_imm = NULL;
+  unsigned char *vreg_has_use = NULL;
   if (mf->next_vreg > 0) {
     single_def_meta_known = calloc(mf->next_vreg, sizeof(unsigned char));
     single_def_meta_op = calloc(mf->next_vreg, sizeof(MirOp));
@@ -1687,14 +1699,28 @@ void emit_mir_function_codegen(const MirFunction *mf) {
     single_def_imm_value = calloc(mf->next_vreg, sizeof(long));
     skip_emit_addr_local = calloc(mf->next_vreg, sizeof(unsigned char));
     skip_emit_imm = calloc(mf->next_vreg, sizeof(unsigned char));
+    vreg_has_use = calloc(mf->next_vreg, sizeof(unsigned char));
     if (!single_def_meta_known || !single_def_meta_op || !single_def_meta_type || !single_def_meta_offset ||
-        !single_def_imm_known || !single_def_imm_value || !skip_emit_addr_local || !skip_emit_imm)
+        !single_def_imm_known || !single_def_imm_value || !skip_emit_addr_local || !skip_emit_imm || !vreg_has_use)
       error("memory allocation failed [in emit_mir_function single-def imm info]");
     build_single_def_meta_info(mf, single_def_meta_known, single_def_meta_op, single_def_meta_type,
                                single_def_meta_offset);
     build_single_def_imm_info(mf, single_def_imm_known, single_def_imm_value);
     build_skip_emit_info(mf, single_def_meta_known, single_def_meta_op, single_def_imm_known, single_def_imm_value,
                          skip_emit_addr_local, skip_emit_imm);
+    for (int i = 0; i < mf->inst_len; i++) {
+      const MirInst *in = &mf->insts[i];
+      if (in->src1 >= 0 && in->src1 < mf->next_vreg)
+        vreg_has_use[in->src1] = 1;
+      if (in->src2 >= 0 && in->src2 < mf->next_vreg)
+        vreg_has_use[in->src2] = 1;
+      if (in->op == MIR_OP_CALL) {
+        for (int a = 0; a < in->argc; a++) {
+          if (in->args[a] >= 0 && in->args[a] < mf->next_vreg)
+            vreg_has_use[in->args[a]] = 1;
+        }
+      }
+    }
   }
 
   MirAsmCtx ctx = {0};
@@ -1708,6 +1734,7 @@ void emit_mir_function_codegen(const MirFunction *mf) {
   ctx.single_def_imm_value = single_def_imm_value;
   ctx.skip_emit_addr_local = skip_emit_addr_local;
   ctx.skip_emit_imm = skip_emit_imm;
+  ctx.vreg_has_use = vreg_has_use;
   ctx.spill_base = align_up(compute_required_local_stack(mf), 8);
   int save_count = count_saved_mask_bits(ra.used_reg_mask);
   ctx.save_base = ctx.spill_base + (ra.spill_count * 8);
@@ -1793,6 +1820,7 @@ void emit_mir_function_codegen(const MirFunction *mf) {
 
   free(skip_emit_imm);
   free(skip_emit_addr_local);
+  free(vreg_has_use);
   free(single_def_meta_offset);
   free(single_def_meta_type);
   free(single_def_meta_op);

@@ -115,10 +115,6 @@ static int can_coalesce_with_src1(MirOp op) {
   case MIR_OP_SHL:
   case MIR_OP_SHR:
   case MIR_OP_BITNOT:
-  case MIR_OP_EQ:
-  case MIR_OP_NE:
-  case MIR_OP_LT:
-  case MIR_OP_LE:
     return 1;
   default:
     return 0;
@@ -391,6 +387,7 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
 
   int active_cnt = 0;
   int spill_count = 0;
+  int prefer_tiny_callspill = ninst <= 16;
   unsigned callee_saved_mask = 0;
   for (int p = 0; p < RA_PREG_COUNT; p++) {
     if (ra_preg_is_callee_saved(p))
@@ -443,9 +440,8 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
         preferred_preg = cand;
     }
 
-    int prefer_spill_for_tiny_cross_call =
-        crosses_call[cur->vreg] && use_site_count[cur->vreg] <= 3 && (cur->end - cur->start) <= 16;
-    if (prefer_spill_for_tiny_cross_call)
+    if (prefer_tiny_callspill && crosses_call[cur->vreg] && use_site_count[cur->vreg] <= 3 &&
+        (cur->end - cur->start) <= 16)
       allowed_mask = 0;
 
     int preg = -1;
