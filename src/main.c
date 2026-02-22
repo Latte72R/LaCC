@@ -320,7 +320,7 @@ int main(int argc, char **argv) {
   free_all_macros();
   free_all_locations();
 
-  generate_assembly(optimize_level);
+  generate_assembly_pipeline(optimize_level);
 
   free_all_nodes();
   free_all_functions();

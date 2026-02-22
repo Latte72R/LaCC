@@ -1,6 +1,5 @@
 #include "diagnostics.h"
-#include "mir_internal.h"
-#include "regalloc.h"
+#include "../codegen_internal.h"
 #include "platform.h"
 
 #include <stdlib.h>
@@ -1667,10 +1666,8 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
   }
 }
 
-void emit_mir_function(const MirFunction *mf) {
-  if (!mf || !mf->fn)
-    error("invalid MIR function in asm emitter");
 
+void emit_mir_function_codegen(const MirFunction *mf) {
   RegAllocResult ra = {0};
   regalloc_run(mf, &ra);
   unsigned char *single_def_meta_known = NULL;

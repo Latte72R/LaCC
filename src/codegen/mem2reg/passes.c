@@ -1,4 +1,4 @@
-#include "mem2reg.h"
+#include "internal.h"
 #include "diagnostics.h"
 
 #include <stdlib.h>
@@ -548,7 +548,7 @@ static void run_mem2reg_compact_vregs(MirFunction *mf) {
   free(live);
 }
 
-static void run_mem2reg_prune_unreferenced_labels(MirInst **insts, int *inst_len, int *inst_cap, int next_label) {
+void run_mem2reg_prune_unreferenced_labels(MirInst **insts, int *inst_len, int *inst_cap, int next_label) {
   if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_label <= 0)
     return;
 
@@ -603,7 +603,7 @@ static int false_cc_for_compare_op(MirOp op, MirCondCode *cc) {
   }
 }
 
-static void run_mem2reg_fuse_compare_jz(MirInst **insts, int *inst_len) {
+void run_mem2reg_fuse_compare_jz(MirInst **insts, int *inst_len) {
   if (!insts || !*insts || !inst_len || *inst_len <= 1)
     return;
 
@@ -629,7 +629,7 @@ static void run_mem2reg_fuse_compare_jz(MirInst **insts, int *inst_len) {
   }
 }
 
-static void run_mem2reg_const_fold(MirInst **insts, int *inst_len, int next_vreg) {
+void run_mem2reg_const_fold(MirInst **insts, int *inst_len, int next_vreg) {
   if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
     return;
 
@@ -724,7 +724,7 @@ static int eval_const_jcc(long cc, Type *type, long lhs, long rhs) {
   }
 }
 
-static void run_mem2reg_cfg_const_fold_branches(MirInst **insts, int *inst_len, int next_vreg) {
+void run_mem2reg_cfg_const_fold_branches(MirInst **insts, int *inst_len, int next_vreg) {
   if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
     return;
 
@@ -779,7 +779,7 @@ static void run_mem2reg_cfg_const_fold_branches(MirInst **insts, int *inst_len, 
   free(def_count);
 }
 
-static void run_mem2reg_copyprop_and_dce(MirInst **insts, int *inst_len, int *inst_cap, int next_vreg) {
+void run_mem2reg_copyprop_and_dce(MirInst **insts, int *inst_len, int *inst_cap, int next_vreg) {
   if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
     return;
 
@@ -886,7 +886,7 @@ static void bit_set64(unsigned long long *bits, int bit) { bits[bit / 64] |= (1U
 
 static int bit_test64(const unsigned long long *bits, int bit) { return (bits[bit / 64] & (1ULL << (bit & 63))) != 0; }
 
-static void run_mem2reg_dead_store_local_cfg(MirInst **insts, int *inst_len, int *inst_cap, int next_label) {
+void run_mem2reg_dead_store_local_cfg(MirInst **insts, int *inst_len, int *inst_cap, int next_label) {
   if (!insts || !*insts || !inst_len || *inst_len <= 0)
     return;
 
@@ -1080,7 +1080,7 @@ static void run_mem2reg_dead_store_local_cfg(MirInst **insts, int *inst_len, int
   free(slot_offsets);
 }
 
-static void run_mem2reg_prune_unreachable_blocks(MirInst **insts, int *inst_len, int *inst_cap, int next_label) {
+void run_mem2reg_prune_unreachable_blocks(MirInst **insts, int *inst_len, int *inst_cap, int next_label) {
   if (!insts || !*insts || !inst_len || *inst_len <= 0)
     return;
 
@@ -1161,7 +1161,9 @@ typedef struct {
   int succ_cnt;
 } Mem2regBlock;
 
-static int is_cfg_terminator(MirOp op) { return op == MIR_OP_JMP || op == MIR_OP_JZ || op == MIR_OP_JCC || op == MIR_OP_RET; }
+static int is_cfg_terminator(MirOp op) {
+  return op == MIR_OP_JMP || op == MIR_OP_JZ || op == MIR_OP_JCC || op == MIR_OP_RET;
+}
 
 static void add_cfg_succ(Mem2regBlock *bb, int succ) {
   if (!bb || succ < 0)
@@ -1254,8 +1256,8 @@ static void build_mem2reg_cfg(const MirFunction *mf, Mem2regBlock **out_blocks, 
   *out_block_len = block_len;
 }
 
-static void transfer_mem2reg_state_over_block(const MirFunction *mf, const Mem2regBlock *bb, LocalSlot *slots, int slot_len,
-                                              const int *addr_slot_of_vreg, LocalState *state) {
+static void transfer_mem2reg_state_over_block(const MirFunction *mf, const Mem2regBlock *bb, LocalSlot *slots,
+                                              int slot_len, const int *addr_slot_of_vreg, LocalState *state) {
   if (!mf || !bb || !slots || slot_len <= 0 || !addr_slot_of_vreg || !state)
     return;
 
@@ -1302,11 +1304,11 @@ static void transfer_mem2reg_state_over_block(const MirFunction *mf, const Mem2r
   }
 }
 
-static void compute_mem2reg_cfg_in_state(const MirFunction *mf, LocalSlot *slots, int slot_len, const int *addr_slot_of_vreg,
-                                         const Mem2regBlock *blocks, int block_len, unsigned char *block_reachable,
-                                         unsigned char *in_valid, VReg *in_value) {
-  if (!mf || !slots || slot_len <= 0 || !addr_slot_of_vreg || !blocks || block_len <= 0 || !block_reachable || !in_valid ||
-      !in_value)
+static void compute_mem2reg_cfg_in_state(const MirFunction *mf, LocalSlot *slots, int slot_len,
+                                         const int *addr_slot_of_vreg, const Mem2regBlock *blocks, int block_len,
+                                         unsigned char *block_reachable, unsigned char *in_valid, VReg *in_value) {
+  if (!mf || !slots || slot_len <= 0 || !addr_slot_of_vreg || !blocks || block_len <= 0 || !block_reachable ||
+      !in_valid || !in_value)
     return;
 
   LocalState *tmp_state = calloc(slot_len, sizeof(LocalState));
@@ -1371,24 +1373,7 @@ static void compute_mem2reg_cfg_in_state(const MirFunction *mf, LocalSlot *slots
   free(tmp_state);
 }
 
-void optimize_mir_inline_cleanup(MirFunction *mf) {
-  if (!mf || mf->inst_len <= 0 || mf->next_vreg <= 0)
-    return;
-
-  run_mem2reg_const_fold(&mf->insts, &mf->inst_len, mf->next_vreg);
-  run_mem2reg_fuse_compare_jz(&mf->insts, &mf->inst_len);
-  run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
-  run_mem2reg_dead_store_local_cfg(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
-  run_mem2reg_cfg_const_fold_branches(&mf->insts, &mf->inst_len, mf->next_vreg);
-  run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
-  run_mem2reg_prune_unreachable_blocks(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
-  run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
-}
-
-void optimize_mir_mem2reg(MirFunction *mf) {
-  if (!mf || mf->inst_len <= 0 || mf->next_vreg <= 0)
-    return;
-
+void mem2reg_run_promote(MirFunction *mf) {
   int slot_cap = mf->inst_len;
   LocalSlot *slots = calloc(slot_cap > 0 ? slot_cap : 1, sizeof(LocalSlot));
   int *addr_slot_of_vreg = malloc(sizeof(int) * mf->next_vreg);
@@ -1475,7 +1460,8 @@ void optimize_mir_mem2reg(MirFunction *mf) {
   build_mem2reg_cfg(mf, &blocks, &block_len);
 
   unsigned char *block_reachable = calloc(block_len > 0 ? block_len : 1, sizeof(unsigned char));
-  unsigned char *cfg_in_valid = calloc((size_t)(block_len > 0 ? block_len : 1) * (size_t)slot_len, sizeof(unsigned char));
+  unsigned char *cfg_in_valid =
+      calloc((size_t)(block_len > 0 ? block_len : 1) * (size_t)slot_len, sizeof(unsigned char));
   VReg *cfg_in_value = malloc(sizeof(VReg) * (size_t)(block_len > 0 ? block_len : 1) * (size_t)slot_len);
   if (!block_reachable || !cfg_in_valid || !cfg_in_value)
     error("memory allocation failed [in optimize_mir_mem2reg cfg state]");
@@ -1509,7 +1495,8 @@ void optimize_mir_mem2reg(MirFunction *mf) {
       MirInst in = mf->insts[i];
       int read_slot = local_read_slot_index(&in, slots, slot_len, addr_slot_of_vreg, mf->next_vreg);
       if (in.op == MIR_OP_JMP || in.op == MIR_OP_JZ || in.op == MIR_OP_JCC || in.op == MIR_OP_RET)
-        flush_dirty_locals(&out_insts, &out_len, &out_cap, slots, slot_len, state, remaining_reads, in.op == MIR_OP_RET);
+        flush_dirty_locals(&out_insts, &out_len, &out_cap, slots, slot_len, state, remaining_reads,
+                           in.op == MIR_OP_RET);
 
       // 昇格できるなら ADDR_LOCAL は不要なので出力しない
       if (in.op == MIR_OP_ADDR_LOCAL && in.dst >= 0 && in.dst < mf->next_vreg) {

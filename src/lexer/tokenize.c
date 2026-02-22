@@ -4,6 +4,7 @@
 #include "runtime.h"
 
 #include "lexer_internal.h"
+#include "preprocess/internal.h"
 
 #include <ctype.h>
 #include <stdlib.h>

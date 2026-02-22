@@ -1,4 +1,4 @@
-#include "regalloc.h"
+#include "../codegen_internal.h"
 #include "diagnostics.h"
 
 #include <stdlib.h>
