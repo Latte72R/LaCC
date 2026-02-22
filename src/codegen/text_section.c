@@ -13,8 +13,9 @@
 
 enum {
   MAX_CTRL_DEPTH = 128,
-  INLINE_MAX_INST_O1 = 7,
-  INLINE_MAX_COST_O1 = 18,
+  INLINE_MAX_INST_O1 = 8,
+  INLINE_MAX_COST_O1 = 30,
+  INLINE_MAX_CALLSITES_O1 = 2,
 };
 
 typedef struct ControlFrame ControlFrame;
@@ -1166,9 +1167,13 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
   case ND_RETURN: {
     MirInst inst;
     init_inst(&inst, MIR_OP_RET);
-    if (!node->type || node->type->ty != TY_VOID)
-      inst.src1 = lower_expr(ctx, node->rhs);
-    inst.type = node->type;
+    Type *ret_type = (ctx->fn && ctx->fn->type) ? ctx->fn->type->return_type : node->type;
+    if (!ret_type || ret_type->ty != TY_VOID) {
+      VReg ret_v = lower_expr(ctx, node->rhs);
+      ret_v = lower_cast_value_if_needed(ctx, ret_v, node->rhs ? node->rhs->type : NULL, ret_type);
+      inst.src1 = ret_v;
+    }
+    inst.type = ret_type;
     mir_emit(ctx->mf, &inst);
     return;
   }
@@ -1544,7 +1549,8 @@ static int should_inline_callsite(const MirFunction *caller, const MirFunction *
     return 0;
   if (mir_inline_cost(callee) > INLINE_MAX_COST_O1)
     return 0;
-  if (!site_info || site_info[callee_idx].call_count != 1 || site_info[callee_idx].addr_taken != 0)
+  if (!site_info || site_info[callee_idx].call_count <= 0 || site_info[callee_idx].call_count > INLINE_MAX_CALLSITES_O1 ||
+      site_info[callee_idx].addr_taken != 0)
     return 0;
   if (caller_idx < 0 || callee_idx < 0 || caller_idx >= fn_count || callee_idx >= fn_count)
     return 0;
@@ -1766,14 +1772,18 @@ static void emit_mir_program(int dump_mir, int optimize_level) {
 
   run_mir_inline_pass(mfs, fns, fn_count, optimize_level);
   if (optimize_level > 0) {
-    for (int i = 0; i < fn_count; i++)
+    for (int i = 0; i < fn_count; i++) {
+      optimize_mir_inline_cleanup(&mfs[i]);
       optimize_mir_mem2reg(&mfs[i]);
+    }
   }
 
   int qh = 0;
   int qt = 0;
   for (int i = 0; i < fn_count; i++) {
     if (!fns[i] || fns[i]->is_static)
+      continue;
+    if (optimize_level > 0 && fns[i]->is_inline)
       continue;
     reachable[i] = 1;
     queue[qt++] = i;

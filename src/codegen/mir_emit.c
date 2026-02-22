@@ -1640,7 +1640,11 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     if (in->src1 != MIR_INVALID_VREG && !ret_src_already_in_rax(ctx->mf, inst_idx, in->src1)) {
       long imm = 0;
       if (vreg_single_def_imm(ctx, in->src1, &imm)) {
-        Type *imm_type = in->type;
+        Type *imm_type = NULL;
+        if (ctx->mf && ctx->mf->fn && ctx->mf->fn->type && ctx->mf->fn->type->return_type)
+          imm_type = ctx->mf->fn->type->return_type;
+        if (!imm_type)
+          imm_type = in->type;
         if (!imm_type && inst_idx > 0 && ctx->mf->insts[inst_idx - 1].op == MIR_OP_IMM &&
             ctx->mf->insts[inst_idx - 1].dst == in->src1) {
           imm_type = ctx->mf->insts[inst_idx - 1].type;

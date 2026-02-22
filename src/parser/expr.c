@@ -845,7 +845,9 @@ Node *unary() {
   if (consume("~")) {
     node = new_node(ND_BITNOT);
     node->lhs = type_cast();
-    node->type = node->lhs->type;
+    if (!is_number(node->lhs->type))
+      error_at(consumed_loc, "invalid operand to unary '~'");
+    node->type = max_type(node->lhs->type, new_type(TY_INT));
     return node;
   }
   return increment_decrement();
