@@ -22,6 +22,7 @@ void check_with_name(int result, const char *name, int ans) {
 #include "unittests/comma.c"
 #include "unittests/enum_init.c"
 #include "unittests/funcptrs_ternary_sizeof.c"
+#include "unittests/inline_keyword.c"
 #include "unittests/literals_and_switch.c"
 #include "unittests/loops_strings_arrays.c"
 #include "unittests/macro.c"
@@ -231,6 +232,9 @@ int main() {
   CHECK(fptr_ternary_sizeof_test22(), 8);
   CHECK(fptr_ternary_sizeof_test23(), 1);
   CHECK(fptr_ternary_sizeof_test24(), 255);
+  CHECK(inline_keyword_test1(), 42);
+  CHECK(inline_keyword_test2(), 25);
+  CHECK(inline_keyword_test3(), 7);
 
   CHECK(unsigned_test1(), 255);
   CHECK(unsigned_test2(), 65535);
