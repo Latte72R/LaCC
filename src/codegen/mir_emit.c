@@ -170,9 +170,9 @@ static const RegNames *reg_names_for64(const char *r64) {
   return NULL;
 }
 
-static const char *reg8_name(const char *r64) { return reg_names_for64(r64)->r8; }
-static const char *reg16_name(const char *r64) { return reg_names_for64(r64)->r16; }
-static const char *reg32_name(const char *r64) { return reg_names_for64(r64)->r32; }
+static inline const char *reg8_name(const char *r64) { return reg_names_for64(r64)->r8; }
+static inline const char *reg16_name(const char *r64) { return reg_names_for64(r64)->r16; }
+static inline const char *reg32_name(const char *r64) { return reg_names_for64(r64)->r32; }
 
 static const char *vreg_assigned_reg64(const MirAsmCtx *ctx, VReg vreg) {
   const RaVRegLoc *loc = vreg_loc(ctx, vreg);
@@ -585,7 +585,7 @@ static long typed_imm_canonical_value(Type *type, long imm) {
   }
 }
 
-static int is_signext_i32(long v) { return (long)(int)v == v; }
+static inline int is_signext_i32(long v) { return (long)(int)v == v; }
 
 static int is_x64_imm32_signext_encodable(long v) {
   unsigned long low = (unsigned long)(unsigned int)v;
@@ -1039,7 +1039,7 @@ static const char *jcc_mnemonic(long cc, Type *type) {
   return "je";
 }
 
-static int reg_eq(const char *a, const char *b) { return a && b && !strcmp(a, b); }
+static inline int reg_eq(const char *a, const char *b) { return a && b && !strcmp(a, b); }
 
 static void emit_binop(MirAsmCtx *ctx, const MirInst *in, const char *op, int commutative, int inst_idx) {
   const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);

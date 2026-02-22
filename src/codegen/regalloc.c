@@ -34,15 +34,17 @@ static int bit_words(int nbits) {
   return (nbits + 63) / 64;
 }
 
-static unsigned long long bit_mask(int bit) { return 1ULL << (bit & 63); }
+static inline unsigned long long bit_mask(int bit) { return 1ULL << (bit & 63); }
 
-static void bit_set(unsigned long long *bits, int bit) { bits[bit / 64] |= bit_mask(bit); }
+static inline void bit_set(unsigned long long *bits, int bit) { bits[bit / 64] |= bit_mask(bit); }
 
-static int bit_get(const unsigned long long *bits, int bit) { return (bits[bit / 64] & bit_mask(bit)) != 0; }
+static inline int bit_get(const unsigned long long *bits, int bit) { return (bits[bit / 64] & bit_mask(bit)) != 0; }
 
-static unsigned long long *bit_row(unsigned long long *rows, int row, int words) { return rows + (row * words); }
+static inline unsigned long long *bit_row(unsigned long long *rows, int row, int words) {
+  return rows + (row * words);
+}
 
-static const unsigned long long *cbit_row(const unsigned long long *rows, int row, int words) {
+static inline const unsigned long long *cbit_row(const unsigned long long *rows, int row, int words) {
   return rows + (row * words);
 }
 

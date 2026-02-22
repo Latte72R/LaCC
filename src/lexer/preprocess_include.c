@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int is_directive_space(char c) { return c == ' ' || c == '\t' || c == '\v' || c == '\f' || c == '\r'; }
+static inline int is_directive_space(char c) { return c == ' ' || c == '\t' || c == '\v' || c == '\f' || c == '\r'; }
 
 static void handle_include_common(char *name, char *p, bool is_system_header, bool is_next) {
   char *including_file = input_file;
@@ -60,11 +60,11 @@ static void handle_include_common(char *name, char *p, bool is_system_header, bo
   hierarchy_level = prev_level;
 }
 
-static void handle_include_directive(char *name, char *p, bool is_system_header) {
+static inline void handle_include_directive(char *name, char *p, bool is_system_header) {
   handle_include_common(name, p, is_system_header, false);
 }
 
-static void handle_include_next_directive(char *name, char *p) { handle_include_common(name, p, false, true); }
+static inline void handle_include_next_directive(char *name, char *p) { handle_include_common(name, p, false, true); }
 
 int parse_include_directive(char **pcur) {
   char *cur = *pcur;

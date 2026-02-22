@@ -11,7 +11,7 @@ typedef struct {
   const char *p;
 } ExprParser;
 
-static void skip_spaces_expr(ExprParser *ctx) { ctx->p = skip_spaces(ctx->p); }
+static inline void skip_spaces_expr(ExprParser *ctx) { ctx->p = skip_spaces(ctx->p); }
 
 static long long parse_conditional(ExprParser *ctx, int *ok);
 

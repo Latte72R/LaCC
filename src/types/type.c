@@ -9,13 +9,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int token_matches(Token *tok, const char *str) {
+static inline int token_matches(Token *tok, const char *str) {
   if (!tok || tok->len != (int)strlen(str))
     return false;
   return strncmp(tok->str, str, tok->len) == 0;
 }
 
-static int is_pointer_attribute(Token *tok) {
+static inline int is_pointer_attribute(Token *tok) {
   if (!tok)
     return false;
   if (tok->kind == TK_CONST)

@@ -77,7 +77,7 @@ static void init_inst(MirInst *inst, MirOp op) {
     inst->args[i] = MIR_INVALID_VREG;
 }
 
-static int new_label(LowerCtx *ctx) { return mir_new_label(ctx->mf); }
+static inline int new_label(LowerCtx *ctx) { return mir_new_label(ctx->mf); }
 
 static void emit_label(LowerCtx *ctx, int label) {
   MirInst inst;
@@ -276,7 +276,7 @@ static int try_emit_jmp_if_true_cond(LowerCtx *ctx, Node *cond, int label) {
   }
 }
 
-static int is_main_function(const Function *fn) { return fn && fn->len == 4 && !strncmp(fn->name, "main", 4); }
+static inline int is_main_function(const Function *fn) { return fn && fn->len == 4 && !strncmp(fn->name, "main", 4); }
 
 static int mir_has_ret(const MirFunction *mf) {
   if (!mf)
@@ -391,9 +391,9 @@ static VReg lower_expr(LowerCtx *ctx, Node *node);
 static void lower_expr_discard(LowerCtx *ctx, Node *node);
 static void lower_stmt(LowerCtx *ctx, Node *node);
 
-static VReg lower_expr(LowerCtx *ctx, Node *node) { return lower_expr_impl(ctx, node, true); }
+static inline VReg lower_expr(LowerCtx *ctx, Node *node) { return lower_expr_impl(ctx, node, true); }
 
-static void lower_expr_discard(LowerCtx *ctx, Node *node) { (void)lower_expr_impl(ctx, node, false); }
+static inline void lower_expr_discard(LowerCtx *ctx, Node *node) { (void)lower_expr_impl(ctx, node, false); }
 
 static int cast_is_noop(Type *from, Type *to) {
   if (!from || !to)

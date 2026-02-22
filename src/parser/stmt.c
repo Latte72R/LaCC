@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int token_equals(Token *tok, const char *str) {
+static inline int token_equals(Token *tok, const char *str) {
   if (!tok)
     return false;
   if (tok->len != (int)strlen(str))
@@ -17,7 +17,7 @@ static int token_equals(Token *tok, const char *str) {
   return strncmp(tok->str, str, tok->len) == 0;
 }
 
-static int is_inline_asm_keyword(Token *tok) {
+static inline int is_inline_asm_keyword(Token *tok) {
   if (!tok)
     return false;
   if (tok->kind != TK_IDENT && tok->kind != TK_RESERVED)
