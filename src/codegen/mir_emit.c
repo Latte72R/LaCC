@@ -36,7 +36,6 @@ struct MirAsmCtx {
   int save_slot[RA_PREG_COUNT];
   int frame_size;
   int omit_frame;
-  VReg pending_ret_rax_vreg;
 };
 
 static int align_up(int n, int align) {
@@ -890,6 +889,36 @@ static int ret_uses_vreg_immediately(const MirFunction *mf, int inst_idx, VReg v
   return next->op == MIR_OP_RET && next->src1 == vreg;
 }
 
+static int ret_src_already_in_rax(const MirFunction *mf, int ret_idx, VReg src_vreg) {
+  if (!mf || ret_idx <= 0 || ret_idx >= mf->inst_len || src_vreg == MIR_INVALID_VREG)
+    return 0;
+  const MirInst *prev = &mf->insts[ret_idx - 1];
+  if (prev->dst != src_vreg)
+    return 0;
+  switch (prev->op) {
+  case MIR_OP_CALL:
+  case MIR_OP_MOV:
+  case MIR_OP_CAST:
+  case MIR_OP_ADD:
+  case MIR_OP_SUB:
+  case MIR_OP_MUL:
+  case MIR_OP_BITAND:
+  case MIR_OP_BITOR:
+  case MIR_OP_BITXOR:
+    return 1;
+  default:
+    return 0;
+  }
+}
+
+static void emit_ret_imm_to_rax(Type *type, long imm) {
+  if (type) {
+    emit_typed_imm_to_reg(type, "rax", imm);
+  } else {
+    write_file("  mov rax, %ld\n", imm);
+  }
+}
+
 static int needs_epilogue_label(const MirFunction *mf) {
   if (!mf || mf->inst_len <= 0)
     return 0;
@@ -1081,17 +1110,11 @@ static void emit_binop(MirAsmCtx *ctx, const MirInst *in, const char *op, int co
 
   if (!forward_ret_to_rax && (!dst_reg || strcmp(work, dst_reg)))
     store_reg_to_vreg(ctx, in->dst, work);
-  if (forward_ret_to_rax)
-    ctx->pending_ret_rax_vreg = in->dst;
 }
 
 static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
   if (!ctx || !ctx->mf || !ctx->mf->fn || !in)
     error("invalid MIR emit context");
-  int can_consume_pending_ret_rax =
-      in->op == MIR_OP_RET && in->src1 != MIR_INVALID_VREG && in->src1 == ctx->pending_ret_rax_vreg;
-  if (!can_consume_pending_ret_rax)
-    ctx->pending_ret_rax_vreg = MIR_INVALID_VREG;
 
   if (in->op == MIR_OP_LABEL) {
     if (ctx->has_pending_jmp && ctx->pending_jmp_label == in->label) {
@@ -1145,7 +1168,6 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
       } else {
         load_vreg_to_reg(ctx, in->src1, "rax");
       }
-      ctx->pending_ret_rax_vreg = in->dst;
       return;
     }
     const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
@@ -1373,7 +1395,6 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
         load_vreg_to_reg(ctx, in->src1, "rax");
         emit_cast_reg(in->type, "rax");
       }
-      ctx->pending_ret_rax_vreg = in->dst;
       return;
     }
     const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
@@ -1658,7 +1679,11 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
         load_vreg_to_reg(ctx, in->src1, "r10");
     }
 
-    write_file("  mov rax, 0\n");
+    int need_rax_zero = in->call_fn ? 0 : 1;
+    if (in->call_fn && in->call_fn->type && in->call_fn->type->ty == TY_FUNC && in->call_fn->type->is_variadic)
+      need_rax_zero = 1;
+    if (need_rax_zero)
+      write_file("  mov rax, 0\n");
     if (in->call_fn) {
       write_file("  call " ASM_SYM_FMT "\n", ASM_SYM_ARGS(in->call_fn->len, in->call_fn->name));
     } else if (fnptr_reg) {
@@ -1670,35 +1695,23 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     if (stack_argc > 0 || align_pad)
       write_file("  add rsp, %d\n", (stack_argc * 8) + (align_pad ? 8 : 0));
     if (in->dst != MIR_INVALID_VREG) {
-      if (ret_uses_vreg_immediately(ctx->mf, inst_idx, in->dst)) {
-        ctx->pending_ret_rax_vreg = in->dst;
-      } else {
+      if (!ret_uses_vreg_immediately(ctx->mf, inst_idx, in->dst))
         store_reg_to_vreg(ctx, in->dst, "rax");
-      }
     }
     return;
   }
   case MIR_OP_RET:
-    if (in->src1 != MIR_INVALID_VREG && !can_consume_pending_ret_rax) {
-      if (inst_idx > 0 && ctx->mf->insts[inst_idx - 1].op == MIR_OP_IMM && ctx->mf->insts[inst_idx - 1].dst == in->src1) {
-        long imm = ctx->mf->insts[inst_idx - 1].imm;
-        Type *imm_type = in->type ? in->type : ctx->mf->insts[inst_idx - 1].type;
-        if (imm_type) {
-          emit_typed_imm_to_reg(imm_type, "rax", imm);
-        } else {
-          write_file("  mov rax, %ld\n", imm);
+    if (in->src1 != MIR_INVALID_VREG && !ret_src_already_in_rax(ctx->mf, inst_idx, in->src1)) {
+      long imm = 0;
+      if (vreg_single_def_imm(ctx, in->src1, &imm)) {
+        Type *imm_type = in->type;
+        if (!imm_type && inst_idx > 0 && ctx->mf->insts[inst_idx - 1].op == MIR_OP_IMM &&
+            ctx->mf->insts[inst_idx - 1].dst == in->src1) {
+          imm_type = ctx->mf->insts[inst_idx - 1].type;
         }
+        emit_ret_imm_to_rax(imm_type, imm);
       } else {
-        long imm = 0;
-        if (vreg_single_def_imm(ctx, in->src1, &imm)) {
-          if (in->type) {
-            emit_typed_imm_to_reg(in->type, "rax", imm);
-          } else {
-            write_file("  mov rax, %ld\n", imm);
-          }
-        } else {
-          load_vreg_to_reg(ctx, in->src1, "rax");
-        }
+        load_vreg_to_reg(ctx, in->src1, "rax");
       }
     }
     if (in->type && in->type->ty == TY_BOOL && in->src1 != MIR_INVALID_VREG) {
