@@ -1112,6 +1112,19 @@ static void emit_binop(MirAsmCtx *ctx, const MirInst *in, const char *op, int co
     store_reg_to_vreg(ctx, in->dst, work);
 }
 
+static void emit_store_local_from_vreg(MirAsmCtx *ctx, Type *type, int offset, VReg src_vreg) {
+  long imm = 0;
+  if (vreg_single_def_imm(ctx, src_vreg, &imm) && emit_typed_imm_to_local_direct(type, offset, imm))
+    return;
+  const char *src_reg = vreg_assigned_reg64(ctx, src_vreg);
+  if (src_reg) {
+    store_reg_to_local_by64(offset, type, src_reg);
+  } else {
+    load_vreg_to_reg(ctx, src_vreg, "r11");
+    store_reg_to_local_by64(offset, type, "r11");
+  }
+}
+
 static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
   if (!ctx || !ctx->mf || !ctx->mf->fn || !in)
     error("invalid MIR emit context");
@@ -1205,16 +1218,7 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     return;
   }
   case MIR_OP_STORE_LOCAL: {
-    long imm = 0;
-    if (vreg_single_def_imm(ctx, in->src1, &imm) && emit_typed_imm_to_local_direct(in->type, in->offset, imm))
-      return;
-    const char *src_reg = vreg_assigned_reg64(ctx, in->src1);
-    if (src_reg) {
-      store_reg_to_local_by64(in->offset, in->type, src_reg);
-    } else {
-      load_vreg_to_reg(ctx, in->src1, "r11");
-      store_reg_to_local_by64(in->offset, in->type, "r11");
-    }
+    emit_store_local_from_vreg(ctx, in->type, in->offset, in->src1);
     return;
   }
   case MIR_OP_ADDR_LOCAL: {
@@ -1259,26 +1263,17 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
         store_reg_to_vreg(ctx, in->dst, work);
       return;
     }
-  case MIR_OP_ADDR_STRING: {
-    const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
-    const char *work = dst_reg ? dst_reg : "rax";
-    write_file("  lea %s, [rip + .L.str%d]\n", work, in->offset);
-    if (!dst_reg)
-      store_reg_to_vreg(ctx, in->dst, work);
-    return;
-  }
-  case MIR_OP_ADDR_ARRAY: {
-    const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
-    const char *work = dst_reg ? dst_reg : "rax";
-    write_file("  lea %s, [rip + .L.arr%d]\n", work, in->offset);
-    if (!dst_reg)
-      store_reg_to_vreg(ctx, in->dst, work);
-    return;
-  }
+  case MIR_OP_ADDR_STRING:
+  case MIR_OP_ADDR_ARRAY:
   case MIR_OP_ADDR_STRUCT_LITERAL: {
     const char *dst_reg = vreg_assigned_reg64(ctx, in->dst);
     const char *work = dst_reg ? dst_reg : "rax";
-    write_file("  lea %s, [rip + .L.struct%d]\n", work, in->offset);
+    const char *label_prefix = ".L.struct";
+    if (in->op == MIR_OP_ADDR_STRING)
+      label_prefix = ".L.str";
+    else if (in->op == MIR_OP_ADDR_ARRAY)
+      label_prefix = ".L.arr";
+    write_file("  lea %s, [rip + %s%d]\n", work, label_prefix, in->offset);
     if (!dst_reg)
       store_reg_to_vreg(ctx, in->dst, work);
     return;
@@ -1302,16 +1297,7 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
   case MIR_OP_STORE: {
     int local_off = 0;
     if (vreg_single_def_addr_local_offset(ctx, in->src1, &local_off) && !(in->type && in->type->ty == TY_BOOL)) {
-      long imm = 0;
-      if (vreg_single_def_imm(ctx, in->src2, &imm) && emit_typed_imm_to_local_direct(in->type, local_off, imm))
-        return;
-      const char *val_reg = vreg_assigned_reg64(ctx, in->src2);
-      if (val_reg) {
-        store_reg_to_local_by64(local_off, in->type, val_reg);
-      } else {
-        load_vreg_to_reg(ctx, in->src2, "r11");
-        store_reg_to_local_by64(local_off, in->type, "r11");
-      }
+      emit_store_local_from_vreg(ctx, in->type, local_off, in->src2);
       return;
     }
     const char *ptr_reg = vreg_assigned_reg64(ctx, in->src1);
@@ -1424,40 +1410,35 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     return;
   case MIR_OP_SDIV:
   case MIR_OP_SMOD:
-    load_vreg_to_reg(ctx, in->src1, "rax");
-    if (vreg_assigned_reg64(ctx, in->src2))
-      load_vreg_to_reg(ctx, in->src2, "rdi");
-    write_file("  cqo\n");
-    if (vreg_assigned_reg64(ctx, in->src2)) {
-      write_file("  idiv rdi\n");
-    } else {
-      int off = vreg_stack_offset_or_neg1(ctx, in->src2);
-      if (off < 0)
-        error("invalid div rhs location [in MIR_OP_SDIV/SMOD]");
-      write_file("  idiv QWORD PTR [rbp - %d]\n", off);
-    }
-    if (in->op == MIR_OP_SMOD)
-      write_file("  mov rax, rdx\n");
-    store_reg_to_vreg(ctx, in->dst, "rax");
-    return;
   case MIR_OP_UDIV:
-  case MIR_OP_UMOD:
+  case MIR_OP_UMOD: {
+    int signed_div = in->op == MIR_OP_SDIV || in->op == MIR_OP_SMOD;
+    int want_mod = in->op == MIR_OP_SMOD || in->op == MIR_OP_UMOD;
+    int rhs_in_reg = vreg_assigned_reg64(ctx, in->src2) ? 1 : 0;
+
     load_vreg_to_reg(ctx, in->src1, "rax");
-    if (vreg_assigned_reg64(ctx, in->src2))
+    if (rhs_in_reg)
       load_vreg_to_reg(ctx, in->src2, "rdi");
-    write_file("  xor rdx, rdx\n");
-    if (vreg_assigned_reg64(ctx, in->src2)) {
-      write_file("  div rdi\n");
+
+    if (signed_div)
+      write_file("  cqo\n");
+    else
+      write_file("  xor rdx, rdx\n");
+
+    if (rhs_in_reg) {
+      write_file("  %s rdi\n", signed_div ? "idiv" : "div");
     } else {
       int off = vreg_stack_offset_or_neg1(ctx, in->src2);
       if (off < 0)
-        error("invalid div rhs location [in MIR_OP_UDIV/UMOD]");
-      write_file("  div QWORD PTR [rbp - %d]\n", off);
+        error("invalid div rhs location [in MIR_OP_DIV/MOD]");
+      write_file("  %s QWORD PTR [rbp - %d]\n", signed_div ? "idiv" : "div", off);
     }
-    if (in->op == MIR_OP_UMOD)
+
+    if (want_mod)
       write_file("  mov rax, rdx\n");
     store_reg_to_vreg(ctx, in->dst, "rax");
     return;
+  }
   case MIR_OP_EQ:
   case MIR_OP_NE:
   case MIR_OP_LT:
@@ -1528,65 +1509,20 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     const char *src2_reg = vreg_assigned_reg64(ctx, in->src2);
     long shift_imm = 0;
     int shift_is_imm = vreg_single_def_imm(ctx, in->src2, &shift_imm) && shift_imm >= 0 && shift_imm <= 255;
+    const char *shift_op = in->op == MIR_OP_SHL ? "shl" : ((in->type && in->type->is_unsigned) ? "shr" : "sar");
     const char *work = (shift_is_imm || (dst_reg && !reg_eq(dst_reg, src2_reg))) && dst_reg ? dst_reg : "rax";
+    const char *shift_dst = (in->type && type_size(in->type) == 4) ? reg32_name(work) : work;
     load_vreg_to_reg(ctx, in->src1, work);
     if (shift_is_imm) {
-      if (in->type && type_size(in->type) == 4) {
-        if (in->op == MIR_OP_SHL) {
-          write_file("  shl %s, %ld\n", reg32_name(work), shift_imm);
-        } else if (in->type->is_unsigned) {
-          write_file("  shr %s, %ld\n", reg32_name(work), shift_imm);
-        } else {
-          write_file("  sar %s, %ld\n", reg32_name(work), shift_imm);
-        }
-      } else {
-        if (in->op == MIR_OP_SHL) {
-          write_file("  shl %s, %ld\n", work, shift_imm);
-        } else if (in->type && in->type->is_unsigned) {
-          write_file("  shr %s, %ld\n", work, shift_imm);
-        } else {
-          write_file("  sar %s, %ld\n", work, shift_imm);
-        }
-      }
-    } else if (src2_reg) {
-      if (strcmp(src2_reg, "rcx"))
-        write_file("  mov rcx, %s\n", src2_reg);
-      if (in->type && type_size(in->type) == 4) {
-        if (in->op == MIR_OP_SHL) {
-          write_file("  shl %s, cl\n", reg32_name(work));
-        } else if (in->type->is_unsigned) {
-          write_file("  shr %s, cl\n", reg32_name(work));
-        } else {
-          write_file("  sar %s, cl\n", reg32_name(work));
-        }
-      } else {
-        if (in->op == MIR_OP_SHL) {
-          write_file("  shl %s, cl\n", work);
-        } else if (in->type && in->type->is_unsigned) {
-          write_file("  shr %s, cl\n", work);
-        } else {
-          write_file("  sar %s, cl\n", work);
-        }
-      }
+      write_file("  %s %s, %ld\n", shift_op, shift_dst, shift_imm);
     } else {
-      load_vreg_to_reg(ctx, in->src2, "rcx");
-      if (in->type && type_size(in->type) == 4) {
-        if (in->op == MIR_OP_SHL) {
-          write_file("  shl %s, cl\n", reg32_name(work));
-        } else if (in->type->is_unsigned) {
-          write_file("  shr %s, cl\n", reg32_name(work));
-        } else {
-          write_file("  sar %s, cl\n", reg32_name(work));
-        }
+      if (src2_reg) {
+        if (strcmp(src2_reg, "rcx"))
+          write_file("  mov rcx, %s\n", src2_reg);
       } else {
-        if (in->op == MIR_OP_SHL) {
-          write_file("  shl %s, cl\n", work);
-        } else if (in->type && in->type->is_unsigned) {
-          write_file("  shr %s, cl\n", work);
-        } else {
-          write_file("  sar %s, cl\n", work);
-        }
+        load_vreg_to_reg(ctx, in->src2, "rcx");
       }
+      write_file("  %s %s, cl\n", shift_op, shift_dst);
     }
     if (!dst_reg || strcmp(work, dst_reg))
       store_reg_to_vreg(ctx, in->dst, work);

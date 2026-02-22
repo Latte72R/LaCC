@@ -1174,20 +1174,16 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     int l_end = new_label(ctx);
     if (node->els) {
       int l_else = new_label(ctx);
-      if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_else)) {
-        VReg cond = lower_expr(ctx, node->cond);
-        emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_else);
-      }
+      if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_else))
+        emit_jmp_if_false_fallback(ctx, node->cond, l_else);
       lower_stmt(ctx, node->then);
       emit_jmp(ctx, l_end);
       emit_label(ctx, l_else);
       lower_stmt(ctx, node->els);
       emit_label(ctx, l_end);
     } else {
-      if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_end)) {
-        VReg cond = lower_expr(ctx, node->cond);
-        emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_end);
-      }
+      if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_end))
+        emit_jmp_if_false_fallback(ctx, node->cond, l_end);
       lower_stmt(ctx, node->then);
       emit_label(ctx, l_end);
     }
@@ -1197,10 +1193,8 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     int l_begin = new_label(ctx);
     int l_end = new_label(ctx);
     emit_label(ctx, l_begin);
-    if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_end)) {
-      VReg cond = lower_expr(ctx, node->cond);
-      emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_end);
-    }
+    if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_end))
+      emit_jmp_if_false_fallback(ctx, node->cond, l_end);
 
     push_control(ctx, l_end, l_begin, node);
     lower_stmt(ctx, node->then);
@@ -1221,10 +1215,8 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     pop_control(ctx, node);
 
     emit_label(ctx, l_step);
-    if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_end)) {
-      VReg cond = lower_expr(ctx, node->cond);
-      emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_end);
-    }
+    if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_end))
+      emit_jmp_if_false_fallback(ctx, node->cond, l_end);
     emit_jmp(ctx, l_begin);
     emit_label(ctx, l_end);
     return;
@@ -1239,10 +1231,8 @@ static void lower_stmt(LowerCtx *ctx, Node *node) {
     emit_label(ctx, l_begin);
 
     if (node->cond && node->cond->kind != ND_NONE) {
-      if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_end)) {
-        VReg cond = lower_expr(ctx, node->cond);
-        emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_end);
-      }
+      if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_end))
+        emit_jmp_if_false_fallback(ctx, node->cond, l_end);
     }
 
     push_control(ctx, l_end, l_step, node);
