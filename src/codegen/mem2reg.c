@@ -271,6 +271,85 @@ static int try_get_identity_copy_source(const MirInst *in, int vreg_count, const
   }
 }
 
+static int fold_binary_const(MirOp op, Type *type, long lhs, long rhs, long *out) {
+  if (!out)
+    return 0;
+  if (type && type->ty == TY_BOOL) {
+    switch (op) {
+    case MIR_OP_ADD:
+    case MIR_OP_SUB:
+    case MIR_OP_MUL:
+    case MIR_OP_BITAND:
+    case MIR_OP_BITOR:
+    case MIR_OP_BITXOR:
+      return 0;
+    default:
+      break;
+    }
+  }
+
+  long l = lhs;
+  long r = rhs;
+  unsigned long ul = (unsigned long)l;
+  unsigned long ur = (unsigned long)r;
+
+  switch (op) {
+  case MIR_OP_ADD:
+    *out = (long)(ul + ur);
+    return 1;
+  case MIR_OP_SUB:
+    *out = (long)(ul - ur);
+    return 1;
+  case MIR_OP_MUL:
+    *out = (long)(ul * ur);
+    return 1;
+  case MIR_OP_BITAND:
+    *out = (long)(ul & ur);
+    return 1;
+  case MIR_OP_BITOR:
+    *out = (long)(ul | ur);
+    return 1;
+  case MIR_OP_BITXOR:
+    *out = (long)(ul ^ ur);
+    return 1;
+  case MIR_OP_EQ:
+    *out = (l == r) ? 1 : 0;
+    return 1;
+  case MIR_OP_NE:
+    *out = (l != r) ? 1 : 0;
+    return 1;
+  case MIR_OP_LT:
+    if (type && type->is_unsigned)
+      *out = (ul < ur) ? 1 : 0;
+    else
+      *out = (l < r) ? 1 : 0;
+    return 1;
+  case MIR_OP_LE:
+    if (type && type->is_unsigned)
+      *out = (ul <= ur) ? 1 : 0;
+    else
+      *out = (l <= r) ? 1 : 0;
+    return 1;
+  default:
+    return 0;
+  }
+}
+
+static int fold_unary_const(MirOp op, Type *type, long src, long *out) {
+  if (!out)
+    return 0;
+  if (type && type->ty == TY_BOOL)
+    return 0;
+  long v = src;
+  switch (op) {
+  case MIR_OP_BITNOT:
+    *out = (long)(~(unsigned long)v);
+    return 1;
+  default:
+    return 0;
+  }
+}
+
 static int resolve_copy_source(const VReg *copy_src, int vreg_count, int v) {
   if (!copy_src || v < 0 || v >= vreg_count)
     return v;
@@ -548,6 +627,63 @@ static void run_mem2reg_fuse_compare_jz(MirInst **insts, int *inst_len) {
     jz->imm = cc;
     jz->type = cmp->type;
   }
+}
+
+static void run_mem2reg_const_fold(MirInst **insts, int *inst_len, int next_vreg) {
+  if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
+    return;
+
+  int *def_count = calloc(next_vreg, sizeof(int));
+  MirOp *def_op = calloc(next_vreg, sizeof(MirOp));
+  long *def_imm = calloc(next_vreg, sizeof(long));
+  if (!def_count || !def_op || !def_imm)
+    error("memory allocation failed [in mem2reg const fold def info]");
+
+  for (int i = 0; i < *inst_len; i++) {
+    MirInst *in = &(*insts)[i];
+    if (in->dst < 0 || in->dst >= next_vreg)
+      continue;
+    def_count[in->dst]++;
+    def_op[in->dst] = in->op;
+    def_imm[in->dst] = in->imm;
+  }
+
+  for (int i = 0; i < *inst_len; i++) {
+    MirInst *in = &(*insts)[i];
+    if (in->dst < 0 || in->dst >= next_vreg)
+      continue;
+
+    long folded = 0;
+    int can_fold = 0;
+    if (in->src1 >= 0 && in->src1 < next_vreg && in->src2 >= 0 && in->src2 < next_vreg) {
+      long lhs = 0;
+      long rhs = 0;
+      if (get_single_def_imm(in->src1, next_vreg, def_count, def_op, def_imm, &lhs) &&
+          get_single_def_imm(in->src2, next_vreg, def_count, def_op, def_imm, &rhs)) {
+        can_fold = fold_binary_const(in->op, in->type, lhs, rhs, &folded);
+      }
+    } else if (in->src1 >= 0 && in->src1 < next_vreg) {
+      long src = 0;
+      if (get_single_def_imm(in->src1, next_vreg, def_count, def_op, def_imm, &src))
+        can_fold = fold_unary_const(in->op, in->type, src, &folded);
+    }
+    if (!can_fold)
+      continue;
+
+    in->op = MIR_OP_IMM;
+    in->src1 = MIR_INVALID_VREG;
+    in->src2 = MIR_INVALID_VREG;
+    in->imm = folded;
+    in->label = MIR_INVALID_LABEL;
+    in->offset = 0;
+    in->argc = 0;
+    for (int a = 0; a < MAX_FUNC_PARAMS; a++)
+      in->args[a] = MIR_INVALID_VREG;
+  }
+
+  free(def_imm);
+  free(def_op);
+  free(def_count);
 }
 
 static void run_mem2reg_copyprop_and_dce(MirInst **insts, int *inst_len, int *inst_cap, int next_vreg) {
@@ -836,6 +972,8 @@ void optimize_mir_mem2reg(MirFunction *mf) {
   run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
   run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
   run_mem2reg_fuse_compare_jz(&mf->insts, &mf->inst_len);
+  run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
+  run_mem2reg_const_fold(&mf->insts, &mf->inst_len, mf->next_vreg);
   run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
   run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
   run_mem2reg_compact_vregs(mf);
