@@ -758,6 +758,40 @@ static void clear_inst_to_nop(MirInst *in) {
     in->args[a] = MIR_INVALID_VREG;
 }
 
+static void run_mem2reg_simplify_jumps_to_next_label(MirInst **insts, int *inst_len) {
+  if (!insts || !*insts || !inst_len || *inst_len <= 1)
+    return;
+
+  for (int i = 0; i + 1 < *inst_len; i++) {
+    MirInst *in = &(*insts)[i];
+    MirInst *next = &(*insts)[i + 1];
+    if (next->op != MIR_OP_LABEL)
+      continue;
+    if (in->op != MIR_OP_JMP && in->op != MIR_OP_JZ && in->op != MIR_OP_JCC)
+      continue;
+    if (in->label != next->label)
+      continue;
+    clear_inst_to_nop(in);
+  }
+}
+
+static void run_mem2reg_remove_nops(MirInst **insts, int *inst_len, int *inst_cap) {
+  if (!insts || !*insts || !inst_len || *inst_len <= 0)
+    return;
+
+  int out = 0;
+  for (int i = 0; i < *inst_len; i++) {
+    if ((*insts)[i].op == MIR_OP_NOP)
+      continue;
+    if (out != i)
+      (*insts)[out] = (*insts)[i];
+    out++;
+  }
+  *inst_len = out;
+  if (inst_cap)
+    *inst_cap = out;
+}
+
 static int eval_const_jcc(long cc, Type *type, long lhs, long rhs) {
   unsigned long ulhs = (unsigned long)lhs;
   unsigned long urhs = (unsigned long)rhs;
@@ -1635,6 +1669,15 @@ void mem2reg_run_promote(MirFunction *mf) {
   run_mem2reg_fuse_compare_jz(&mf->insts, &mf->inst_len);
   run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
   run_mem2reg_const_fold(&mf->insts, &mf->inst_len, mf->next_vreg);
+  run_mem2reg_cfg_const_fold_branches(&mf->insts, &mf->inst_len, mf->next_vreg);
+  run_mem2reg_simplify_jumps_to_next_label(&mf->insts, &mf->inst_len);
+  run_mem2reg_remove_nops(&mf->insts, &mf->inst_len, &mf->inst_cap);
+  run_mem2reg_prune_unreachable_blocks(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
+  run_mem2reg_simplify_jumps_to_next_label(&mf->insts, &mf->inst_len);
+  run_mem2reg_remove_nops(&mf->insts, &mf->inst_len, &mf->inst_cap);
+  run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
+  run_mem2reg_dead_store_local_cfg(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
+  run_mem2reg_remove_nops(&mf->insts, &mf->inst_len, &mf->inst_cap);
   run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
   run_mem2reg_canonicalize_commutative_imm_rhs(&mf->insts, &mf->inst_len, mf->next_vreg);
   run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
