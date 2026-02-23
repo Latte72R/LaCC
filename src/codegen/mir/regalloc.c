@@ -157,8 +157,18 @@ static int should_dump_ra_trace(const MirFunction *mf) {
   return str_eq_len(mf->fn->name, mf->fn->len, filter);
 }
 
-static void dump_active(FILE *out, Interval **active, int active_cnt, const int *reg_for_vreg) {
+static void trace_print_preg(FILE *out, int preg) {
   if (!out)
+    return;
+  if (preg < 0 || preg >= RA_PREG_COUNT) {
+    fprintf(out, "<bad-preg:%d>", preg);
+    return;
+  }
+  fputs(ra_preg64(preg), out);
+}
+
+static void dump_active(FILE *out, Interval **active, int active_cnt, const int *reg_for_vreg, int vreg_count) {
+  if (!out || !active || !reg_for_vreg || vreg_count <= 0)
     return;
   fprintf(out, "    active:");
   if (active_cnt <= 0) {
@@ -167,11 +177,25 @@ static void dump_active(FILE *out, Interval **active, int active_cnt, const int 
   }
   for (int i = 0; i < active_cnt; i++) {
     Interval *it = active[i];
+    if (!it) {
+      fprintf(out, " <null-interval>");
+      continue;
+    }
+    if (it->vreg < 0 || it->vreg >= vreg_count) {
+      fprintf(out, " v%d[%d,%d]=<bad-vreg>", it->vreg, it->start, it->end);
+      continue;
+    }
     int preg = reg_for_vreg[it->vreg];
-    if (preg >= 0)
-      fprintf(out, " v%d[%d,%d]=%s", it->vreg, it->start, it->end, ra_preg64(preg));
-    else
+      if (preg >= 0 && preg < RA_PREG_COUNT) {
+      fprintf(out, " v%d[%d,%d]=", it->vreg, it->start, it->end);
+      trace_print_preg(out, preg);
+      continue;
+    }
+    if (preg == -1) {
       fprintf(out, " v%d[%d,%d]=<none>", it->vreg, it->start, it->end);
+      continue;
+    }
+    fprintf(out, " v%d[%d,%d]=<bad-preg:%d>", it->vreg, it->start, it->end, preg);
   }
   fprintf(out, "\n");
 }
@@ -422,9 +446,11 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
         }
         if (dump_trace && preg >= 0) {
           if (expire_for_copy)
-            fprintf(trace_out, "    expire(copy) v%d[%d,%d] from %s\n", it->vreg, it->start, it->end, ra_preg64(preg));
+            fprintf(trace_out, "    expire(copy) v%d[%d,%d] from ", it->vreg, it->start, it->end);
           else
-            fprintf(trace_out, "    expire v%d[%d,%d] from %s\n", it->vreg, it->start, it->end, ra_preg64(preg));
+            fprintf(trace_out, "    expire v%d[%d,%d] from ", it->vreg, it->start, it->end);
+          trace_print_preg(trace_out, preg);
+          fputc('\n', trace_out);
         }
       } else {
         active[write_idx++] = it;
@@ -458,10 +484,12 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
         qsort(active, active_cnt, sizeof(Interval *), cmp_active_end);
       if (dump_trace) {
         if (copy_src != MIR_INVALID_VREG && preferred_preg == preg)
-          fprintf(trace_out, "    assign(coalesce v%d<-v%d) v%d -> %s\n", cur->vreg, copy_src, cur->vreg, ra_preg64(preg));
+          fprintf(trace_out, "    assign(coalesce v%d<-v%d) v%d -> ", cur->vreg, copy_src, cur->vreg);
         else
-          fprintf(trace_out, "    assign v%d -> %s\n", cur->vreg, ra_preg64(preg));
-        dump_active(trace_out, active, active_cnt, reg_for_vreg);
+          fprintf(trace_out, "    assign v%d -> ", cur->vreg);
+        trace_print_preg(trace_out, preg);
+        fputc('\n', trace_out);
+        dump_active(trace_out, active, active_cnt, reg_for_vreg, mf->next_vreg);
       }
       continue;
     }
@@ -491,15 +519,17 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
       qsort(active, active_cnt, sizeof(Interval *), cmp_active_end);
       if (dump_trace) {
         fprintf(trace_out, "    spill v%d -> slot%d\n", victim->vreg, slot_for_vreg[victim->vreg]);
-        fprintf(trace_out, "    assign v%d -> %s\n", cur->vreg, ra_preg64(victim_reg));
-        dump_active(trace_out, active, active_cnt, reg_for_vreg);
+        fprintf(trace_out, "    assign v%d -> ", cur->vreg);
+        trace_print_preg(trace_out, victim_reg);
+        fputc('\n', trace_out);
+        dump_active(trace_out, active, active_cnt, reg_for_vreg, mf->next_vreg);
       }
     } else {
       if (slot_for_vreg[cur->vreg] < 0)
         slot_for_vreg[cur->vreg] = spill_count++;
       if (dump_trace) {
         fprintf(trace_out, "    spill v%d -> slot%d\n", cur->vreg, slot_for_vreg[cur->vreg]);
-        dump_active(trace_out, active, active_cnt, reg_for_vreg);
+        dump_active(trace_out, active, active_cnt, reg_for_vreg, mf->next_vreg);
       }
     }
   }
@@ -525,10 +555,12 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   if (dump_trace) {
     fprintf(trace_out, "  result:");
     for (int v = 0; v < mf->next_vreg; v++) {
-      if (out->locs[v].kind == RA_LOC_REG)
-        fprintf(trace_out, " v%d=%s", v, ra_preg64(out->locs[v].reg));
-      else
+      if (out->locs[v].kind == RA_LOC_REG) {
+        fprintf(trace_out, " v%d=", v);
+        trace_print_preg(trace_out, out->locs[v].reg);
+      } else {
         fprintf(trace_out, " v%d=slot%d", v, out->locs[v].stack_slot);
+      }
     }
     fprintf(trace_out, "\n");
   }

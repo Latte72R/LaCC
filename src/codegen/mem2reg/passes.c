@@ -456,6 +456,7 @@ static int is_trivial_dead_def_candidate(MirOp op) {
   case MIR_OP_MOV:
   case MIR_OP_IMM:
   case MIR_OP_CAST:
+  case MIR_OP_LOAD_LOCAL:
   case MIR_OP_ADD:
   case MIR_OP_SUB:
   case MIR_OP_MUL:
