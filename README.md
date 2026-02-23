@@ -137,8 +137,44 @@ LaCC does **not** support the following:
 ### Single‐Unit Compilation
 LaCC only handles one .c file at a time — there's no support for separate compilation or linking multiple translation units.
 
-### No Optimizations
-There are no code-generation optimizations beyond what's needed to make it work.
+### Optimizations
+LaCC does not emit assembly directly from AST nodes. It implements optimization around MIR (an intermediate representation).
+
+Optimization behavior depends on the optimization level:
+
+- **`-O0`**
+  - Generates MIR, then runs normal register allocation and instruction emission.
+  - Does not run the main optimization passes (inline expansion / mem2reg / CFG cleanup).
+  - Still applies parser-side constant folding and local simplifications in the emitter where possible (for example, immediate-form instruction selection).
+
+- **`-O1`**
+  - Includes all `-O0` behavior plus staged MIR-level optimization passes.
+  - Typical passes include:
+    - Conditional inlining of small `static inline` functions
+    - Copy propagation / DCE
+    - Compare/branch fusion (for `cmp+setcc+jz`-style patterns)
+    - Unreachable block and unreferenced label pruning
+    - mem2reg (promotable locals to registers)
+    - CFG-based dead store elimination
+    - VReg compaction
+    - Constant folding at the emission stage
+
+`-O` is currently equivalent to `-O1`.  
+There is no separate `-O2` (or higher) optimization pipeline yet.
+
+To compare optimization results (assembly line counts), use:
+
+```bash
+make asmcmp
+```
+
+For MIR / register-allocation debugging output, use:
+
+```bash
+LACC_DUMP_MIR=1 ./build/lacc -O1 -S foo.c -o foo.s
+LACC_DUMP_RA=1 ./build/lacc -O1 -S foo.c -o foo.s
+LACC_DUMP_RA=1 LACC_DUMP_RA_FN=main ./build/lacc -O1 -S foo.c -o foo.s
+```
 
 
 ## Getting Started with LaCC
