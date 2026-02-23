@@ -1,6 +1,6 @@
 #include "../codegen_internal.h"
-#include "internal.h"
 #include "diagnostics.h"
+#include "internal.h"
 #include "platform.h"
 #include "runtime.h"
 
@@ -216,8 +216,8 @@ static int should_inline_callsite(const MirFunction *caller, const MirFunction *
     return 0;
   if (mir_inline_cost(callee) > INLINE_MAX_COST_O1)
     return 0;
-  if (!site_info || site_info[callee_idx].call_count <= 0 || site_info[callee_idx].call_count > INLINE_MAX_CALLSITES_O1 ||
-      site_info[callee_idx].addr_taken != 0)
+  if (!site_info || site_info[callee_idx].call_count <= 0 ||
+      site_info[callee_idx].call_count > INLINE_MAX_CALLSITES_O1 || site_info[callee_idx].addr_taken != 0)
     return 0;
   if (caller_idx < 0 || callee_idx < 0 || caller_idx >= fn_count || callee_idx >= fn_count)
     return 0;
@@ -311,8 +311,9 @@ static void expand_inline_callsite(MirFunction *caller, const MirFunction *calle
   free(vmap);
 }
 
-static int run_inline_in_function(MirFunction *caller, MirFunction *mfs, Function **fns, int fn_count, int optimize_level,
-                                  int caller_idx, const unsigned char *reach, const InlineSiteInfo *site_info) {
+static int run_inline_in_function(MirFunction *caller, MirFunction *mfs, Function **fns, int fn_count,
+                                  int optimize_level, int caller_idx, const unsigned char *reach,
+                                  const InlineSiteInfo *site_info) {
   if (!caller || !mfs || !fns || fn_count <= 0)
     return 0;
 
@@ -326,9 +327,8 @@ static int run_inline_in_function(MirFunction *caller, MirFunction *mfs, Functio
     MirInst *in = &caller->insts[i];
     if (in->op == MIR_OP_CALL && in->call_fn) {
       int callee_idx = find_lowered_function_index(fns, fn_count, in->call_fn);
-      if (callee_idx >= 0 &&
-          should_inline_callsite(caller, &mfs[callee_idx], in, optimize_level, caller_idx, callee_idx, reach,
-                                 fn_count, site_info)) {
+      if (callee_idx >= 0 && should_inline_callsite(caller, &mfs[callee_idx], in, optimize_level, caller_idx,
+                                                    callee_idx, reach, fn_count, site_info)) {
         expand_inline_callsite(caller, &mfs[callee_idx], in, &out, &out_len, &out_cap, &caller_local_max);
         changed = 1;
         continue;
@@ -407,12 +407,6 @@ static void run_mir_inline_pass(MirFunction *mfs, Function **fns, int fn_count, 
 }
 
 void emit_mir_program_pipeline(int dump_mir, int optimize_level) {
-#if LACC_PLATFORM_APPLE
-  write_file("  .section __TEXT,__text,regular,pure_instructions\n");
-#else
-  write_file("  .text\n");
-#endif
-
   int fn_count = 0;
   for (int i = 0; code[i]->kind != ND_NONE; i++) {
     if (code[i]->kind == ND_FUNCDEF)
@@ -420,6 +414,12 @@ void emit_mir_program_pipeline(int dump_mir, int optimize_level) {
   }
   if (fn_count <= 0)
     return;
+
+#if LACC_PLATFORM_APPLE
+  write_file("  .section __TEXT,__text,regular,pure_instructions\n");
+#else
+  write_file("  .text\n");
+#endif
 
   MirFunction *mfs = calloc(fn_count, sizeof(MirFunction));
   Function **fns = calloc(fn_count, sizeof(Function *));

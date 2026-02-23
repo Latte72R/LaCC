@@ -203,12 +203,7 @@ static void add_include_paths_from_compiler(void) {
     error("waitpid failed: %s", strerror(errno));
   }
   if (!WIFEXITED(status) || WEXITSTATUS(status) != 0 || !added) {
-    // Fallback for toolchains/environments where probing output format differs.
-    append_include_path_if_absent("/usr/lib/llvm-18/lib/clang/18/include");
-    append_include_path_if_absent("/usr/lib/gcc/x86_64-linux-gnu/13/include");
-    append_include_path_if_absent("/usr/local/include");
-    append_include_path_if_absent("/usr/include/x86_64-linux-gnu");
-    append_include_path_if_absent("/usr/include");
+    error("failed to get include paths from default compiler");
   }
 }
 
