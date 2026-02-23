@@ -3,7 +3,7 @@
 #include "platform.h"
 #include "runtime.h"
 
-#include "lexer_internal.h"
+#include "internal.h"
 
 #include <ctype.h>
 #include <stdbool.h>

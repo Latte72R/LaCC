@@ -202,12 +202,8 @@ static void add_include_paths_from_compiler(void) {
   if (waitpid(pid, &status, 0) < 0) {
     error("waitpid failed: %s", strerror(errno));
   }
-  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-    // cc が無い/壊れてる/特殊環境 など
-    error("cc failed while probing include paths (exit=%d)", WIFEXITED(status) ? WEXITSTATUS(status) : -1);
-  }
-  if (!added) {
-    error("failed to parse include paths from compiler output.");
+  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0 || !added) {
+    error("failed to get include paths from default compiler");
   }
 }
 
@@ -216,6 +212,7 @@ int main(int argc, char **argv) {
   input_file = NULL;
   output_file = NULL;
   int output_file_specified = false;
+  int optimize_level = 0;
 
   if (argc < 2) {
     error("invalid number of arguments.");
@@ -225,6 +222,12 @@ int main(int argc, char **argv) {
     if (!strncmp(argv[i], "-I", 2) && i + 1 < argc) {
       add_include_path_front(argv[++i]);
     } else if (!strncmp(argv[i], "-S", 2)) {
+    } else if (!strncmp(argv[i], "-O0", 3) && argv[i][3] == '\0') {
+      optimize_level = 0;
+    } else if (!strncmp(argv[i], "-O1", 3) && argv[i][3] == '\0') {
+      optimize_level = 1;
+    } else if (!strncmp(argv[i], "-O", 2) && argv[i][2] == '\0') {
+      optimize_level = 1;
     } else if (!strncmp(argv[i], "-w", 2)) {
       show_warning = false;
     } else if (!strncmp(argv[i], "-H", 2)) {
@@ -314,7 +317,7 @@ int main(int argc, char **argv) {
   free_all_macros();
   free_all_locations();
 
-  generate_assembly();
+  generate_assembly_pipeline(optimize_level);
 
   free_all_nodes();
   free_all_functions();

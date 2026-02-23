@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int token_equals(Token *tok, const char *str) {
+static inline int token_equals(Token *tok, const char *str) {
   if (!tok)
     return false;
   if (tok->len != (int)strlen(str))
@@ -17,7 +17,7 @@ static int token_equals(Token *tok, const char *str) {
   return strncmp(tok->str, str, tok->len) == 0;
 }
 
-static int is_inline_asm_keyword(Token *tok) {
+static inline int is_inline_asm_keyword(Token *tok) {
   if (!tok)
     return false;
   if (tok->kind != TK_IDENT && tok->kind != TK_RESERVED)
@@ -72,6 +72,12 @@ Node *goto_stmt() {
 }
 
 Node *label_stmt() {
+  for (Label *it = current_fn->labels; it; it = it->next) {
+    if (it->len == token->len && !strncmp(it->name, token->str, it->len)) {
+      error_at(token->loc, "duplicate label: %.*s [in label statement]", token->len, token->str);
+    }
+  }
+
   Label *label = malloc(sizeof(Label));
   label->name = token->str;
   label->len = token->len;
@@ -101,6 +107,19 @@ Node *if_stmt() {
   } else {
     node->els = NULL;
   }
+
+  int ok = true;
+  int cond_value = eval_const_expr(node->cond, &ok);
+  if (ok) {
+    if (cond_value)
+      return node->then;
+    if (node->els)
+      return node->els;
+    Node *empty = new_node(ND_NONE);
+    empty->endline = true;
+    return empty;
+  }
+
   return node;
 }
 

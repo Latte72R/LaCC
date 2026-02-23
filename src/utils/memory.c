@@ -227,6 +227,12 @@ static void free_arrays_list(Array *arr) {
 static void free_struct_literals_list(StructLiteral *lit) {
   while (lit) {
     StructLiteral *next = lit->next;
+    StructReloc *rel = lit->relocs;
+    while (rel) {
+      StructReloc *rel_next = rel->next;
+      free(rel);
+      rel = rel_next;
+    }
     if (lit->data)
       free(lit->data);
     free(lit);

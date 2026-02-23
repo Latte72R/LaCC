@@ -60,7 +60,7 @@ static Type *make_size_t_type() {
   return type;
 }
 
-static Type *make_int_type() { return new_type(TY_INT); }
+static inline Type *make_int_type() { return new_type(TY_INT); }
 
 static Type *make_void_ptr(int is_const) {
   Type *base = new_type(TY_VOID);

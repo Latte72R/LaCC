@@ -18,13 +18,16 @@ void check_with_name(int result, const char *name, int ans) {
 #include "unittests/basic.c"
 #include "unittests/bool.c"
 #include "unittests/builtins_fortify.c"
+#include "unittests/casts_extra.c"
 #include "unittests/comma.c"
 #include "unittests/enum_init.c"
 #include "unittests/funcptrs_ternary_sizeof.c"
+#include "unittests/inline_keyword.c"
 #include "unittests/literals_and_switch.c"
 #include "unittests/loops_strings_arrays.c"
 #include "unittests/macro.c"
 #include "unittests/nullable_funcptrs.c"
+#include "unittests/regressions_postinc.c"
 #include "unittests/struct_arrays_bits.c"
 #include "unittests/struct_initializers.c"
 #include "unittests/switch_goto_casts.c"
@@ -163,6 +166,7 @@ int main() {
   CHECK(switch_casts_test24(), 0);
   CHECK(switch_casts_test25(), 10);
   CHECK(switch_casts_test26(), 3);
+  CHECK(switch_casts_test29(), 255);
 
   CHECK(unions_funcptrs_test1(), 0);
   CHECK(unions_funcptrs_test2(), -4);
@@ -228,6 +232,9 @@ int main() {
   CHECK(fptr_ternary_sizeof_test22(), 8);
   CHECK(fptr_ternary_sizeof_test23(), 1);
   CHECK(fptr_ternary_sizeof_test24(), 255);
+  CHECK(inline_keyword_test1(), 42);
+  CHECK(inline_keyword_test2(), 25);
+  CHECK(inline_keyword_test3(), 7);
 
   CHECK(unsigned_test1(), 255);
   CHECK(unsigned_test2(), 65535);
@@ -263,6 +270,10 @@ int main() {
   CHECK(unsigned_test32(), 0);
   CHECK(unsigned_test33(), 8);
   CHECK(unsigned_test34(), 1);
+  CHECK(regress_postinc_test1(), 34);
+  CHECK(regress_postinc_test2(), 54);
+  CHECK(regress_postinc_test3(), 561);
+  CHECK(regress_postinc_test4(), 255);
 
   // bool / _Bool tests
   CHECK(bool_test1(), 2);
@@ -311,6 +322,19 @@ int main() {
   CHECK(builtin_strcpy_chk_test(), 1);
   CHECK(builtin_strncpy_chk_test(), 1);
   CHECK(builtin_stpcpy_chk_test(), 1);
+
+  CHECK(cast_extra_test1(), 52);
+  CHECK(cast_extra_test2(), -16);
+  CHECK(cast_extra_test3(), 65535);
+  CHECK(cast_extra_test4(), 1);
+  CHECK(cast_extra_test5(), 1);
+  CHECK(cast_extra_test6(), 0);
+  CHECK(cast_extra_test7(), 7);
+  CHECK(cast_extra_test8(), 1);
+  CHECK(cast_extra_test9(), 22136);
+  CHECK(cast_extra_test10(), 1);
+  CHECK(cast_extra_test11(), 1);
+  CHECK(cast_extra_test12(), 1);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

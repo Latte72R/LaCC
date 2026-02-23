@@ -5,6 +5,7 @@
 
 #include "parser_internal.h"
 
+#include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -13,6 +14,226 @@
 static Node *comma_expr();
 
 Node *expr() { return comma_expr(); }
+
+static unsigned long long bit_mask_for_width(int bits) {
+  if (bits >= 64)
+    return ~0ULL;
+  return (1ULL << bits) - 1ULL;
+}
+
+static long long sign_extend_width(unsigned long long v, int bits) {
+  if (bits >= 64)
+    return (long long)v;
+  unsigned long long mask = bit_mask_for_width(bits);
+  unsigned long long sign = 1ULL << (bits - 1);
+  v &= mask;
+  if (v & sign)
+    v |= ~mask;
+  return (long long)v;
+}
+
+static Node *build_compare_with_const_fold(NodeKind kind, Node *lhs, Node *rhs) {
+  if (lhs && rhs && lhs->kind == ND_NUM && rhs->kind == ND_NUM && lhs->type && rhs->type && is_number(lhs->type) &&
+      is_number(rhs->type)) {
+    Type *cmp_type = max_type(lhs->type, rhs->type);
+    int bits = type_size(cmp_type) * 8;
+    if (bits <= 0 || bits > 64)
+      bits = 64;
+    unsigned long long mask = bit_mask_for_width(bits);
+    unsigned long long ul = ((unsigned long long)lhs->val) & mask;
+    unsigned long long ur = ((unsigned long long)rhs->val) & mask;
+    long long sl = sign_extend_width(ul, bits);
+    long long sr = sign_extend_width(ur, bits);
+
+    int v = 0;
+    if (cmp_type->is_unsigned) {
+      if (kind == ND_EQ)
+        v = (ul == ur);
+      else if (kind == ND_NE)
+        v = (ul != ur);
+      else if (kind == ND_LT)
+        v = (ul < ur);
+      else if (kind == ND_LE)
+        v = (ul <= ur);
+    } else {
+      if (kind == ND_EQ)
+        v = (sl == sr);
+      else if (kind == ND_NE)
+        v = (sl != sr);
+      else if (kind == ND_LT)
+        v = (sl < sr);
+      else if (kind == ND_LE)
+        v = (sl <= sr);
+    }
+
+    Node *folded = new_num(v ? 1 : 0);
+    folded->type = new_type(TY_INT);
+    return folded;
+  }
+
+  Node *node = new_binary(kind, lhs, rhs);
+  node->type = new_type(TY_INT);
+  return node;
+}
+
+static Node *build_binary_with_const_fold(NodeKind kind, Node *lhs, Node *rhs, Type *type) {
+  if (lhs && rhs && type && lhs->kind == ND_NUM && rhs->kind == ND_NUM) {
+    int bits = type_size(type) * 8;
+    if (bits <= 0 || bits > 64)
+      bits = 64;
+
+    unsigned long long mask = bit_mask_for_width(bits);
+    unsigned long long ul = ((unsigned long long)lhs->val) & mask;
+    unsigned long long ur = ((unsigned long long)rhs->val) & mask;
+    long long sl = sign_extend_width(ul, bits);
+    long long sr = sign_extend_width(ur, bits);
+    int is_unsigned = type->is_unsigned;
+    int can_fold = true;
+    unsigned long long uv = 0;
+    long long sv = 0;
+    unsigned int sh = 0;
+    if (rhs->val >= 0)
+      sh = (unsigned int)rhs->val;
+
+    switch (kind) {
+    case ND_ADD:
+      uv = (ul + ur) & mask;
+      if (!is_unsigned)
+        sv = sign_extend_width(uv, bits);
+      break;
+    case ND_SUB:
+      uv = (ul - ur) & mask;
+      if (!is_unsigned)
+        sv = sign_extend_width(uv, bits);
+      break;
+    case ND_MUL:
+      uv = (ul * ur) & mask;
+      if (!is_unsigned)
+        sv = sign_extend_width(uv, bits);
+      break;
+    case ND_DIV:
+      if (is_unsigned) {
+        if (ur == 0) {
+          can_fold = false;
+        } else {
+          uv = ul / ur;
+        }
+      } else {
+        if (sr == 0) {
+          can_fold = false;
+        } else {
+          long long smin = (bits >= 64) ? LLONG_MIN : -(1LL << (bits - 1));
+          if (sl == smin && sr == -1)
+            can_fold = false;
+          else
+            sv = sl / sr;
+        }
+      }
+      break;
+    case ND_MOD:
+      if (is_unsigned) {
+        if (ur == 0) {
+          can_fold = false;
+        } else {
+          uv = ul % ur;
+        }
+      } else {
+        if (sr == 0) {
+          can_fold = false;
+        } else {
+          long long smin = (bits >= 64) ? LLONG_MIN : -(1LL << (bits - 1));
+          if (sl == smin && sr == -1)
+            can_fold = false;
+          else
+            sv = sl % sr;
+        }
+      }
+      break;
+    case ND_SHL:
+      if (rhs->val < 0 || sh >= (unsigned int)bits) {
+        can_fold = false;
+      } else if (is_unsigned) {
+        uv = (ul << sh) & mask;
+      } else {
+        if (sl < 0) {
+          can_fold = false;
+        } else if (bits < 64) {
+          unsigned long long smax = (1ULL << (bits - 1)) - 1ULL;
+          if (ul > (smax >> sh))
+            can_fold = false;
+          else
+            sv = (long long)(ul << sh);
+        } else {
+          sv = sl << sh;
+        }
+      }
+      break;
+    case ND_SHR:
+      if (rhs->val < 0 || sh >= (unsigned int)bits) {
+        can_fold = false;
+      } else if (is_unsigned) {
+        uv = ul >> sh;
+      } else {
+        sv = sl >> sh;
+      }
+      break;
+    case ND_BITAND:
+      uv = (ul & ur) & mask;
+      if (!is_unsigned)
+        sv = sign_extend_width(uv, bits);
+      break;
+    case ND_BITOR:
+      uv = (ul | ur) & mask;
+      if (!is_unsigned)
+        sv = sign_extend_width(uv, bits);
+      break;
+    case ND_BITXOR:
+      uv = (ul ^ ur) & mask;
+      if (!is_unsigned)
+        sv = sign_extend_width(uv, bits);
+      break;
+    default:
+      can_fold = false;
+      break;
+    }
+
+    if (can_fold) {
+      Node *folded = new_num((int)(is_unsigned ? uv : sv));
+      folded->type = type;
+      return folded;
+    }
+  }
+
+  Node *node = new_binary(kind, lhs, rhs);
+  node->type = type;
+  return node;
+}
+
+static Node *fold_const_cast(Type *type, Node *expr) {
+  if (!type || !expr || expr->kind != ND_NUM)
+    return NULL;
+  if (!(is_number(type) || is_ptr_or_arr(type)))
+    return NULL;
+
+  int bits = type_size(type) * 8;
+  if (bits <= 0 || bits > 64)
+    bits = 64;
+
+  unsigned long long mask = bit_mask_for_width(bits);
+  unsigned long long uv = ((unsigned long long)expr->val) & mask;
+  long long sv = sign_extend_width(uv, bits);
+
+  Node *folded;
+  if (type->ty == TY_BOOL) {
+    folded = new_num(expr->val ? 1 : 0);
+  } else if (type->is_unsigned || is_ptr_or_arr(type)) {
+    folded = new_num((int)uv);
+  } else {
+    folded = new_num((int)sv);
+  }
+  folded->type = type;
+  return folded;
+}
 
 static Node *comma_expr() {
   Node *node = assign();
@@ -147,6 +368,7 @@ Node *assign() {
 Node *ternary_operator() {
   Node *node = logical_or();
   if (consume("?")) {
+    Node *cond = node;
     // Inside conditional operator, both branches should be parsed as
     // assignment-expressions (not full comma-expressions). Using expr()
     // here would swallow argument separators (',') in contexts like
@@ -193,7 +415,16 @@ Node *ternary_operator() {
       }
       ternary->type = then_branch->type;
     }
-    node = ternary;
+
+    int ok = true;
+    int cond_value = eval_const_expr(cond, &ok);
+    if (ok) {
+      Node *picked = cond_value ? then_branch : else_branch;
+      picked->type = ternary->type;
+      node = picked;
+    } else {
+      node = ternary;
+    }
   }
   return node;
 }
@@ -232,8 +463,9 @@ Node *bit_or() {
   Node *node = bit_xor();
   for (;;) {
     if (consume("|")) {
-      node = new_binary(ND_BITOR, node, bit_xor());
-      node->type = max_type(node->lhs->type, node->rhs->type);
+      Node *rhs = bit_xor();
+      Type *type = max_type(node->type, rhs->type);
+      node = build_binary_with_const_fold(ND_BITOR, node, rhs, type);
     } else {
       break;
     }
@@ -245,8 +477,9 @@ Node *bit_xor() {
   Node *node = bit_and();
   for (;;) {
     if (consume("^")) {
-      node = new_binary(ND_BITXOR, node, bit_and());
-      node->type = max_type(node->lhs->type, node->rhs->type);
+      Node *rhs = bit_and();
+      Type *type = max_type(node->type, rhs->type);
+      node = build_binary_with_const_fold(ND_BITXOR, node, rhs, type);
     } else {
       break;
     }
@@ -258,8 +491,9 @@ Node *bit_and() {
   Node *node = equality();
   for (;;) {
     if (consume("&")) {
-      node = new_binary(ND_BITAND, node, equality());
-      node->type = max_type(node->lhs->type, node->rhs->type);
+      Node *rhs = equality();
+      Type *type = max_type(node->type, rhs->type);
+      node = build_binary_with_const_fold(ND_BITAND, node, rhs, type);
     } else {
       break;
     }
@@ -285,8 +519,7 @@ Node *equality() {
         warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
                    type_name(rhs->type));
       }
-      node = new_binary(ND_EQ, node, rhs);
-      node->type = new_type(TY_INT);
+      node = build_compare_with_const_fold(ND_EQ, node, rhs);
     } else if (consume("!=")) {
       Node *rhs = relational();
       if (is_enum_type(node->type) && is_enum_type(rhs->type) && node->type->object != rhs->type->object) {
@@ -298,8 +531,7 @@ Node *equality() {
         warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
                    type_name(rhs->type));
       }
-      node = new_binary(ND_NE, node, rhs);
-      node->type = new_type(TY_INT);
+      node = build_compare_with_const_fold(ND_NE, node, rhs);
     } else {
       break;
     }
@@ -323,8 +555,7 @@ Node *relational() {
         warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
                    type_name(rhs->type));
       }
-      node = new_binary(ND_LT, node, rhs);
-      node->type = new_type(TY_INT);
+      node = build_compare_with_const_fold(ND_LT, node, rhs);
     } else if (consume("<=")) {
       Node *rhs = bit_shift();
       if (is_enum_type(node->type) && is_enum_type(rhs->type) && node->type->object != rhs->type->object) {
@@ -336,8 +567,7 @@ Node *relational() {
         warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
                    type_name(rhs->type));
       }
-      node = new_binary(ND_LE, node, rhs);
-      node->type = new_type(TY_INT);
+      node = build_compare_with_const_fold(ND_LE, node, rhs);
     } else if (consume(">")) {
       Node *lhs = bit_shift();
       if (is_enum_type(lhs->type) && is_enum_type(node->type) && lhs->type->object != node->type->object) {
@@ -349,8 +579,7 @@ Node *relational() {
         warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
                    type_name(lhs->type));
       }
-      node = new_binary(ND_LT, lhs, node);
-      node->type = new_type(TY_INT);
+      node = build_compare_with_const_fold(ND_LT, lhs, node);
     } else if (consume(">=")) {
       Node *lhs = bit_shift();
       if (is_enum_type(lhs->type) && is_enum_type(node->type) && lhs->type->object != node->type->object) {
@@ -362,8 +591,7 @@ Node *relational() {
         warning_at(consumed_loc, "comparison between pointer and integer ('%s' and '%s')", type_name(node->type),
                    type_name(lhs->type));
       }
-      node = new_binary(ND_LE, lhs, node);
-      node->type = new_type(TY_INT);
+      node = build_compare_with_const_fold(ND_LE, lhs, node);
     } else {
       break;
     }
@@ -375,11 +603,11 @@ Node *bit_shift() {
   Node *node = add();
   for (;;) {
     if (consume("<<")) {
-      node = new_binary(ND_SHL, node, add());
-      node->type = node->lhs->type;
+      Node *rhs = add();
+      node = build_binary_with_const_fold(ND_SHL, node, rhs, node->type);
     } else if (consume(">>")) {
-      node = new_binary(ND_SHR, node, add());
-      node->type = node->lhs->type;
+      Node *rhs = add();
+      node = build_binary_with_const_fold(ND_SHR, node, rhs, node->type);
     } else {
       break;
     }
@@ -398,20 +626,19 @@ Node *new_add(Node *lhs, Node *rhs, Location *loc) {
   }
   // lhsがloc, rhsがintなら
   else if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
-    mul_node = new_binary(ND_MUL, rhs, new_num(get_sizeof(lhs->type->ptr_to)));
-    node = new_binary(ND_ADD, lhs, mul_node);
-    node->type = lhs->type;
+    Type *mul_type = rhs->type;
+    mul_node = build_binary_with_const_fold(ND_MUL, rhs, new_num(get_sizeof(lhs->type->ptr_to)), mul_type);
+    node = build_binary_with_const_fold(ND_ADD, lhs, mul_node, lhs->type);
   }
   // lhsがint, rhsがptrなら
   else if (is_number(lhs->type) && is_ptr_or_arr(rhs->type)) {
-    mul_node = new_binary(ND_MUL, lhs, new_num(get_sizeof(rhs->type->ptr_to)));
-    node = new_binary(ND_ADD, mul_node, rhs);
-    node->type = rhs->type;
+    Type *mul_type = lhs->type;
+    mul_node = build_binary_with_const_fold(ND_MUL, lhs, new_num(get_sizeof(rhs->type->ptr_to)), mul_type);
+    node = build_binary_with_const_fold(ND_ADD, mul_node, rhs, rhs->type);
   }
   // それ以外は普通に演算
   else {
-    node = new_binary(ND_ADD, lhs, rhs);
-    node->type = max_type(lhs->type, rhs->type);
+    node = build_binary_with_const_fold(ND_ADD, lhs, rhs, max_type(lhs->type, rhs->type));
   }
   return node;
 }
@@ -433,14 +660,13 @@ Node *new_sub(Node *lhs, Node *rhs, Location *loc) {
   }
   // lhsがloc, rhsがintなら
   else if (is_ptr_or_arr(lhs->type) && is_number(rhs->type)) {
-    mul_node = new_binary(ND_MUL, rhs, new_num(get_sizeof(lhs->type->ptr_to)));
-    node = new_binary(ND_SUB, lhs, mul_node);
-    node->type = lhs->type;
+    Type *mul_type = rhs->type;
+    mul_node = build_binary_with_const_fold(ND_MUL, rhs, new_num(get_sizeof(lhs->type->ptr_to)), mul_type);
+    node = build_binary_with_const_fold(ND_SUB, lhs, mul_node, lhs->type);
   }
   // それ以外は普通に演算
   else {
-    node = new_binary(ND_SUB, lhs, rhs);
-    node->type = max_type(lhs->type, rhs->type);
+    node = build_binary_with_const_fold(ND_SUB, lhs, rhs, max_type(lhs->type, rhs->type));
   }
   return node;
 }
@@ -480,16 +706,19 @@ Node *mul() {
   for (;;) {
     if (consume("*")) {
       consumed_loc_prev = consumed_loc;
-      node = new_binary(ND_MUL, node, type_cast());
-      node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_loc_prev);
+      Node *rhs = type_cast();
+      Type *type = resolve_type_mul(node->type, rhs->type, consumed_loc_prev);
+      node = build_binary_with_const_fold(ND_MUL, node, rhs, type);
     } else if (consume("/")) {
       consumed_loc_prev = consumed_loc;
-      node = new_binary(ND_DIV, node, type_cast());
-      node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_loc_prev);
+      Node *rhs = type_cast();
+      Type *type = resolve_type_mul(node->type, rhs->type, consumed_loc_prev);
+      node = build_binary_with_const_fold(ND_DIV, node, rhs, type);
     } else if (consume("%")) {
       consumed_loc_prev = consumed_loc;
-      node = new_binary(ND_MOD, node, type_cast());
-      node->type = resolve_type_mul(node->lhs->type, node->rhs->type, consumed_loc_prev);
+      Node *rhs = type_cast();
+      Type *type = resolve_type_mul(node->type, rhs->type, consumed_loc_prev);
+      node = build_binary_with_const_fold(ND_MOD, node, rhs, type);
     } else {
       break;
     }
@@ -512,7 +741,8 @@ Node *type_cast() {
     error_at(token->loc, "expected ')' after type cast [in type_cast]");
   }
   Node *node = new_node(ND_TYPECAST);
-  node->lhs = unary();
+  // cast-expression is right-associative: (T) cast-expression
+  node->lhs = type_cast();
   node->type = type;
   if (type->ty == TY_VOID) {
     // void型へのキャストは評価のみ
@@ -537,6 +767,12 @@ Node *type_cast() {
       warning_at(tok->loc, "cast to smaller integer type '%s' from pointer [in type cast]", type_name(type));
     }
   }
+
+  // (char)123 のような定数キャストは frontend で即値化
+  Node *folded = fold_const_cast(type, node->lhs);
+  if (folded)
+    return folded;
+
   return node;
 }
 
@@ -572,7 +808,15 @@ Node *unary() {
   if (consume("+"))
     return type_cast();
   if (consume("-")) {
-    node = new_binary(ND_SUB, new_num(0), type_cast());
+    Node *rhs = type_cast();
+    int ok = true;
+    int value = eval_const_expr(rhs, &ok);
+    if (ok) {
+      Node *folded = new_num(-value);
+      folded->type = rhs->type;
+      return folded;
+    }
+    node = new_binary(ND_SUB, new_num(0), rhs);
     node->type = node->rhs->type;
     return node;
   }
@@ -601,7 +845,9 @@ Node *unary() {
   if (consume("~")) {
     node = new_node(ND_BITNOT);
     node->lhs = type_cast();
-    node->type = node->lhs->type;
+    if (!is_number(node->lhs->type))
+      error_at(consumed_loc, "invalid operand to unary '~'");
+    node->type = max_type(node->lhs->type, new_type(TY_INT));
     return node;
   }
   return increment_decrement();

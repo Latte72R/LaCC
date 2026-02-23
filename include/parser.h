@@ -28,9 +28,17 @@ struct Array {
 };
 
 typedef struct StructLiteral StructLiteral;
+typedef struct StructReloc StructReloc;
+struct StructReloc {
+  StructReloc *next;
+  int offset;
+  String *str;
+};
+
 struct StructLiteral {
   StructLiteral *next;
   unsigned char *data;
+  StructReloc *relocs;
   int size;
   int id;
   int needs_label;

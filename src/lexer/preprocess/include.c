@@ -3,11 +3,13 @@
 #include "runtime.h"
 #include "source.h"
 
-#include "lexer_internal.h"
+#include "internal.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+
+static inline int is_directive_space(char c) { return c == ' ' || c == '\t' || c == '\v' || c == '\f' || c == '\r'; }
 
 static void handle_include_common(char *name, char *p, bool is_system_header, bool is_next) {
   char *including_file = input_file;
@@ -58,11 +60,11 @@ static void handle_include_common(char *name, char *p, bool is_system_header, bo
   hierarchy_level = prev_level;
 }
 
-static void handle_include_directive(char *name, char *p, bool is_system_header) {
+static inline void handle_include_directive(char *name, char *p, bool is_system_header) {
   handle_include_common(name, p, is_system_header, false);
 }
 
-static void handle_include_next_directive(char *name, char *p) { handle_include_common(name, p, false, true); }
+static inline void handle_include_next_directive(char *name, char *p) { handle_include_common(name, p, false, true); }
 
 int parse_include_directive(char **pcur) {
   char *cur = *pcur;
@@ -79,11 +81,85 @@ int parse_include_directive(char **pcur) {
   char *body_start = cur;
   char *scan = find_directive_line_end(body_start);
 
+  // Fast path for ordinary #include <...> / #include "..."
+  char *raw = body_start;
+  while (raw < scan && is_directive_space(*raw))
+    raw++;
+  if (raw < scan && (*raw == '"' || *raw == '<')) {
+    char close = (*raw == '"') ? '"' : '>';
+    int is_system_header = (*raw == '<');
+    raw++;
+    char *name_start = raw;
+
+    while (raw < scan && *raw != close) {
+      if (close == '"' && *raw == '\\' && (raw + 1) < scan) {
+        raw += 2;
+        continue;
+      }
+      if (*raw == '\n')
+        error_at(new_location(body_start), "unexpected newline in #include directive");
+      raw++;
+    }
+    if (raw >= scan || *raw != close)
+      error_at(new_location(body_start), "unterminated include filename");
+
+    size_t len = raw - name_start;
+    char *name = malloc(len + 1);
+    if (!name)
+      error("memory allocation failed");
+    if (len > 0)
+      memcpy(name, name_start, len);
+    name[len] = '\0';
+
+    raw++; // skip closing delimiter
+    while (raw < scan) {
+      while (raw < scan && is_directive_space(*raw))
+        raw++;
+      if (raw >= scan)
+        break;
+
+      if ((raw + 1) < scan && raw[0] == '/' && raw[1] == '*') {
+        raw += 2;
+        while ((raw + 1) < scan && !(raw[0] == '*' && raw[1] == '/'))
+          raw++;
+        if ((raw + 1) >= scan)
+          error_at(new_location(body_start), "unterminated comment in #include directive");
+        raw += 2;
+        continue;
+      }
+
+      if ((raw + 1) < scan && raw[0] == '/' && raw[1] == '/') {
+        raw = scan;
+        break;
+      }
+
+      error_at(new_location(body_start), "unexpected tokens after #include filename");
+    }
+
+    if (is_next) {
+      handle_include_next_directive(name, body_start);
+    } else {
+      handle_include_directive(name, body_start, is_system_header);
+    }
+
+    char *rest = scan;
+    if (*rest == '\n')
+      rest++;
+    *pcur = rest;
+    return 1;
+  }
+
   char *trimmed = copy_trim_directive_expr(body_start, scan);
   if (!trimmed[0])
     error_at(new_location(body_start), "expected header name after #include");
-  char *expanded = expand_expression_internal(trimmed);
-  char *p = (char *)skip_spaces(expanded);
+  char *expanded = NULL;
+  char *expr = trimmed;
+  char *trimmed_head = (char *)skip_spaces(trimmed);
+  if (*trimmed_head != '"' && *trimmed_head != '<') {
+    expanded = expand_expression_internal(trimmed);
+    expr = expanded;
+  }
+  char *p = (char *)skip_spaces(expr);
 
   char close;
   if (*p == '"') {
@@ -92,7 +168,8 @@ int parse_include_directive(char **pcur) {
     close = '>';
   } else {
     free(trimmed);
-    free(expanded);
+    if (expanded)
+      free(expanded);
     error_at(new_location(body_start), "expected '\"' or '<' after #include");
   }
 
@@ -110,7 +187,8 @@ int parse_include_directive(char **pcur) {
 
   if (*p != close) {
     free(trimmed);
-    free(expanded);
+    if (expanded)
+      free(expanded);
     error_at(new_location(body_start), "unterminated include filename");
   }
 
@@ -126,12 +204,14 @@ int parse_include_directive(char **pcur) {
   p = (char *)skip_spaces(p);
   if (*p) {
     free(trimmed);
-    free(expanded);
+    if (expanded)
+      free(expanded);
     error_at(new_location(body_start), "unexpected tokens after #include filename");
   }
 
   free(trimmed);
-  free(expanded);
+  if (expanded)
+    free(expanded);
 
   if (is_next) {
     handle_include_next_directive(name, body_start);

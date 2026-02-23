@@ -11,7 +11,7 @@ CC_FLAGS:=$(CC_FLAGS_1)
 LACC_FLAGS:=-I $(INCLUDE_DIR)
 EXTENSION:=$(SRC_DIR)/extension.c
 HEADERS:=$(wildcard $(INCLUDE_DIR)/*.h)
-SRCS:=$(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/**/*.c)
+SRCS:=$(shell find $(SRC_DIR) -type f -name '*.c' | sort)
 SRCS:=$(filter-out $(EXTENSION),$(SRCS))
 OBJ_S:=$(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.s,$(SRCS))
 CC?=cc
@@ -23,6 +23,8 @@ WARN_TEST:=$(TEST_DIR)/warntest.c
 INCLUDE_TEST:=$(TEST_DIR)/includes.c
 TMP_C:=$(BUILD_DIR)/tmp.c
 TMP_S:=$(BUILD_DIR)/tmp.s
+TMP_S_O0:=$(BUILD_DIR)/tmp_O0.s
+TMP_S_O1:=$(BUILD_DIR)/tmp_O1.s
 TMP_OUT:=$(BUILD_DIR)/tmp
 STAGE3_DIR := $(BUILD_DIR)/stage3
 
@@ -69,7 +71,10 @@ $(SELFHOST): $(BOOSTSTRAP) $(OBJ_S) | $(BUILD_DIR)
 	@echo "Self-hosted compiler created at '$@'."
 
 define unittest
-	@$(call runfile, $(1), $(UNIT_TEST))
+	@echo "[unittest -O0]"
+	@$(call runfile, $(1), -O0 $(UNIT_TEST))
+	@echo "[unittest -O1]"
+	@$(call runfile, $(1), -O1 $(UNIT_TEST))
 endef
 
 define warntest
@@ -142,29 +147,40 @@ sanitize: clean bootstrap selfhost clean
 
 .NOTPARALLEL: sanitize
 
-# コンパイラ本体のみ比較（SRCS 全部）
-asmcmp: $(SELFHOST) $(patsubst $(SRC_DIR)/%.c,$(STAGE3_DIR)/%.s,$(SRCS)) ## Compare stage2 vs stage3 assembly for compiler sources
+asmcmp: $(SELFHOST) | $(BUILD_DIR) ## Compare asm line counts: lacc/cc x -O0/-O1 (default: all src/*.c, optional: FILE=path/to/file.c)
 	@set -eu; \
-	fail=0; \
-	green=$$(printf '\033[32m'); \
-	red=$$(printf '\033[31m'); \
-	reset=$$(printf '\033[0m'); \
-	for f in $(SRCS); do \
-	  rel=$${f#$(SRC_DIR)/}; \
-	  s2="$(BUILD_DIR)/$${rel%.c}.s"; \
-	  s3="$(STAGE3_DIR)/$${rel%.c}.s"; \
-	  if diff -u "$$s2" "$$s3" >/dev/null; then \
-	    printf '%sOK%s: %s\n' "$$green" "$$reset" "$$rel"; \
-	  else \
-	    printf '%sNG%s: %s\n' "$$red" "$$reset" "$$rel"; \
-	    fail=1; \
-	  fi; \
+	files="$(FILE)"; \
+	if [ -z "$$files" ]; then \
+	  files="$(SRCS)"; \
+	fi; \
+	outdir="$(BUILD_DIR)/asmcmp"; \
+	mkdir -p "$$outdir"; \
+	t_l0=0; t_l1=0; t_c0=0; t_c1=0; \
+	printf '%-40s %8s %8s %8s %8s\n' "file" "lacc-O0" "lacc-O1" "cc-O0" "cc-O1"; \
+	printf '%-40s %8s %8s %8s %8s\n' "----" "-------" "-------" "-----" "-----"; \
+	for f in $$files; do \
+	  rel=$${f#./}; \
+	  base=$${rel%.c}; \
+	  l0="$$outdir/$${base}.lacc.O0.s"; \
+	  l1="$$outdir/$${base}.lacc.O1.s"; \
+	  c0="$$outdir/$${base}.cc.O0.s"; \
+	  c1="$$outdir/$${base}.cc.O1.s"; \
+	  mkdir -p "$$(dirname "$$l0")"; \
+	  $(SELFHOST) $(LACC_FLAGS) -O0 "$$f" -S -o "$$l0"; \
+	  $(SELFHOST) $(LACC_FLAGS) -O1 "$$f" -S -o "$$l1"; \
+	  $(CC) -std=c99 -I $(INCLUDE_DIR) -w -O0 -S -masm=intel -fno-verbose-asm "$$f" -o "$$c0"; \
+	  $(CC) -std=c99 -I $(INCLUDE_DIR) -w -O1 -S -masm=intel -fno-verbose-asm "$$f" -o "$$c1"; \
+	  n_l0=$$(wc -l < "$$l0" | tr -d ' '); \
+	  n_l1=$$(wc -l < "$$l1" | tr -d ' '); \
+	  n_c0=$$(wc -l < "$$c0" | tr -d ' '); \
+	  n_c1=$$(wc -l < "$$c1" | tr -d ' '); \
+	  t_l0=$$((t_l0 + n_l0)); \
+	  t_l1=$$((t_l1 + n_l1)); \
+	  t_c0=$$((t_c0 + n_c0)); \
+	  t_c1=$$((t_c1 + n_c1)); \
+	  printf '%-40s %8s %8s %8s %8s\n' "$$rel" "$$n_l0" "$$n_l1" "$$n_c0" "$$n_c1"; \
 	done; \
-	if [ "$$fail" -eq 0 ]; then \
-	  printf '%sAll files match!%s\n' "$$green" "$$reset"; \
-	else \
-	  exit 1; \
-	fi
+	printf '%-40s %8s %8s %8s %8s\n' "TOTAL" "$$t_l0" "$$t_l1" "$$t_c0" "$$t_c1"
 
 clean: ## Clean up generated files
 	@rm -rf $(BUILD_DIR)

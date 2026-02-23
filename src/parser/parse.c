@@ -261,7 +261,19 @@ static void store_scalar_bytes(Type *type, unsigned char *buffer, int offset, lo
     buffer[offset + i] = ((v >> (8 * i)) & 0xFF);
 }
 
-static void parse_array_member_initializer(Type *type, unsigned char *buffer) {
+static void add_struct_string_reloc(StructLiteral *lit, int offset, String *str) {
+  if (!lit || !str)
+    error("invalid struct string relocation");
+  StructReloc *rel = malloc(sizeof(StructReloc));
+  if (!rel)
+    error("memory allocation failed [in add_struct_string_reloc]");
+  rel->offset = offset;
+  rel->str = str;
+  rel->next = lit->relocs;
+  lit->relocs = rel;
+}
+
+static void parse_array_member_initializer(StructLiteral *lit, Type *type, unsigned char *base, unsigned char *buffer) {
   int size = get_sizeof(type);
   zero_bytes(buffer, size);
   Type *elem = type->ptr_to;
@@ -293,16 +305,27 @@ static void parse_array_member_initializer(Type *type, unsigned char *buffer) {
   int idx = 0;
   while (!peek("}")) {
     Location *value_loc = token->loc;
-    Node *expr_node = assign();
-    int ok = true;
-    int value = eval_const_expr(expr_node, &ok);
-    if (!ok) {
-      error_at(value_loc, "expected a compile time constant [in struct initializer]");
+    if (elem->ty == TY_PTR && token->kind == TK_STRING) {
+      consumed_loc = token->loc;
+      String *str = string_literal();
+      if (idx < count) {
+        int member_off = (int)(buffer - base) + (idx * elem_size);
+        add_struct_string_reloc(lit, member_off, str);
+      } else {
+        warning_at(value_loc, "excess elements in array member initializer [in struct initializer]");
+      }
+    } else {
+      Node *expr_node = assign();
+      int ok = true;
+      int value = eval_const_expr(expr_node, &ok);
+      if (!ok) {
+        error_at(value_loc, "expected a compile time constant [in struct initializer]");
+      }
+      if (idx < count)
+        store_scalar_bytes(elem, buffer, idx * elem_size, (long long)value);
+      else
+        warning_at(value_loc, "excess elements in array member initializer [in struct initializer]");
     }
-    if (idx < count)
-      store_scalar_bytes(elem, buffer, idx * elem_size, (long long)value);
-    else
-      warning_at(value_loc, "excess elements in array member initializer [in struct initializer]");
     idx++;
     if (!consume(","))
       break;
@@ -312,27 +335,32 @@ static void parse_array_member_initializer(Type *type, unsigned char *buffer) {
   expect("}", "after array initializer", "struct initializer");
 }
 
-static void parse_struct_or_union_initializer(Type *type, unsigned char *buffer);
+static void parse_struct_or_union_initializer(StructLiteral *lit, Type *type, unsigned char *base, unsigned char *buffer);
 
-static void parse_member_initializer(Type *type, unsigned char *buffer) {
+static void parse_member_initializer(StructLiteral *lit, Type *type, unsigned char *base, unsigned char *buffer) {
   if (type->ty == TY_STRUCT || type->ty == TY_UNION) {
     if (!peek("{"))
       error_at(token->loc, "expected '{' for aggregate member initializer [in struct initializer]");
-    parse_struct_or_union_initializer(type, buffer);
+    parse_struct_or_union_initializer(lit, type, base, buffer);
     return;
   }
   if (type->ty == TY_ARR) {
-    parse_array_member_initializer(type, buffer);
+    parse_array_member_initializer(lit, type, base, buffer);
     return;
   }
 
-  Location *value_loc = token->loc;
+  if (type->ty == TY_PTR && token->kind == TK_STRING) {
+    consumed_loc = token->loc;
+    String *str = string_literal();
+    add_struct_string_reloc(lit, (int)(buffer - base), str);
+    return;
+  }
+
   long long value = expect_signed_number();
   store_scalar_bytes(type, buffer, 0, value);
-  (void)value_loc;
 }
 
-static void parse_struct_or_union_initializer(Type *type, unsigned char *buffer) {
+static void parse_struct_or_union_initializer(StructLiteral *lit, Type *type, unsigned char *base, unsigned char *buffer) {
   int size = get_sizeof(type);
   zero_bytes(buffer, size);
   expect("{", "before struct initializer", "struct initializer");
@@ -359,7 +387,7 @@ static void parse_struct_or_union_initializer(Type *type, unsigned char *buffer)
                  member_tok->str);
       }
       expect("=", "after member designator", "struct initializer");
-      parse_member_initializer(member->type, buffer + member->offset);
+      parse_member_initializer(lit, member->type, base, buffer + member->offset);
       if (!consume(","))
         break;
       if (peek("}"))
@@ -382,7 +410,7 @@ static void parse_struct_or_union_initializer(Type *type, unsigned char *buffer)
       first_decl = it;
       it = it->next;
     }
-    parse_member_initializer(first_decl->type, buffer + first_decl->offset);
+    parse_member_initializer(lit, first_decl->type, base, buffer + first_decl->offset);
     if (consume(",")) {
       // Standard的には余剰要素はエラーとする
       error_at(token->loc, "excess elements in union initializer [in struct initializer]");
@@ -415,7 +443,7 @@ static void parse_struct_or_union_initializer(Type *type, unsigned char *buffer)
       error_at(token->loc, "excess elements in struct initializer [in struct initializer]");
     }
     LVar *member = members[pos++];
-    parse_member_initializer(member->type, buffer + member->offset);
+    parse_member_initializer(lit, member->type, base, buffer + member->offset);
     if (!consume(","))
       break;
     if (peek("}"))
@@ -433,10 +461,11 @@ StructLiteral *struct_literal(Type *type) {
   literal->id = struct_literal_cnt++;
   literal->size = get_sizeof(type);
   literal->data = calloc(literal->size, sizeof(unsigned char));
+  literal->relocs = NULL;
   literal->needs_label = false;
   literal->next = struct_literals;
   struct_literals = literal;
-  parse_struct_or_union_initializer(type, literal->data);
+  parse_struct_or_union_initializer(literal, type, literal->data, literal->data);
   return literal;
 }
 

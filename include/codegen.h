@@ -1,8 +1,6 @@
 #ifndef CODEGEN_H
 #define CODEGEN_H
 
-#include "parser.h"
-
-void generate_assembly();
+void generate_assembly_pipeline(int optimize_level);
 
 #endif // CODEGEN_H

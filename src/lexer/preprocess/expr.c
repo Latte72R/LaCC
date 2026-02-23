@@ -3,7 +3,7 @@
 #include "runtime.h"
 #include "source.h"
 
-#include "lexer_internal.h"
+#include "internal.h"
 
 #include <ctype.h>
 #include <stdbool.h>
@@ -22,7 +22,7 @@ static void append_text(char **buf, int *len, int *cap, const char *text, int te
   *len += text_len;
 }
 
-static void append_char(char **buf, int *len, int *cap, char c) { append_text(buf, len, cap, &c, 1); }
+static inline void append_char(char **buf, int *len, int *cap, char c) { append_text(buf, len, cap, &c, 1); }
 
 static char *copy_macro_body_text(Macro *macro) {
   char *body = macro->body;

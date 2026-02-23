@@ -363,3 +363,8 @@ int switch_casts_test28() { // 代入
   int (*fq)() = (0 ? 0 : fp);
   return 0;
 }
+
+int switch_casts_test29() {
+  int x = -1;
+  return (int)(long)(unsigned char)x;
+}
