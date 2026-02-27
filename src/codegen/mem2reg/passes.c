@@ -134,14 +134,6 @@ static void flush_dirty_locals(MirInst **out_insts, int *out_len, int *out_cap, 
   }
 }
 
-static void invalidate_all_states(LocalState *state, int slot_len) {
-  for (int i = 0; i < slot_len; i++) {
-    state[i].valid = 0;
-    state[i].dirty = 0;
-    state[i].value = MIR_INVALID_VREG;
-  }
-}
-
 static int is_control_barrier(MirOp op) {
   return op == MIR_OP_LABEL || op == MIR_OP_JMP || op == MIR_OP_JZ || op == MIR_OP_JCC || op == MIR_OP_RET;
 }
@@ -788,6 +780,74 @@ static int eval_const_jcc(long cc, Type *type, long lhs, long rhs) {
   }
 }
 
+static int *build_label_to_inst_map(const MirInst *insts, int inst_len, int next_label, const char *pass_name) {
+  if (!insts || inst_len <= 0 || next_label <= 0)
+    return NULL;
+
+  int *label_to_inst = malloc(sizeof(int) * next_label);
+  if (!label_to_inst)
+    error("memory allocation failed [in %s labels]", pass_name ? pass_name : "mem2reg");
+
+  for (int l = 0; l < next_label; l++)
+    label_to_inst[l] = -1;
+  for (int i = 0; i < inst_len; i++) {
+    if (insts[i].op != MIR_OP_LABEL)
+      continue;
+    int l = insts[i].label;
+    if (l >= 0 && l < next_label)
+      label_to_inst[l] = i;
+  }
+  return label_to_inst;
+}
+
+static void run_mem2reg_eliminate_dead_defs(MirInst **insts, int *inst_len, int *inst_cap, int next_vreg) {
+  if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
+    return;
+
+  int *use_count = calloc(next_vreg, sizeof(int));
+  unsigned char *dead = calloc(*inst_len, sizeof(unsigned char));
+  if (!use_count || !dead)
+    error("memory allocation failed [in mem2reg dce setup]");
+
+  for (int i = 0; i < *inst_len; i++)
+    add_inst_uses(&(*insts)[i], use_count, next_vreg);
+
+  int changed = 1;
+  while (changed) {
+    changed = 0;
+    for (int i = 0; i < *inst_len; i++) {
+      MirInst *in = &(*insts)[i];
+      if (dead[i])
+        continue;
+      if (!is_trivial_dead_def_candidate(in->op))
+        continue;
+      if (in->dst < 0 || in->dst >= next_vreg)
+        continue;
+      if (use_count[in->dst] != 0)
+        continue;
+
+      dead[i] = 1;
+      changed = 1;
+      remove_inst_uses(in, use_count, next_vreg);
+    }
+  }
+
+  int out = 0;
+  for (int i = 0; i < *inst_len; i++) {
+    if (dead[i])
+      continue;
+    if (out != i)
+      (*insts)[out] = (*insts)[i];
+    out++;
+  }
+  *inst_len = out;
+  if (inst_cap)
+    *inst_cap = out;
+
+  free(use_count);
+  free(dead);
+}
+
 void run_mem2reg_copyprop_and_dce(MirInst **insts, int *inst_len, int *inst_cap, int next_vreg) {
   if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
     return;
@@ -847,96 +907,11 @@ void run_mem2reg_copyprop_and_dce(MirInst **insts, int *inst_len, int *inst_cap,
   free(def_type);
   free(def_op);
   free(def_count);
-
-  int *use_count = calloc(next_vreg, sizeof(int));
-  unsigned char *dead = calloc(*inst_len, sizeof(unsigned char));
-  if (!use_count || !dead)
-    error("memory allocation failed [in mem2reg dce setup]");
-
-  for (int i = 0; i < *inst_len; i++)
-    add_inst_uses(&(*insts)[i], use_count, next_vreg);
-
-  int changed = 1;
-  while (changed) {
-    changed = 0;
-    for (int i = 0; i < *inst_len; i++) {
-      MirInst *in = &(*insts)[i];
-      if (dead[i])
-        continue;
-      if (!is_trivial_dead_def_candidate(in->op))
-        continue;
-      if (in->dst < 0 || in->dst >= next_vreg)
-        continue;
-      if (use_count[in->dst] != 0)
-        continue;
-
-      dead[i] = 1;
-      changed = 1;
-      remove_inst_uses(in, use_count, next_vreg);
-    }
-  }
-
-  int out = 0;
-  for (int i = 0; i < *inst_len; i++) {
-    if (dead[i])
-      continue;
-    if (out != i)
-      (*insts)[out] = (*insts)[i];
-    out++;
-  }
-  *inst_len = out;
-  *inst_cap = out;
-
-  free(use_count);
-  free(dead);
+  run_mem2reg_eliminate_dead_defs(insts, inst_len, inst_cap, next_vreg);
 }
 
 void run_mem2reg_dce(MirInst **insts, int *inst_len, int *inst_cap, int next_vreg) {
-  if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
-    return;
-
-  int *use_count = calloc(next_vreg, sizeof(int));
-  unsigned char *dead = calloc(*inst_len, sizeof(unsigned char));
-  if (!use_count || !dead)
-    error("memory allocation failed [in mem2reg dce setup]");
-
-  for (int i = 0; i < *inst_len; i++)
-    add_inst_uses(&(*insts)[i], use_count, next_vreg);
-
-  int changed = 1;
-  while (changed) {
-    changed = 0;
-    for (int i = 0; i < *inst_len; i++) {
-      MirInst *in = &(*insts)[i];
-      if (dead[i])
-        continue;
-      if (!is_trivial_dead_def_candidate(in->op))
-        continue;
-      if (in->dst < 0 || in->dst >= next_vreg)
-        continue;
-      if (use_count[in->dst] != 0)
-        continue;
-
-      dead[i] = 1;
-      changed = 1;
-      remove_inst_uses(in, use_count, next_vreg);
-    }
-  }
-
-  int out = 0;
-  for (int i = 0; i < *inst_len; i++) {
-    if (dead[i])
-      continue;
-    if (out != i)
-      (*insts)[out] = (*insts)[i];
-    out++;
-  }
-  *inst_len = out;
-  if (inst_cap)
-    *inst_cap = out;
-
-  free(dead);
-  free(use_count);
+  run_mem2reg_eliminate_dead_defs(insts, inst_len, inst_cap, next_vreg);
 }
 
 static void bit_set64(unsigned long long *bits, int bit) { bits[bit / 64] |= (1ULL << (bit & 63)); }
@@ -1002,21 +977,7 @@ void run_mem2reg_dead_store_local_cfg(MirInst **insts, int *inst_len, int *inst_
   }
 
   int words = (bit_count + 63) / 64;
-  int *label_to_inst = NULL;
-  if (next_label > 0) {
-    label_to_inst = malloc(sizeof(int) * next_label);
-    if (!label_to_inst)
-      error("memory allocation failed [in mem2reg dead-store labels]");
-    for (int l = 0; l < next_label; l++)
-      label_to_inst[l] = -1;
-    for (int i = 0; i < n; i++) {
-      if ((*insts)[i].op != MIR_OP_LABEL)
-        continue;
-      int l = (*insts)[i].label;
-      if (l >= 0 && l < next_label)
-        label_to_inst[l] = i;
-    }
-  }
+  int *label_to_inst = build_label_to_inst_map(*insts, n, next_label, "mem2reg dead-store");
 
   unsigned long long *live_in = calloc((size_t)n * (size_t)words, sizeof(unsigned long long));
   unsigned long long *live_out = calloc((size_t)n * (size_t)words, sizeof(unsigned long long));
@@ -1142,21 +1103,7 @@ void run_mem2reg_prune_unreachable_blocks(MirInst **insts, int *inst_len, int *i
     return;
 
   int n = *inst_len;
-  int *label_to_inst = NULL;
-  if (next_label > 0) {
-    label_to_inst = malloc(sizeof(int) * next_label);
-    if (!label_to_inst)
-      error("memory allocation failed [in mem2reg prune unreachable labels]");
-    for (int l = 0; l < next_label; l++)
-      label_to_inst[l] = -1;
-    for (int i = 0; i < n; i++) {
-      if ((*insts)[i].op != MIR_OP_LABEL)
-        continue;
-      int l = (*insts)[i].label;
-      if (l >= 0 && l < next_label)
-        label_to_inst[l] = i;
-    }
-  }
+  int *label_to_inst = build_label_to_inst_map(*insts, n, next_label, "mem2reg prune unreachable");
 
   unsigned char *visited = calloc(n, sizeof(unsigned char));
   int *queue = malloc(sizeof(int) * n);
@@ -1477,19 +1424,6 @@ static int sccp_eval_inst_result(const MirInst *in, int vreg_count, const SccpLa
   }
 }
 
-static int find_block_by_label(const MirFunction *mf, const Mem2regBlock *blocks, int block_len, int label) {
-  if (!mf || !blocks || block_len <= 0 || label < 0)
-    return -1;
-  for (int bi = 0; bi < block_len; bi++) {
-    int idx = blocks[bi].start;
-    if (idx < 0 || idx >= mf->inst_len)
-      continue;
-    if (mf->insts[idx].op == MIR_OP_LABEL && mf->insts[idx].label == label)
-      return bi;
-  }
-  return -1;
-}
-
 static int mark_block_executable(unsigned char *exec, int block_len, int bi) {
   if (!exec || bi < 0 || bi >= block_len || exec[bi])
     return 0;
@@ -1528,6 +1462,22 @@ void run_mem2reg_sccp(MirFunction *mf) {
   SccpLatticeKind *kinds = calloc(mf->next_vreg, sizeof(SccpLatticeKind));
   long *values = calloc(mf->next_vreg, sizeof(long));
   unsigned char *exec = calloc(block_len, sizeof(unsigned char));
+  int *label_to_block = NULL;
+  if (mf->next_label > 0) {
+    label_to_block = malloc(sizeof(int) * mf->next_label);
+    if (!label_to_block)
+      error("memory allocation failed [in mem2reg sccp label map]");
+    for (int l = 0; l < mf->next_label; l++)
+      label_to_block[l] = -1;
+    for (int bi = 0; bi < block_len; bi++) {
+      int first = blocks[bi].start;
+      if (first < 0 || first >= mf->inst_len || mf->insts[first].op != MIR_OP_LABEL)
+        continue;
+      int l = mf->insts[first].label;
+      if (l >= 0 && l < mf->next_label)
+        label_to_block[l] = bi;
+    }
+  }
   if (!kinds || !values || !exec)
     error("memory allocation failed [in mem2reg sccp setup]");
 
@@ -1562,14 +1512,18 @@ void run_mem2reg_sccp(MirFunction *mf) {
         continue;
 
       if (term->op == MIR_OP_JMP) {
-        int target = find_block_by_label(mf, blocks, block_len, term->label);
+        int target = -1;
+        if (label_to_block && term->label >= 0 && term->label < mf->next_label)
+          target = label_to_block[term->label];
         if (mark_block_executable(exec, block_len, target))
           changed = 1;
         continue;
       }
 
       if (term->op == MIR_OP_JZ) {
-        int target = find_block_by_label(mf, blocks, block_len, term->label);
+        int target = -1;
+        if (label_to_block && term->label >= 0 && term->label < mf->next_label)
+          target = label_to_block[term->label];
         int fallthrough = (bi + 1 < block_len) ? (bi + 1) : -1;
         long cond = 0;
         SccpLatticeKind ck = sccp_vreg_kind(term->src1, mf->next_vreg, kinds, values, &cond);
@@ -1587,7 +1541,9 @@ void run_mem2reg_sccp(MirFunction *mf) {
       }
 
       if (term->op == MIR_OP_JCC) {
-        int target = find_block_by_label(mf, blocks, block_len, term->label);
+        int target = -1;
+        if (label_to_block && term->label >= 0 && term->label < mf->next_label)
+          target = label_to_block[term->label];
         int fallthrough = (bi + 1 < block_len) ? (bi + 1) : -1;
         long lhs = 0;
         long rhs = 0;
@@ -1665,6 +1621,7 @@ void run_mem2reg_sccp(MirFunction *mf) {
   run_mem2reg_prune_unreachable_blocks(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
   run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
 
+  free(label_to_block);
   free(exec);
   free(values);
   free(kinds);

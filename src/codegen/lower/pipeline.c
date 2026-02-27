@@ -62,16 +62,6 @@ static int mir_local_max_offset(const MirFunction *mf) {
   return max_off;
 }
 
-static int mir_has_call_inst(const MirFunction *mf) {
-  if (!mf)
-    return 0;
-  for (int i = 0; i < mf->inst_len; i++) {
-    if (mf->insts[i].op == MIR_OP_CALL)
-      return 1;
-  }
-  return 0;
-}
-
 static int mir_inline_cost(const MirFunction *mf) {
   if (!mf)
     return 0;

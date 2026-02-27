@@ -595,8 +595,6 @@ static long typed_imm_canonical_value(Type *type, long imm) {
   }
 }
 
-static inline int is_signext_i32(long v) { return (long)(int)v == v; }
-
 static int is_x64_imm32_signext_encodable(long v) {
   unsigned long low = (unsigned long)(unsigned int)v;
   unsigned long sx = low;

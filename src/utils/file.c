@@ -120,22 +120,6 @@ static int path_is_prefix(const char *prefix, const char *full) {
   return full[plen] == '/';
 }
 
-static char *dirname_of(const char *path) {
-  const char *slash = strrchr(path, '/');
-  if (!slash) {
-    return duplicate_cstring("");
-  }
-  int len = (int)(slash - path);
-  if (len <= 0)
-    return duplicate_cstring("/");
-  char *dir = malloc(len + 1);
-  if (!dir)
-    error("memory allocation failed");
-  memcpy(dir, path, len);
-  dir[len] = '\0';
-  return dir;
-}
-
 // Read file for #include_next: search continue after the directory where including_file was found.
 char *read_include_next_file(char *name, const char *including_file, char **resolved_name) {
   if (resolved_name)
