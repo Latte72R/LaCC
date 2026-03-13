@@ -760,6 +760,48 @@ static VReg lower_load_from_addr(LowerCtx *ctx, VReg addr, Type *type) {
   return dst;
 }
 
+static int can_lower_direct_local_access(const Node *node) {
+  Type *type;
+  if (!node || !node->var || node->var->is_static)
+    return 0;
+  type = node->var->type ? node->var->type : node->type;
+  if (!type)
+    return 0;
+  switch (type->ty) {
+  case TY_BOOL:
+  case TY_CHAR:
+  case TY_SHORT:
+  case TY_INT:
+  case TY_LONG:
+  case TY_LONGLONG:
+    return 1;
+  default:
+    return 0;
+  }
+}
+
+static VReg lower_direct_local_load(LowerCtx *ctx, const Node *node) {
+  VReg dst = mir_new_vreg(ctx->mf);
+  Type *type = node->var && node->var->type ? node->var->type : node->type;
+  MirInst load;
+  init_inst(&load, MIR_OP_LOAD_LOCAL);
+  load.dst = dst;
+  load.offset = node->var->offset;
+  load.type = type;
+  mir_emit(ctx->mf, &load);
+  return dst;
+}
+
+static void lower_direct_local_store(LowerCtx *ctx, const Node *node, VReg value) {
+  Type *type = node->var && node->var->type ? node->var->type : node->type;
+  MirInst store;
+  init_inst(&store, MIR_OP_STORE_LOCAL);
+  store.src1 = value;
+  store.offset = node->var->offset;
+  store.type = type;
+  mir_emit(ctx->mf, &store);
+}
+
 static void lower_store_to_addr(LowerCtx *ctx, VReg addr, VReg value, Type *type) {
   MirInst store;
   init_inst(&store, MIR_OP_STORE);
@@ -953,6 +995,8 @@ static VReg lower_expr_impl(LowerCtx *ctx, Node *node) {
   case ND_VARDEC:
   case ND_GVAR:
   case ND_GLBDEC: {
+    if ((node->kind == ND_LVAR || node->kind == ND_VARDEC) && can_lower_direct_local_access(node))
+      return lower_direct_local_load(ctx, node);
     VReg addr = lower_addr(ctx, node);
     return lower_load_from_addr(ctx, addr, node->type);
   }
@@ -1035,13 +1079,17 @@ static VReg lower_expr_impl(LowerCtx *ctx, Node *node) {
       emit_memcpy(ctx, dst_addr, src_addr, get_sizeof(node->lhs->type));
       return src_addr;
     }
-    VReg addr = lower_addr(ctx, node->lhs);
     VReg rhs = lower_expr(ctx, node->rhs);
     Type *lhs_type = node->lhs ? node->lhs->type : node->type;
     VReg stored = rhs;
     if (lhs_type && lhs_type->ty != TY_STRUCT && lhs_type->ty != TY_UNION && lhs_type->ty != TY_ARR)
       stored = lower_cast_value_if_needed(ctx, rhs, node->rhs ? node->rhs->type : NULL, lhs_type);
-    lower_store_to_addr(ctx, addr, stored, lhs_type);
+    if (node->lhs && (node->lhs->kind == ND_LVAR || node->lhs->kind == ND_VARDEC) && can_lower_direct_local_access(node->lhs))
+      lower_direct_local_store(ctx, node->lhs, stored);
+    else {
+      VReg addr = lower_addr(ctx, node->lhs);
+      lower_store_to_addr(ctx, addr, stored, lhs_type);
+    }
 
     // Scalar-like assignments already have the stored value in "stored";
     // return it directly instead of reloading from memory.
@@ -1049,6 +1097,7 @@ static VReg lower_expr_impl(LowerCtx *ctx, Node *node) {
       return stored;
 
     // Aggregates keep address-style value flow in the current MIR design.
+    VReg addr = lower_addr(ctx, node->lhs);
     return lower_load_from_addr(ctx, addr, lhs_type);
   }
   case ND_POSTINC:

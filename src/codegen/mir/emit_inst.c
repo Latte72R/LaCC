@@ -279,7 +279,7 @@ static void load_reg_from_local(int offset, Type *type, const char *dst_reg64) {
 }
 
 static void store_reg_to_local(int offset, Type *type, const char *reg1, const char *reg2, const char *reg4,
-                               const char *reg8) {
+                               const char *reg64) {
   if (!type)
     error("missing type [in store_reg_to_local]");
   switch (type->ty) {
@@ -298,7 +298,7 @@ static void store_reg_to_local(int offset, Type *type, const char *reg1, const c
   case TY_PTR:
   case TY_ARGARR:
   case TY_ARR:
-    write_file("  mov QWORD PTR [rbp - %d], %s\n", offset, reg8);
+    write_file("  mov QWORD PTR [rbp - %d], %s\n", offset, reg64);
     break;
   default:
     error("unsupported type in MIR local store [ty=%d]", type->ty);

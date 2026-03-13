@@ -79,13 +79,39 @@ struct MirInst {
   Type *type;
 };
 
+typedef struct MirPhi MirPhi;
+struct MirPhi {
+  VReg dst;
+  int *incoming_block;
+  VReg *incoming_value;
+  int incoming_count;
+  int incoming_cap;
+};
+
+typedef struct MirBasicBlock MirBasicBlock;
+struct MirBasicBlock {
+  int id;
+  int label;
+  MirInst *insts;
+  int inst_len;
+  int inst_cap;
+  int succ[2];
+  int succ_count;
+  int *preds;
+  int pred_count;
+  int pred_cap;
+  MirPhi *phis;
+  int phi_count;
+  int phi_cap;
+};
+
 // 関数1個分のMIR
 typedef struct MirFunction MirFunction;
 struct MirFunction {
   Function *fn;
-  MirInst *insts;
-  int inst_len;
-  int inst_cap;
+  MirBasicBlock *blocks;
+  int block_count;
+  int block_cap;
   int next_vreg;
   int next_label;
   int param_count;
