@@ -1,8 +1,10 @@
-#include "internal.h"
+#include "../bitset.h"
 #include "diagnostics.h"
+#include "internal.h"
 
 #include <stdlib.h>
 #include <string.h>
+#include "../cleanup/internal.h"
 
 typedef struct {
   int offset;
@@ -134,14 +136,6 @@ static void flush_dirty_locals(MirInst **out_insts, int *out_len, int *out_cap, 
   }
 }
 
-static void invalidate_all_states(LocalState *state, int slot_len) {
-  for (int i = 0; i < slot_len; i++) {
-    state[i].valid = 0;
-    state[i].dirty = 0;
-    state[i].value = MIR_INVALID_VREG;
-  }
-}
-
 static int is_control_barrier(MirOp op) {
   return op == MIR_OP_LABEL || op == MIR_OP_JMP || op == MIR_OP_JZ || op == MIR_OP_JCC || op == MIR_OP_RET;
 }
@@ -171,314 +165,6 @@ static int local_read_slot_index(const MirInst *in, LocalSlot *slots, int slot_l
   return -1;
 }
 
-static int same_scalar_type(Type *a, Type *b) {
-  if (!a || !b)
-    return 0;
-  return a->ty == b->ty && a->is_unsigned == b->is_unsigned;
-}
-
-static int is_integer_scalar_type(Type *type) {
-  if (!type)
-    return 0;
-  switch (type->ty) {
-  case TY_BOOL:
-  case TY_CHAR:
-  case TY_SHORT:
-  case TY_INT:
-  case TY_LONG:
-  case TY_LONGLONG:
-    return 1;
-  default:
-    return 0;
-  }
-}
-
-static int is_noop_scalar_cast(Type *from, Type *to) {
-  if (!from || !to)
-    return 0;
-  if (same_scalar_type(from, to))
-    return 1;
-  if (!is_integer_scalar_type(from) || !is_integer_scalar_type(to))
-    return 0;
-  return type_size(from) == type_size(to);
-}
-
-static int get_single_def_imm(VReg v, int vreg_count, const int *def_count, const MirOp *def_op, const long *def_imm,
-                              long *out) {
-  if (v < 0 || v >= vreg_count || !def_count || !def_op || !def_imm)
-    return 0;
-  if (def_count[v] != 1 || def_op[v] != MIR_OP_IMM)
-    return 0;
-  if (out)
-    *out = def_imm[v];
-  return 1;
-}
-
-static int try_get_identity_copy_source(const MirInst *in, int vreg_count, const int *def_count, const MirOp *def_op,
-                                        const long *def_imm, VReg *out_src) {
-  if (!in || !out_src)
-    return 0;
-  if (in->src1 < 0 || in->src1 >= vreg_count || in->src2 < 0 || in->src2 >= vreg_count)
-    return 0;
-
-  long imm1 = 0;
-  long imm2 = 0;
-  int src1_imm = get_single_def_imm(in->src1, vreg_count, def_count, def_op, def_imm, &imm1);
-  int src2_imm = get_single_def_imm(in->src2, vreg_count, def_count, def_op, def_imm, &imm2);
-
-  switch (in->op) {
-  case MIR_OP_ADD:
-    if (src1_imm && imm1 == 0) {
-      *out_src = in->src2;
-      return 1;
-    }
-    if (src2_imm && imm2 == 0) {
-      *out_src = in->src1;
-      return 1;
-    }
-    return 0;
-  case MIR_OP_SUB:
-  case MIR_OP_SHL:
-  case MIR_OP_SHR:
-    if (src2_imm && imm2 == 0) {
-      *out_src = in->src1;
-      return 1;
-    }
-    return 0;
-  case MIR_OP_MUL:
-    if (src1_imm && imm1 == 1) {
-      *out_src = in->src2;
-      return 1;
-    }
-    if (src2_imm && imm2 == 1) {
-      *out_src = in->src1;
-      return 1;
-    }
-    return 0;
-  case MIR_OP_BITOR:
-  case MIR_OP_BITXOR:
-    if (src1_imm && imm1 == 0) {
-      *out_src = in->src2;
-      return 1;
-    }
-    if (src2_imm && imm2 == 0) {
-      *out_src = in->src1;
-      return 1;
-    }
-    return 0;
-  default:
-    return 0;
-  }
-}
-
-static int fold_binary_const(MirOp op, Type *type, long lhs, long rhs, long *out) {
-  if (!out)
-    return 0;
-  if (type && type->ty == TY_BOOL) {
-    switch (op) {
-    case MIR_OP_ADD:
-    case MIR_OP_SUB:
-    case MIR_OP_MUL:
-    case MIR_OP_BITAND:
-    case MIR_OP_BITOR:
-    case MIR_OP_BITXOR:
-      return 0;
-    default:
-      break;
-    }
-  }
-
-  long l = lhs;
-  long r = rhs;
-  unsigned long ul = (unsigned long)l;
-  unsigned long ur = (unsigned long)r;
-
-  switch (op) {
-  case MIR_OP_ADD:
-    *out = (long)(ul + ur);
-    return 1;
-  case MIR_OP_SUB:
-    *out = (long)(ul - ur);
-    return 1;
-  case MIR_OP_MUL:
-    *out = (long)(ul * ur);
-    return 1;
-  case MIR_OP_BITAND:
-    *out = (long)(ul & ur);
-    return 1;
-  case MIR_OP_BITOR:
-    *out = (long)(ul | ur);
-    return 1;
-  case MIR_OP_BITXOR:
-    *out = (long)(ul ^ ur);
-    return 1;
-  case MIR_OP_EQ:
-    *out = (l == r) ? 1 : 0;
-    return 1;
-  case MIR_OP_NE:
-    *out = (l != r) ? 1 : 0;
-    return 1;
-  case MIR_OP_LT:
-    if (type && type->is_unsigned)
-      *out = (ul < ur) ? 1 : 0;
-    else
-      *out = (l < r) ? 1 : 0;
-    return 1;
-  case MIR_OP_LE:
-    if (type && type->is_unsigned)
-      *out = (ul <= ur) ? 1 : 0;
-    else
-      *out = (l <= r) ? 1 : 0;
-    return 1;
-  default:
-    return 0;
-  }
-}
-
-static int fold_unary_const(MirOp op, Type *type, long src, long *out) {
-  if (!out)
-    return 0;
-  if (type && type->ty == TY_BOOL)
-    return 0;
-  long v = src;
-  switch (op) {
-  case MIR_OP_BITNOT:
-    *out = (long)(~(unsigned long)v);
-    return 1;
-  default:
-    return 0;
-  }
-}
-
-static int resolve_copy_source(const VReg *copy_src, int vreg_count, int v) {
-  if (!copy_src || v < 0 || v >= vreg_count)
-    return v;
-  int cur = v;
-  int guard = 0;
-  while (cur >= 0 && cur < vreg_count && copy_src[cur] != MIR_INVALID_VREG && copy_src[cur] != cur) {
-    cur = copy_src[cur];
-    if (++guard > vreg_count)
-      break;
-  }
-  return cur;
-}
-
-static void rewrite_vreg_use(VReg *use, const VReg *copy_src, int vreg_count) {
-  if (!use || !copy_src || *use < 0 || *use >= vreg_count)
-    return;
-  *use = resolve_copy_source(copy_src, vreg_count, *use);
-}
-
-static void rewrite_inst_uses(MirInst *in, const VReg *copy_src, int vreg_count) {
-  if (!in || !copy_src || vreg_count <= 0)
-    return;
-  rewrite_vreg_use(&in->src1, copy_src, vreg_count);
-  rewrite_vreg_use(&in->src2, copy_src, vreg_count);
-  if (in->op == MIR_OP_CALL) {
-    for (int a = 0; a < in->argc; a++)
-      rewrite_vreg_use(&in->args[a], copy_src, vreg_count);
-  }
-}
-
-static void for_each_inst_use(const MirInst *in, int vreg_count, void (*fn)(VReg v, void *ctx), void *ctx) {
-  if (!in || !fn || vreg_count <= 0)
-    return;
-  if (in->src1 >= 0 && in->src1 < vreg_count)
-    fn(in->src1, ctx);
-  if (in->src2 >= 0 && in->src2 < vreg_count)
-    fn(in->src2, ctx);
-  if (in->op == MIR_OP_CALL) {
-    for (int a = 0; a < in->argc; a++) {
-      VReg arg = in->args[a];
-      if (arg >= 0 && arg < vreg_count)
-        fn(arg, ctx);
-    }
-  }
-}
-
-static void clear_copy_relations(VReg *copy_src, int vreg_count) {
-  if (!copy_src || vreg_count <= 0)
-    return;
-  for (int v = 0; v < vreg_count; v++)
-    copy_src[v] = MIR_INVALID_VREG;
-}
-
-static void kill_copy_relations_of(VReg *copy_src, int vreg_count, VReg dst) {
-  if (!copy_src || vreg_count <= 0 || dst < 0 || dst >= vreg_count)
-    return;
-  copy_src[dst] = MIR_INVALID_VREG;
-  for (int v = 0; v < vreg_count; v++) {
-    if (copy_src[v] == MIR_INVALID_VREG)
-      continue;
-    if (resolve_copy_source(copy_src, vreg_count, copy_src[v]) == dst)
-      copy_src[v] = MIR_INVALID_VREG;
-  }
-}
-
-typedef struct {
-  int *use_count;
-  int delta;
-} UseCountDeltaCtx;
-
-static void apply_use_count_delta(VReg v, void *ctx_void) {
-  UseCountDeltaCtx *ctx = ctx_void;
-  if (!ctx || !ctx->use_count)
-    return;
-  if (ctx->delta > 0) {
-    ctx->use_count[v] += ctx->delta;
-  } else if (ctx->delta < 0 && ctx->use_count[v] > 0) {
-    ctx->use_count[v] += ctx->delta;
-    if (ctx->use_count[v] < 0)
-      ctx->use_count[v] = 0;
-  }
-}
-
-static void add_inst_uses(const MirInst *in, int *use_count, int vreg_count) {
-  if (!in || !use_count || vreg_count <= 0)
-    return;
-  UseCountDeltaCtx ctx;
-  ctx.use_count = use_count;
-  ctx.delta = +1;
-  for_each_inst_use(in, vreg_count, apply_use_count_delta, &ctx);
-}
-
-static void remove_inst_uses(const MirInst *in, int *use_count, int vreg_count) {
-  if (!in || !use_count || vreg_count <= 0)
-    return;
-  UseCountDeltaCtx ctx;
-  ctx.use_count = use_count;
-  ctx.delta = -1;
-  for_each_inst_use(in, vreg_count, apply_use_count_delta, &ctx);
-}
-
-static int is_trivial_dead_def_candidate(MirOp op) {
-  switch (op) {
-  case MIR_OP_MOV:
-  case MIR_OP_IMM:
-  case MIR_OP_CAST:
-  case MIR_OP_ADD:
-  case MIR_OP_SUB:
-  case MIR_OP_MUL:
-  case MIR_OP_EQ:
-  case MIR_OP_NE:
-  case MIR_OP_LT:
-  case MIR_OP_LE:
-  case MIR_OP_BITAND:
-  case MIR_OP_BITOR:
-  case MIR_OP_BITXOR:
-  case MIR_OP_BITNOT:
-  case MIR_OP_ADDR_LOCAL:
-  case MIR_OP_ADDR_SYMBOL:
-  case MIR_OP_ADDR_FUNC:
-  case MIR_OP_ADDR_STRING:
-  case MIR_OP_ADDR_ARRAY:
-  case MIR_OP_ADDR_STRUCT_LITERAL:
-    return 1;
-  default:
-    return 0;
-  }
-}
-
 static void mark_vreg_live(unsigned char *live, int vreg_count, VReg v) {
   if (!live || vreg_count <= 0 || v < 0 || v >= vreg_count)
     return;
@@ -497,7 +183,7 @@ static void remap_inst_vreg(VReg *v, const int *map, int old_vreg_count) {
 }
 
 static void run_mem2reg_compact_vregs(MirFunction *mf) {
-  if (!mf || mf->inst_len <= 0 || mf->next_vreg <= 0)
+  if (!mf || mf->blocks[0].inst_len <= 0 || mf->next_vreg <= 0)
     return;
 
   int old_vreg_count = mf->next_vreg;
@@ -508,8 +194,8 @@ static void run_mem2reg_compact_vregs(MirFunction *mf) {
   for (int v = 0; v < old_vreg_count; v++)
     map[v] = -1;
 
-  for (int i = 0; i < mf->inst_len; i++) {
-    MirInst *in = &mf->insts[i];
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    MirInst *in = &mf->blocks[0].insts[i];
     mark_vreg_live(live, old_vreg_count, in->dst);
     mark_vreg_live(live, old_vreg_count, in->src1);
     mark_vreg_live(live, old_vreg_count, in->src2);
@@ -532,8 +218,8 @@ static void run_mem2reg_compact_vregs(MirFunction *mf) {
     return;
   }
 
-  for (int i = 0; i < mf->inst_len; i++) {
-    MirInst *in = &mf->insts[i];
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    MirInst *in = &mf->blocks[0].insts[i];
     remap_inst_vreg(&in->dst, map, old_vreg_count);
     remap_inst_vreg(&in->src1, map, old_vreg_count);
     remap_inst_vreg(&in->src2, map, old_vreg_count);
@@ -547,434 +233,25 @@ static void run_mem2reg_compact_vregs(MirFunction *mf) {
   free(map);
   free(live);
 }
+static int *build_label_to_inst_map(const MirInst *insts, int inst_len, int next_label, const char *pass_name) {
+  if (!insts || inst_len <= 0 || next_label <= 0)
+    return NULL;
 
-void run_mem2reg_prune_unreferenced_labels(MirInst **insts, int *inst_len, int *inst_cap, int next_label) {
-  if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_label <= 0)
-    return;
+  int *label_to_inst = malloc(sizeof(int) * next_label);
+  if (!label_to_inst)
+    error("memory allocation failed [in %s labels]", pass_name ? pass_name : "mem2reg");
 
-  unsigned char *referenced = calloc(next_label, sizeof(unsigned char));
-  if (!referenced)
-    error("memory allocation failed [in mem2reg prune labels]");
-
-  for (int i = 0; i < *inst_len; i++) {
-    MirInst *in = &(*insts)[i];
-    if (in->op != MIR_OP_JMP && in->op != MIR_OP_JZ && in->op != MIR_OP_JCC)
+  for (int l = 0; l < next_label; l++)
+    label_to_inst[l] = -1;
+  for (int i = 0; i < inst_len; i++) {
+    if (insts[i].op != MIR_OP_LABEL)
       continue;
-    if (in->label < 0 || in->label >= next_label)
-      continue;
-    referenced[in->label] = 1;
+    int l = insts[i].label;
+    if (l >= 0 && l < next_label)
+      label_to_inst[l] = i;
   }
-
-  int out = 0;
-  for (int i = 0; i < *inst_len; i++) {
-    MirInst *in = &(*insts)[i];
-    if (in->op == MIR_OP_LABEL) {
-      if (in->label >= 0 && in->label < next_label && !referenced[in->label])
-        continue;
-    }
-    if (out != i)
-      (*insts)[out] = (*insts)[i];
-    out++;
-  }
-  *inst_len = out;
-  *inst_cap = out;
-
-  free(referenced);
+  return label_to_inst;
 }
-
-static int false_cc_for_compare_op(MirOp op, MirCondCode *cc) {
-  if (!cc)
-    return 0;
-  switch (op) {
-  case MIR_OP_EQ:
-    *cc = MIR_CC_NE;
-    return 1;
-  case MIR_OP_NE:
-    *cc = MIR_CC_EQ;
-    return 1;
-  case MIR_OP_LT:
-    *cc = MIR_CC_GE;
-    return 1;
-  case MIR_OP_LE:
-    *cc = MIR_CC_GT;
-    return 1;
-  default:
-    return 0;
-  }
-}
-
-void run_mem2reg_fuse_compare_jz(MirInst **insts, int *inst_len) {
-  if (!insts || !*insts || !inst_len || *inst_len <= 1)
-    return;
-
-  for (int i = 0; i + 1 < *inst_len; i++) {
-    MirInst *cmp = &(*insts)[i];
-    MirInst *jz = &(*insts)[i + 1];
-    if (jz->op != MIR_OP_JZ)
-      continue;
-    if (cmp->dst == MIR_INVALID_VREG || jz->src1 != cmp->dst)
-      continue;
-
-    MirCondCode cc;
-    if (!false_cc_for_compare_op(cmp->op, &cc))
-      continue;
-    if (cmp->src1 == MIR_INVALID_VREG || cmp->src2 == MIR_INVALID_VREG)
-      continue;
-
-    jz->op = MIR_OP_JCC;
-    jz->src1 = cmp->src1;
-    jz->src2 = cmp->src2;
-    jz->imm = cc;
-    jz->type = cmp->type;
-  }
-}
-
-void run_mem2reg_const_fold(MirInst **insts, int *inst_len, int next_vreg) {
-  if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
-    return;
-
-  int *def_count = calloc(next_vreg, sizeof(int));
-  MirOp *def_op = calloc(next_vreg, sizeof(MirOp));
-  long *def_imm = calloc(next_vreg, sizeof(long));
-  if (!def_count || !def_op || !def_imm)
-    error("memory allocation failed [in mem2reg const fold def info]");
-
-  for (int i = 0; i < *inst_len; i++) {
-    MirInst *in = &(*insts)[i];
-    if (in->dst < 0 || in->dst >= next_vreg)
-      continue;
-    def_count[in->dst]++;
-    def_op[in->dst] = in->op;
-    def_imm[in->dst] = in->imm;
-  }
-
-  for (int i = 0; i < *inst_len; i++) {
-    MirInst *in = &(*insts)[i];
-    if (in->dst < 0 || in->dst >= next_vreg)
-      continue;
-
-    long folded = 0;
-    int can_fold = 0;
-    if (in->src1 >= 0 && in->src1 < next_vreg && in->src2 >= 0 && in->src2 < next_vreg) {
-      long lhs = 0;
-      long rhs = 0;
-      if (get_single_def_imm(in->src1, next_vreg, def_count, def_op, def_imm, &lhs) &&
-          get_single_def_imm(in->src2, next_vreg, def_count, def_op, def_imm, &rhs)) {
-        can_fold = fold_binary_const(in->op, in->type, lhs, rhs, &folded);
-      }
-    } else if (in->src1 >= 0 && in->src1 < next_vreg) {
-      long src = 0;
-      if (get_single_def_imm(in->src1, next_vreg, def_count, def_op, def_imm, &src))
-        can_fold = fold_unary_const(in->op, in->type, src, &folded);
-    }
-    if (!can_fold)
-      continue;
-
-    in->op = MIR_OP_IMM;
-    in->src1 = MIR_INVALID_VREG;
-    in->src2 = MIR_INVALID_VREG;
-    in->imm = folded;
-    in->label = MIR_INVALID_LABEL;
-    in->offset = 0;
-    in->argc = 0;
-    for (int a = 0; a < MAX_FUNC_PARAMS; a++)
-      in->args[a] = MIR_INVALID_VREG;
-  }
-
-  free(def_imm);
-  free(def_op);
-  free(def_count);
-}
-
-static int is_commutative_imm_rhs_op(MirOp op) {
-  switch (op) {
-  case MIR_OP_ADD:
-  case MIR_OP_MUL:
-  case MIR_OP_BITAND:
-  case MIR_OP_BITOR:
-  case MIR_OP_BITXOR:
-  case MIR_OP_EQ:
-  case MIR_OP_NE:
-    return 1;
-  default:
-    return 0;
-  }
-}
-
-void run_mem2reg_canonicalize_commutative_imm_rhs(MirInst **insts, int *inst_len, int next_vreg) {
-  if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
-    return;
-
-  int *def_count = calloc(next_vreg, sizeof(int));
-  MirOp *def_op = calloc(next_vreg, sizeof(MirOp));
-  long *def_imm = calloc(next_vreg, sizeof(long));
-  if (!def_count || !def_op || !def_imm)
-    error("memory allocation failed [in mem2reg commutative canonicalize setup]");
-
-  for (int i = 0; i < *inst_len; i++) {
-    MirInst *in = &(*insts)[i];
-    if (in->dst < 0 || in->dst >= next_vreg)
-      continue;
-    def_count[in->dst]++;
-    def_op[in->dst] = in->op;
-    def_imm[in->dst] = in->imm;
-  }
-
-  for (int i = 0; i < *inst_len; i++) {
-    MirInst *in = &(*insts)[i];
-    if (!is_commutative_imm_rhs_op(in->op))
-      continue;
-    if (in->src1 < 0 || in->src1 >= next_vreg || in->src2 < 0 || in->src2 >= next_vreg)
-      continue;
-
-    int src1_is_imm = get_single_def_imm(in->src1, next_vreg, def_count, def_op, def_imm, NULL);
-    int src2_is_imm = get_single_def_imm(in->src2, next_vreg, def_count, def_op, def_imm, NULL);
-    if (src1_is_imm && !src2_is_imm) {
-      VReg t = in->src1;
-      in->src1 = in->src2;
-      in->src2 = t;
-    }
-  }
-
-  free(def_imm);
-  free(def_op);
-  free(def_count);
-}
-
-static void clear_inst_to_nop(MirInst *in) {
-  if (!in)
-    return;
-  in->op = MIR_OP_NOP;
-  in->dst = MIR_INVALID_VREG;
-  in->src1 = MIR_INVALID_VREG;
-  in->src2 = MIR_INVALID_VREG;
-  in->imm = 0;
-  in->offset = 0;
-  in->label = MIR_INVALID_LABEL;
-  in->var = NULL;
-  in->call_fn = NULL;
-  in->argc = 0;
-  for (int a = 0; a < MAX_FUNC_PARAMS; a++)
-    in->args[a] = MIR_INVALID_VREG;
-}
-
-static void run_mem2reg_simplify_jumps_to_next_label(MirInst **insts, int *inst_len) {
-  if (!insts || !*insts || !inst_len || *inst_len <= 1)
-    return;
-
-  for (int i = 0; i + 1 < *inst_len; i++) {
-    MirInst *in = &(*insts)[i];
-    MirInst *next = &(*insts)[i + 1];
-    if (next->op != MIR_OP_LABEL)
-      continue;
-    if (in->op != MIR_OP_JMP && in->op != MIR_OP_JZ && in->op != MIR_OP_JCC)
-      continue;
-    if (in->label != next->label)
-      continue;
-    clear_inst_to_nop(in);
-  }
-}
-
-static void run_mem2reg_remove_nops(MirInst **insts, int *inst_len, int *inst_cap) {
-  if (!insts || !*insts || !inst_len || *inst_len <= 0)
-    return;
-
-  int out = 0;
-  for (int i = 0; i < *inst_len; i++) {
-    if ((*insts)[i].op == MIR_OP_NOP)
-      continue;
-    if (out != i)
-      (*insts)[out] = (*insts)[i];
-    out++;
-  }
-  *inst_len = out;
-  if (inst_cap)
-    *inst_cap = out;
-}
-
-static int eval_const_jcc(long cc, Type *type, long lhs, long rhs) {
-  unsigned long ulhs = (unsigned long)lhs;
-  unsigned long urhs = (unsigned long)rhs;
-  switch ((MirCondCode)cc) {
-  case MIR_CC_EQ:
-    return lhs == rhs;
-  case MIR_CC_NE:
-    return lhs != rhs;
-  case MIR_CC_LT:
-    return (type && type->is_unsigned) ? (ulhs < urhs) : (lhs < rhs);
-  case MIR_CC_LE:
-    return (type && type->is_unsigned) ? (ulhs <= urhs) : (lhs <= rhs);
-  case MIR_CC_GT:
-    return (type && type->is_unsigned) ? (ulhs > urhs) : (lhs > rhs);
-  case MIR_CC_GE:
-    return (type && type->is_unsigned) ? (ulhs >= urhs) : (lhs >= rhs);
-  default:
-    return 0;
-  }
-}
-
-void run_mem2reg_cfg_const_fold_branches(MirInst **insts, int *inst_len, int next_vreg) {
-  if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
-    return;
-
-  int *def_count = calloc(next_vreg, sizeof(int));
-  MirOp *def_op = calloc(next_vreg, sizeof(MirOp));
-  long *def_imm = calloc(next_vreg, sizeof(long));
-  if (!def_count || !def_op || !def_imm)
-    error("memory allocation failed [in mem2reg cfg const fold setup]");
-
-  for (int i = 0; i < *inst_len; i++) {
-    MirInst *in = &(*insts)[i];
-    if (in->dst < 0 || in->dst >= next_vreg)
-      continue;
-    def_count[in->dst]++;
-    def_op[in->dst] = in->op;
-    def_imm[in->dst] = in->imm;
-  }
-
-  for (int i = 0; i < *inst_len; i++) {
-    MirInst *in = &(*insts)[i];
-    if (in->op == MIR_OP_JZ) {
-      long cond = 0;
-      if (!get_single_def_imm(in->src1, next_vreg, def_count, def_op, def_imm, &cond))
-        continue;
-      if (cond == 0) {
-        in->op = MIR_OP_JMP;
-        in->src1 = MIR_INVALID_VREG;
-        in->src2 = MIR_INVALID_VREG;
-      } else {
-        clear_inst_to_nop(in);
-      }
-      continue;
-    }
-    if (in->op == MIR_OP_JCC) {
-      long lhs = 0;
-      long rhs = 0;
-      if (!get_single_def_imm(in->src1, next_vreg, def_count, def_op, def_imm, &lhs) ||
-          !get_single_def_imm(in->src2, next_vreg, def_count, def_op, def_imm, &rhs))
-        continue;
-      if (eval_const_jcc(in->imm, in->type, lhs, rhs)) {
-        in->op = MIR_OP_JMP;
-        in->src1 = MIR_INVALID_VREG;
-        in->src2 = MIR_INVALID_VREG;
-      } else {
-        clear_inst_to_nop(in);
-      }
-    }
-  }
-
-  free(def_imm);
-  free(def_op);
-  free(def_count);
-}
-
-void run_mem2reg_copyprop_and_dce(MirInst **insts, int *inst_len, int *inst_cap, int next_vreg) {
-  if (!insts || !*insts || !inst_len || *inst_len <= 0 || next_vreg <= 0)
-    return;
-
-  int *def_count = calloc(next_vreg, sizeof(int));
-  MirOp *def_op = calloc(next_vreg, sizeof(MirOp));
-  Type **def_type = calloc(next_vreg, sizeof(Type *));
-  long *def_imm = calloc(next_vreg, sizeof(long));
-  if (!def_count || !def_op || !def_type || !def_imm)
-    error("memory allocation failed [in mem2reg copy-prop def info]");
-  for (int i = 0; i < *inst_len; i++) {
-    MirInst *in = &(*insts)[i];
-    if (in->dst < 0 || in->dst >= next_vreg)
-      continue;
-    def_count[in->dst]++;
-    def_op[in->dst] = in->op;
-    def_type[in->dst] = in->type;
-    def_imm[in->dst] = in->imm;
-  }
-
-  VReg *copy_src = malloc(sizeof(VReg) * next_vreg);
-  if (!copy_src)
-    error("memory allocation failed [in mem2reg copy-prop setup]");
-  clear_copy_relations(copy_src, next_vreg);
-
-  for (int i = 0; i < *inst_len; i++) {
-    MirInst *in = &(*insts)[i];
-    rewrite_inst_uses(in, copy_src, next_vreg);
-
-    if (in->dst >= 0 && in->dst < next_vreg)
-      kill_copy_relations_of(copy_src, next_vreg, in->dst);
-
-    if (in->op == MIR_OP_MOV && in->dst >= 0 && in->dst < next_vreg && in->src1 >= 0 && in->src1 < next_vreg &&
-        in->dst != in->src1) {
-      copy_src[in->dst] = in->src1;
-    }
-
-    if (in->op == MIR_OP_CAST && in->dst >= 0 && in->dst < next_vreg && in->src1 >= 0 && in->src1 < next_vreg &&
-        in->dst != in->src1 && def_count[in->src1] == 1 && is_noop_scalar_cast(def_type[in->src1], in->type) &&
-        def_op[in->src1] != MIR_OP_NOP) {
-      copy_src[in->dst] = in->src1;
-    }
-
-    VReg identity_src = MIR_INVALID_VREG;
-    if (in->dst >= 0 && in->dst < next_vreg &&
-        try_get_identity_copy_source(in, next_vreg, def_count, def_op, def_imm, &identity_src) &&
-        identity_src != MIR_INVALID_VREG && identity_src != in->dst) {
-      copy_src[in->dst] = identity_src;
-    }
-
-    if (is_control_barrier(in->op))
-      clear_copy_relations(copy_src, next_vreg);
-  }
-
-  free(copy_src);
-  free(def_imm);
-  free(def_type);
-  free(def_op);
-  free(def_count);
-
-  int *use_count = calloc(next_vreg, sizeof(int));
-  unsigned char *dead = calloc(*inst_len, sizeof(unsigned char));
-  if (!use_count || !dead)
-    error("memory allocation failed [in mem2reg dce setup]");
-
-  for (int i = 0; i < *inst_len; i++)
-    add_inst_uses(&(*insts)[i], use_count, next_vreg);
-
-  int changed = 1;
-  while (changed) {
-    changed = 0;
-    for (int i = 0; i < *inst_len; i++) {
-      MirInst *in = &(*insts)[i];
-      if (dead[i])
-        continue;
-      if (!is_trivial_dead_def_candidate(in->op))
-        continue;
-      if (in->dst < 0 || in->dst >= next_vreg)
-        continue;
-      if (use_count[in->dst] != 0)
-        continue;
-
-      dead[i] = 1;
-      changed = 1;
-      remove_inst_uses(in, use_count, next_vreg);
-    }
-  }
-
-  int out = 0;
-  for (int i = 0; i < *inst_len; i++) {
-    if (dead[i])
-      continue;
-    if (out != i)
-      (*insts)[out] = (*insts)[i];
-    out++;
-  }
-  *inst_len = out;
-  *inst_cap = out;
-
-  free(use_count);
-  free(dead);
-}
-
-static void bit_set64(unsigned long long *bits, int bit) { bits[bit / 64] |= (1ULL << (bit & 63)); }
-
-static int bit_test64(const unsigned long long *bits, int bit) { return (bits[bit / 64] & (1ULL << (bit & 63))) != 0; }
-
 void run_mem2reg_dead_store_local_cfg(MirInst **insts, int *inst_len, int *inst_cap, int next_label) {
   if (!insts || !*insts || !inst_len || *inst_len <= 0)
     return;
@@ -1034,21 +311,7 @@ void run_mem2reg_dead_store_local_cfg(MirInst **insts, int *inst_len, int *inst_
   }
 
   int words = (bit_count + 63) / 64;
-  int *label_to_inst = NULL;
-  if (next_label > 0) {
-    label_to_inst = malloc(sizeof(int) * next_label);
-    if (!label_to_inst)
-      error("memory allocation failed [in mem2reg dead-store labels]");
-    for (int l = 0; l < next_label; l++)
-      label_to_inst[l] = -1;
-    for (int i = 0; i < n; i++) {
-      if ((*insts)[i].op != MIR_OP_LABEL)
-        continue;
-      int l = (*insts)[i].label;
-      if (l >= 0 && l < next_label)
-        label_to_inst[l] = i;
-    }
-  }
+  int *label_to_inst = build_label_to_inst_map(*insts, n, next_label, "mem2reg dead-store");
 
   unsigned long long *live_in = calloc((size_t)n * (size_t)words, sizeof(unsigned long long));
   unsigned long long *live_out = calloc((size_t)n * (size_t)words, sizeof(unsigned long long));
@@ -1109,7 +372,7 @@ void run_mem2reg_dead_store_local_cfg(MirInst **insts, int *inst_len, int *inst_
         if (in->op == MIR_OP_STORE_LOCAL) {
           new_in[bit / 64] &= ~(1ULL << (bit & 63));
         } else if (in->op == MIR_OP_LOAD_LOCAL) {
-          bit_set64(new_in, bit);
+          bit_set(new_in, bit);
         }
       }
 
@@ -1143,7 +406,7 @@ void run_mem2reg_dead_store_local_cfg(MirInst **insts, int *inst_len, int *inst_
     if (bit < 0)
       continue;
     unsigned long long *out_row = &live_out[(size_t)i * (size_t)words];
-    if (!bit_test64(out_row, bit))
+    if (!bit_get(out_row, bit))
       dead[i] = 1;
   }
 
@@ -1167,80 +430,6 @@ void run_mem2reg_dead_store_local_cfg(MirInst **insts, int *inst_len, int *inst_
   free(slot_bit);
   free(slot_escaped);
   free(slot_offsets);
-}
-
-void run_mem2reg_prune_unreachable_blocks(MirInst **insts, int *inst_len, int *inst_cap, int next_label) {
-  if (!insts || !*insts || !inst_len || *inst_len <= 0)
-    return;
-
-  int n = *inst_len;
-  int *label_to_inst = NULL;
-  if (next_label > 0) {
-    label_to_inst = malloc(sizeof(int) * next_label);
-    if (!label_to_inst)
-      error("memory allocation failed [in mem2reg prune unreachable labels]");
-    for (int l = 0; l < next_label; l++)
-      label_to_inst[l] = -1;
-    for (int i = 0; i < n; i++) {
-      if ((*insts)[i].op != MIR_OP_LABEL)
-        continue;
-      int l = (*insts)[i].label;
-      if (l >= 0 && l < next_label)
-        label_to_inst[l] = i;
-    }
-  }
-
-  unsigned char *visited = calloc(n, sizeof(unsigned char));
-  int *queue = malloc(sizeof(int) * n);
-  if (!visited || !queue)
-    error("memory allocation failed [in mem2reg prune unreachable work]");
-  int qh = 0;
-  int qt = 0;
-  if (n > 0) {
-    visited[0] = 1;
-    queue[qt++] = 0;
-  }
-
-  while (qh < qt) {
-    int i = queue[qh++];
-    MirInst *in = &(*insts)[i];
-    int succs[2] = {-1, -1};
-    int succ_cnt = 0;
-    if (in->op == MIR_OP_JMP) {
-      if (label_to_inst && in->label >= 0 && in->label < next_label)
-        succs[succ_cnt++] = label_to_inst[in->label];
-    } else if (in->op == MIR_OP_JZ || in->op == MIR_OP_JCC) {
-      if (i + 1 < n)
-        succs[succ_cnt++] = i + 1;
-      if (label_to_inst && in->label >= 0 && in->label < next_label)
-        succs[succ_cnt++] = label_to_inst[in->label];
-    } else if (in->op != MIR_OP_RET) {
-      if (i + 1 < n)
-        succs[succ_cnt++] = i + 1;
-    }
-    for (int s = 0; s < succ_cnt; s++) {
-      int si = succs[s];
-      if (si < 0 || si >= n || visited[si])
-        continue;
-      visited[si] = 1;
-      queue[qt++] = si;
-    }
-  }
-
-  int out = 0;
-  for (int i = 0; i < n; i++) {
-    if (!visited[i])
-      continue;
-    if (out != i)
-      (*insts)[out] = (*insts)[i];
-    out++;
-  }
-  *inst_len = out;
-  *inst_cap = out;
-
-  free(queue);
-  free(visited);
-  free(label_to_inst);
 }
 
 typedef struct {
@@ -1269,7 +458,7 @@ static void build_mem2reg_cfg(const MirFunction *mf, Mem2regBlock **out_blocks, 
   if (!mf || !out_blocks || !out_block_len)
     error("invalid cfg builder args [in mem2reg cfg]");
 
-  int n = mf->inst_len;
+  int n = mf->blocks[0].inst_len;
   unsigned char *is_block_start = calloc(n > 0 ? n : 1, sizeof(unsigned char));
   if (!is_block_start)
     error("memory allocation failed [in mem2reg cfg starts]");
@@ -1277,7 +466,7 @@ static void build_mem2reg_cfg(const MirFunction *mf, Mem2regBlock **out_blocks, 
   if (n > 0)
     is_block_start[0] = 1;
   for (int i = 1; i < n; i++) {
-    if (mf->insts[i].op == MIR_OP_LABEL || is_cfg_terminator(mf->insts[i - 1].op))
+    if (mf->blocks[0].insts[i].op == MIR_OP_LABEL || is_cfg_terminator(mf->blocks[0].insts[i - 1].op))
       is_block_start[i] = 1;
   }
 
@@ -1312,7 +501,7 @@ static void build_mem2reg_cfg(const MirFunction *mf, Mem2regBlock **out_blocks, 
   }
 
   for (int bi = 0; bi < block_len; bi++) {
-    MirInst *first = &mf->insts[blocks[bi].start];
+    MirInst *first = &mf->blocks[0].insts[blocks[bi].start];
     if (first->op == MIR_OP_LABEL && first->label >= 0 && first->label < mf->next_label)
       label_to_block[first->label] = bi;
   }
@@ -1321,7 +510,7 @@ static void build_mem2reg_cfg(const MirFunction *mf, Mem2regBlock **out_blocks, 
     Mem2regBlock *bb = &blocks[bi];
     if (bb->start >= bb->end)
       continue;
-    MirInst *term = &mf->insts[bb->end - 1];
+    MirInst *term = &mf->blocks[0].insts[bb->end - 1];
     int fallthrough = (bi + 1 < block_len) ? (bi + 1) : -1;
     if (term->op == MIR_OP_JMP) {
       if (term->label >= 0 && term->label < mf->next_label)
@@ -1345,13 +534,19 @@ static void build_mem2reg_cfg(const MirFunction *mf, Mem2regBlock **out_blocks, 
   *out_block_len = block_len;
 }
 
+typedef enum {
+  SCCP_LATTICE_UNDEF = 0,
+  SCCP_LATTICE_CONST,
+  SCCP_LATTICE_OVERDEF,
+} SccpLatticeKind;
+
 static void transfer_mem2reg_state_over_block(const MirFunction *mf, const Mem2regBlock *bb, LocalSlot *slots,
                                               int slot_len, const int *addr_slot_of_vreg, LocalState *state) {
   if (!mf || !bb || !slots || slot_len <= 0 || !addr_slot_of_vreg || !state)
     return;
 
   for (int i = bb->start; i < bb->end; i++) {
-    const MirInst *in = &mf->insts[i];
+    const MirInst *in = &mf->blocks[0].insts[i];
     if ((in->op == MIR_OP_LOAD || in->op == MIR_OP_STORE) && in->src1 >= 0 && in->src1 < mf->next_vreg) {
       int s = addr_slot_of_vreg[in->src1];
       if (s >= 0 && s < slot_len && slots[s].promotable) {
@@ -1463,7 +658,7 @@ static void compute_mem2reg_cfg_in_state(const MirFunction *mf, LocalSlot *slots
 }
 
 void mem2reg_run_promote(MirFunction *mf) {
-  int slot_cap = mf->inst_len;
+  int slot_cap = mf->blocks[0].inst_len;
   LocalSlot *slots = calloc(slot_cap > 0 ? slot_cap : 1, sizeof(LocalSlot));
   int *addr_slot_of_vreg = malloc(sizeof(int) * mf->next_vreg);
   if (!slots || !addr_slot_of_vreg)
@@ -1472,8 +667,8 @@ void mem2reg_run_promote(MirFunction *mf) {
     addr_slot_of_vreg[v] = -1;
 
   int slot_len = 0;
-  for (int i = 0; i < mf->inst_len; i++) {
-    MirInst *in = &mf->insts[i];
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    MirInst *in = &mf->blocks[0].insts[i];
     if ((in->op == MIR_OP_ADDR_LOCAL || in->op == MIR_OP_LOAD_LOCAL || in->op == MIR_OP_STORE_LOCAL) &&
         in->offset > 0) {
       int s = get_or_add_slot(slots, &slot_len, slot_cap, in->offset, in->type);
@@ -1488,8 +683,8 @@ void mem2reg_run_promote(MirFunction *mf) {
     return;
   }
 
-  for (int i = 0; i < mf->inst_len; i++) {
-    MirInst *in = &mf->insts[i];
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    MirInst *in = &mf->blocks[0].insts[i];
     if (in->op == MIR_OP_LOAD && in->src1 >= 0 && in->src1 < mf->next_vreg) {
       int s = addr_slot_of_vreg[in->src1];
       if (s >= 0 && (!slots[s].promotable || !local_access_compatible(slots[s].type, in->type)))
@@ -1566,8 +761,8 @@ void mem2reg_run_promote(MirFunction *mf) {
     error("memory allocation failed [in optimize_mir_mem2reg state]");
   for (int i = 0; i < slot_len; i++)
     state[i].value = MIR_INVALID_VREG;
-  for (int i = 0; i < mf->inst_len; i++) {
-    int s = local_read_slot_index(&mf->insts[i], slots, slot_len, addr_slot_of_vreg, mf->next_vreg);
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    int s = local_read_slot_index(&mf->blocks[0].insts[i], slots, slot_len, addr_slot_of_vreg, mf->next_vreg);
     if (s >= 0)
       remaining_reads[s]++;
   }
@@ -1581,7 +776,7 @@ void mem2reg_run_promote(MirFunction *mf) {
     }
 
     for (int i = blocks[bi].start; i < blocks[bi].end; i++) {
-      MirInst in = mf->insts[i];
+      MirInst in = mf->blocks[0].insts[i];
       int read_slot = local_read_slot_index(&in, slots, slot_len, addr_slot_of_vreg, mf->next_vreg);
       if (in.op == MIR_OP_JMP || in.op == MIR_OP_JZ || in.op == MIR_OP_JCC || in.op == MIR_OP_RET)
         flush_dirty_locals(&out_insts, &out_len, &out_cap, slots, slot_len, state, remaining_reads,
@@ -1594,7 +789,7 @@ void mem2reg_run_promote(MirFunction *mf) {
           goto post_inst;
       }
 
-      // LOAD はレジスタからの MOV に、STORE は状態の更新にそれぞれ置き換える
+      // LOAD はレジスタからの MOV に，STORE は状態の更新にそれぞれ置き換える
       if ((in.op == MIR_OP_LOAD || in.op == MIR_OP_STORE) && in.src1 >= 0 && in.src1 < mf->next_vreg) {
         int s = addr_slot_of_vreg[in.src1];
         if (s >= 0 && slots[s].promotable) {
@@ -1621,7 +816,7 @@ void mem2reg_run_promote(MirFunction *mf) {
         }
       }
 
-      // 既にキャッシュがあれば MOV に置換、なければそのまま出してキャッシュ化
+      // 既にキャッシュがあれば MOV に置換，なければそのまま出してキャッシュ化
       if (in.op == MIR_OP_LOAD_LOCAL) {
         int s = find_slot(slots, slot_len, in.offset);
         if (s >= 0 && slots[s].promotable && local_access_compatible(slots[s].type, in.type)) {
@@ -1656,31 +851,24 @@ void mem2reg_run_promote(MirFunction *mf) {
     }
 
     // fallthrough で LABEL ブロックへ入る境界では stack を同期しておく
-    if (bi + 1 < block_len && mf->insts[blocks[bi + 1].start].op == MIR_OP_LABEL)
+    if (bi + 1 < block_len && mf->blocks[0].insts[blocks[bi + 1].start].op == MIR_OP_LABEL)
       flush_dirty_locals(&out_insts, &out_len, &out_cap, slots, slot_len, state, remaining_reads, 0);
   }
 
-  free(mf->insts);
-  mf->insts = out_insts;
-  mf->inst_len = out_len;
-  mf->inst_cap = out_cap;
-  run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
-  run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
-  run_mem2reg_fuse_compare_jz(&mf->insts, &mf->inst_len);
-  run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
-  run_mem2reg_const_fold(&mf->insts, &mf->inst_len, mf->next_vreg);
-  run_mem2reg_cfg_const_fold_branches(&mf->insts, &mf->inst_len, mf->next_vreg);
-  run_mem2reg_simplify_jumps_to_next_label(&mf->insts, &mf->inst_len);
-  run_mem2reg_remove_nops(&mf->insts, &mf->inst_len, &mf->inst_cap);
-  run_mem2reg_prune_unreachable_blocks(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
-  run_mem2reg_simplify_jumps_to_next_label(&mf->insts, &mf->inst_len);
-  run_mem2reg_remove_nops(&mf->insts, &mf->inst_len, &mf->inst_cap);
-  run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
-  run_mem2reg_dead_store_local_cfg(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
-  run_mem2reg_remove_nops(&mf->insts, &mf->inst_len, &mf->inst_cap);
-  run_mem2reg_copyprop_and_dce(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_vreg);
-  run_mem2reg_canonicalize_commutative_imm_rhs(&mf->insts, &mf->inst_len, mf->next_vreg);
-  run_mem2reg_prune_unreferenced_labels(&mf->insts, &mf->inst_len, &mf->inst_cap, mf->next_label);
+  free(mf->blocks[0].insts);
+  mf->blocks[0].insts = out_insts;
+  mf->blocks[0].inst_len = out_len;
+  mf->blocks[0].inst_cap = out_cap;
+  for (int iter = 0; iter < 3; iter++) {
+    run_cleanup_fuse_compare_jz(&mf->blocks[0].insts, &mf->blocks[0].inst_len);
+    run_cleanup_sccp(mf);
+    run_cleanup_copyprop_and_dce(&mf->blocks[0].insts, &mf->blocks[0].inst_len, &mf->blocks[0].inst_cap, mf->next_vreg);
+    run_cleanup_dce(&mf->blocks[0].insts, &mf->blocks[0].inst_len, &mf->blocks[0].inst_cap, mf->next_vreg);
+    run_mem2reg_dead_store_local_cfg(&mf->blocks[0].insts, &mf->blocks[0].inst_len, &mf->blocks[0].inst_cap, mf->next_label);
+    run_cleanup_canonicalize_commutative_imm_rhs(&mf->blocks[0].insts, &mf->blocks[0].inst_len, mf->next_vreg);
+    run_cleanup_prune_unreachable_blocks(&mf->blocks[0].insts, &mf->blocks[0].inst_len, &mf->blocks[0].inst_cap, mf->next_label);
+    run_cleanup_prune_unreferenced_labels(&mf->blocks[0].insts, &mf->blocks[0].inst_len, &mf->blocks[0].inst_cap, mf->next_label);
+  }
   run_mem2reg_compact_vregs(mf);
 
   free(cfg_in_value);

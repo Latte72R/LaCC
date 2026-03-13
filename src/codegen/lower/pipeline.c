@@ -52,32 +52,22 @@ static int mir_local_max_offset(const MirFunction *mf) {
   if (!mf)
     return 0;
   int max_off = 0;
-  for (int i = 0; i < mf->inst_len; i++) {
-    MirOp op = mf->insts[i].op;
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    MirOp op = mf->blocks[0].insts[i].op;
     if (op != MIR_OP_LOAD_LOCAL && op != MIR_OP_STORE_LOCAL && op != MIR_OP_ADDR_LOCAL)
       continue;
-    if (mf->insts[i].offset > max_off)
-      max_off = mf->insts[i].offset;
+    if (mf->blocks[0].insts[i].offset > max_off)
+      max_off = mf->blocks[0].insts[i].offset;
   }
   return max_off;
-}
-
-static int mir_has_call_inst(const MirFunction *mf) {
-  if (!mf)
-    return 0;
-  for (int i = 0; i < mf->inst_len; i++) {
-    if (mf->insts[i].op == MIR_OP_CALL)
-      return 1;
-  }
-  return 0;
 }
 
 static int mir_inline_cost(const MirFunction *mf) {
   if (!mf)
     return 0;
   int cost = 0;
-  for (int i = 0; i < mf->inst_len; i++) {
-    MirOp op = mf->insts[i].op;
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    MirOp op = mf->blocks[0].insts[i].op;
     switch (op) {
     case MIR_OP_NOP:
     case MIR_OP_LABEL:
@@ -158,8 +148,8 @@ static void build_inline_site_info(const MirFunction *mfs, Function **fns, int f
   }
   for (int i = 0; i < fn_count; i++) {
     const MirFunction *mf = &mfs[i];
-    for (int k = 0; k < mf->inst_len; k++) {
-      const MirInst *in = &mf->insts[k];
+    for (int k = 0; k < mf->blocks[0].inst_len; k++) {
+      const MirInst *in = &mf->blocks[0].insts[k];
       if (in->op != MIR_OP_CALL && in->op != MIR_OP_ADDR_FUNC)
         continue;
       if (!in->call_fn)
@@ -212,7 +202,7 @@ static int should_inline_callsite(const MirFunction *caller, const MirFunction *
     return 0;
   if (call->argc != callee->param_count || call->argc < 0 || call->argc > MAX_FUNC_PARAMS)
     return 0;
-  if (callee->inst_len <= 0 || callee->inst_len > INLINE_MAX_INST_O1)
+  if (callee->blocks[0].inst_len <= 0 || callee->blocks[0].inst_len > INLINE_MAX_INST_O1)
     return 0;
   if (mir_inline_cost(callee) > INLINE_MAX_COST_O1)
     return 0;
@@ -265,8 +255,8 @@ static void expand_inline_callsite(MirFunction *caller, const MirFunction *calle
     append_inst_inline(out, out_len, out_cap, &st);
   }
 
-  for (int i = 0; i < callee->inst_len; i++) {
-    const MirInst *cin = &callee->insts[i];
+  for (int i = 0; i < callee->blocks[0].inst_len; i++) {
+    const MirInst *cin = &callee->blocks[0].insts[i];
     if (cin->op == MIR_OP_RET) {
       if (call->dst != MIR_INVALID_VREG && cin->src1 != MIR_INVALID_VREG) {
         MirInst mv;
@@ -323,8 +313,8 @@ static int run_inline_in_function(MirFunction *caller, MirFunction *mfs, Functio
   int out_len = 0;
   int out_cap = 0;
 
-  for (int i = 0; i < caller->inst_len; i++) {
-    MirInst *in = &caller->insts[i];
+  for (int i = 0; i < caller->blocks[0].inst_len; i++) {
+    MirInst *in = &caller->blocks[0].insts[i];
     if (in->op == MIR_OP_CALL && in->call_fn) {
       int callee_idx = find_lowered_function_index(fns, fn_count, in->call_fn);
       if (callee_idx >= 0 && should_inline_callsite(caller, &mfs[callee_idx], in, optimize_level, caller_idx,
@@ -342,10 +332,10 @@ static int run_inline_in_function(MirFunction *caller, MirFunction *mfs, Functio
     return 0;
   }
 
-  free(caller->insts);
-  caller->insts = out;
-  caller->inst_len = out_len;
-  caller->inst_cap = out_cap;
+  free(caller->blocks[0].insts);
+  caller->blocks[0].insts = out;
+  caller->blocks[0].inst_len = out_len;
+  caller->blocks[0].inst_cap = out_cap;
   return 1;
 }
 
@@ -371,8 +361,8 @@ static void build_call_reachability(const MirFunction *mfs, Function **fns, int 
     while (qh < qt) {
       int from = queue[qh++];
       const MirFunction *mf = &mfs[from];
-      for (int k = 0; k < mf->inst_len; k++) {
-        const MirInst *in = &mf->insts[k];
+      for (int k = 0; k < mf->blocks[0].inst_len; k++) {
+        const MirInst *in = &mf->blocks[0].insts[k];
         if (in->op != MIR_OP_CALL || !in->call_fn)
           continue;
         int to = find_lowered_function_index(fns, fn_count, in->call_fn);
@@ -438,12 +428,16 @@ void emit_mir_program_pipeline(int dump_mir, int optimize_level) {
   }
 
   run_mir_inline_pass(mfs, fns, fn_count, optimize_level);
+  for (int i = 0; i < fn_count; i++)
+    ssa_construct(&mfs[i]);
   if (optimize_level > 0) {
     for (int i = 0; i < fn_count; i++) {
-      optimize_mir_inline_cleanup(&mfs[i]);
+      optimize_mir_cleanup(&mfs[i]);
       optimize_mir_mem2reg(&mfs[i]);
     }
   }
+  for (int i = 0; i < fn_count; i++)
+    ssa_destruct(&mfs[i]);
 
   int qh = 0;
   int qt = 0;
@@ -459,8 +453,8 @@ void emit_mir_program_pipeline(int dump_mir, int optimize_level) {
   while (qh < qt) {
     int from = queue[qh++];
     MirFunction *mf = &mfs[from];
-    for (int i = 0; i < mf->inst_len; i++) {
-      MirInst *in = &mf->insts[i];
+    for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+      MirInst *in = &mf->blocks[0].insts[i];
       if ((in->op != MIR_OP_CALL && in->op != MIR_OP_ADDR_FUNC) || !in->call_fn)
         continue;
 

@@ -30,7 +30,10 @@ void gen_rodata_section();
 void gen_data_section();
 
 void optimize_mir_mem2reg(MirFunction *mf);
-void optimize_mir_inline_cleanup(MirFunction *mf);
+void optimize_mir_cleanup(MirFunction *mf);
+
+void ssa_construct(MirFunction *mf);
+void ssa_destruct(MirFunction *mf);
 
 const char *ra_preg64(int preg);
 int ra_preg_is_callee_saved(int preg);

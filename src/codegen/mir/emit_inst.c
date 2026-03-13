@@ -74,11 +74,11 @@ static int align_frame_size_for_calls(int size) {
 static int mir_uses_local_offset(const MirFunction *mf, int offset) {
   if (!mf || offset <= 0)
     return 0;
-  for (int i = 0; i < mf->inst_len; i++) {
-    MirOp op = mf->insts[i].op;
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    MirOp op = mf->blocks[0].insts[i].op;
     if (op != MIR_OP_LOAD_LOCAL && op != MIR_OP_STORE_LOCAL && op != MIR_OP_ADDR_LOCAL)
       continue;
-    if (mf->insts[i].offset == offset)
+    if (mf->blocks[0].insts[i].offset == offset)
       return 1;
   }
   return 0;
@@ -87,8 +87,8 @@ static int mir_uses_local_offset(const MirFunction *mf, int offset) {
 static int mir_has_call(const MirFunction *mf) {
   if (!mf)
     return 0;
-  for (int i = 0; i < mf->inst_len; i++) {
-    if (mf->insts[i].op == MIR_OP_CALL)
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    if (mf->blocks[0].insts[i].op == MIR_OP_CALL)
       return 1;
   }
   return 0;
@@ -99,8 +99,8 @@ static int compute_required_local_stack(const MirFunction *mf) {
     return 0;
 
   int max_off = 0;
-  for (int i = 0; i < mf->inst_len; i++) {
-    const MirInst *in = &mf->insts[i];
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    const MirInst *in = &mf->blocks[0].insts[i];
     if (in->op != MIR_OP_LOAD_LOCAL && in->op != MIR_OP_STORE_LOCAL && in->op != MIR_OP_ADDR_LOCAL)
       continue;
     if (in->offset > max_off)
@@ -595,8 +595,6 @@ static long typed_imm_canonical_value(Type *type, long imm) {
   }
 }
 
-static inline int is_signext_i32(long v) { return (long)(int)v == v; }
-
 static int is_x64_imm32_signext_encodable(long v) {
   unsigned long low = (unsigned long)(unsigned int)v;
   unsigned long sx = low;
@@ -658,8 +656,8 @@ static void build_single_def_imm_info(const MirFunction *mf, unsigned char *know
     value[v] = 0;
   }
 
-  for (int i = 0; i < mf->inst_len; i++) {
-    const MirInst *in = &mf->insts[i];
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    const MirInst *in = &mf->blocks[0].insts[i];
     if (in->dst < 0 || in->dst >= mf->next_vreg)
       continue;
     int v = in->dst;
@@ -712,8 +710,8 @@ static void build_single_def_meta_info(const MirFunction *mf, unsigned char *kno
     offset[v] = 0;
   }
 
-  for (int i = 0; i < mf->inst_len; i++) {
-    const MirInst *in = &mf->insts[i];
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    const MirInst *in = &mf->blocks[0].insts[i];
     if (in->dst < 0 || in->dst >= mf->next_vreg)
       continue;
     int v = in->dst;
@@ -836,8 +834,8 @@ static void build_skip_emit_info(const MirFunction *mf, const unsigned char *sin
       skip_emit_imm[v] = 1;
   }
 
-  for (int i = 0; i < mf->inst_len; i++) {
-    const MirInst *in = &mf->insts[i];
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    const MirInst *in = &mf->blocks[0].insts[i];
     int allow_direct_local_store_use = is_direct_local_store_pattern(mf, single_def_meta_known, single_def_meta_op, in);
 
     if (in->src1 != MIR_INVALID_VREG) {
@@ -881,10 +879,10 @@ static void flush_pending_jmp(MirAsmCtx *ctx) {
 }
 
 static int can_ret_fallthrough_to_epilogue(const MirFunction *mf, int inst_idx) {
-  if (!mf || inst_idx < 0 || inst_idx >= mf->inst_len)
+  if (!mf || inst_idx < 0 || inst_idx >= mf->blocks[0].inst_len)
     return 0;
-  for (int i = inst_idx + 1; i < mf->inst_len; i++) {
-    MirOp op = mf->insts[i].op;
+  for (int i = inst_idx + 1; i < mf->blocks[0].inst_len; i++) {
+    MirOp op = mf->blocks[0].insts[i].op;
     if (op == MIR_OP_LABEL || op == MIR_OP_NOP)
       continue;
     return 0;
@@ -893,16 +891,16 @@ static int can_ret_fallthrough_to_epilogue(const MirFunction *mf, int inst_idx) 
 }
 
 static int ret_uses_vreg_immediately(const MirFunction *mf, int inst_idx, VReg vreg) {
-  if (!mf || inst_idx < 0 || inst_idx + 1 >= mf->inst_len || vreg == MIR_INVALID_VREG)
+  if (!mf || inst_idx < 0 || inst_idx + 1 >= mf->blocks[0].inst_len || vreg == MIR_INVALID_VREG)
     return 0;
-  const MirInst *next = &mf->insts[inst_idx + 1];
+  const MirInst *next = &mf->blocks[0].insts[inst_idx + 1];
   return next->op == MIR_OP_RET && next->src1 == vreg;
 }
 
 static int ret_src_already_in_rax(const MirFunction *mf, int ret_idx, VReg src_vreg) {
-  if (!mf || ret_idx <= 0 || ret_idx >= mf->inst_len || src_vreg == MIR_INVALID_VREG)
+  if (!mf || ret_idx <= 0 || ret_idx >= mf->blocks[0].inst_len || src_vreg == MIR_INVALID_VREG)
     return 0;
-  const MirInst *prev = &mf->insts[ret_idx - 1];
+  const MirInst *prev = &mf->blocks[0].insts[ret_idx - 1];
   if (prev->dst != src_vreg)
     return 0;
   switch (prev->op) {
@@ -930,10 +928,10 @@ static void emit_ret_imm_to_rax(Type *type, long imm) {
 }
 
 static int needs_epilogue_label(const MirFunction *mf) {
-  if (!mf || mf->inst_len <= 0)
+  if (!mf || mf->blocks[0].inst_len <= 0)
     return 0;
-  for (int i = 0; i < mf->inst_len; i++) {
-    if (mf->insts[i].op != MIR_OP_RET)
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    if (mf->blocks[0].insts[i].op != MIR_OP_RET)
       continue;
     if (!can_ret_fallthrough_to_epilogue(mf, i))
       return 1;
@@ -1164,8 +1162,8 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
     write_file("  nop\n");
     return;
   case MIR_OP_IMM: {
-    if (inst_idx + 1 < ctx->mf->inst_len) {
-      const MirInst *next = &ctx->mf->insts[inst_idx + 1];
+    if (inst_idx + 1 < ctx->mf->blocks[0].inst_len) {
+      const MirInst *next = &ctx->mf->blocks[0].insts[inst_idx + 1];
       if (next->op == MIR_OP_RET && next->src1 == in->dst)
         return;
     }
@@ -1655,9 +1653,9 @@ static void emit_mir_inst(MirAsmCtx *ctx, const MirInst *in, int inst_idx) {
           imm_type = ctx->mf->fn->type->return_type;
         if (!imm_type)
           imm_type = in->type;
-        if (!imm_type && inst_idx > 0 && ctx->mf->insts[inst_idx - 1].op == MIR_OP_IMM &&
-            ctx->mf->insts[inst_idx - 1].dst == in->src1) {
-          imm_type = ctx->mf->insts[inst_idx - 1].type;
+        if (!imm_type && inst_idx > 0 && ctx->mf->blocks[0].insts[inst_idx - 1].op == MIR_OP_IMM &&
+            ctx->mf->blocks[0].insts[inst_idx - 1].dst == in->src1) {
+          imm_type = ctx->mf->blocks[0].insts[inst_idx - 1].type;
         }
         emit_ret_imm_to_rax(imm_type, imm);
       } else {
@@ -1708,8 +1706,8 @@ void emit_mir_function_codegen(const MirFunction *mf) {
     build_single_def_imm_info(mf, single_def_imm_known, single_def_imm_value);
     build_skip_emit_info(mf, single_def_meta_known, single_def_meta_op, single_def_imm_known, single_def_imm_value,
                          skip_emit_addr_local, skip_emit_imm);
-    for (int i = 0; i < mf->inst_len; i++) {
-      const MirInst *in = &mf->insts[i];
+    for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+      const MirInst *in = &mf->blocks[0].insts[i];
       if (in->src1 >= 0 && in->src1 < mf->next_vreg)
         vreg_has_use[in->src1] = 1;
       if (in->src2 >= 0 && in->src2 < mf->next_vreg)
@@ -1800,8 +1798,8 @@ void emit_mir_function_codegen(const MirFunction *mf) {
     }
   }
 
-  for (int i = 0; i < mf->inst_len; i++)
-    emit_mir_inst(&ctx, &mf->insts[i], i);
+  for (int i = 0; i < mf->blocks[0].inst_len; i++)
+    emit_mir_inst(&ctx, &mf->blocks[0].insts[i], i);
   flush_pending_jmp(&ctx);
 
   if (emit_epilogue_label)

@@ -2,7 +2,6 @@
 #include "runtime.h"
 #include "../codegen_internal.h"
 
-#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -279,18 +278,18 @@ static inline int is_main_function(const Function *fn) { return fn && fn->len ==
 static int mir_has_ret(const MirFunction *mf) {
   if (!mf)
     return 0;
-  for (int i = 0; i < mf->inst_len; i++) {
-    if (mf->insts[i].op == MIR_OP_RET)
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    if (mf->blocks[0].insts[i].op == MIR_OP_RET)
       return 1;
   }
   return 0;
 }
 
 static int mir_end_reachable(const MirFunction *mf) {
-  if (!mf || mf->inst_len <= 0)
+  if (!mf || mf->blocks[0].inst_len <= 0)
     return 1;
 
-  int n = mf->inst_len;
+  int n = mf->blocks[0].inst_len;
   int *label_to_inst = NULL;
   if (mf->next_label > 0) {
     label_to_inst = malloc(sizeof(int) * mf->next_label);
@@ -299,9 +298,9 @@ static int mir_end_reachable(const MirFunction *mf) {
     for (int l = 0; l < mf->next_label; l++)
       label_to_inst[l] = -1;
     for (int i = 0; i < n; i++) {
-      if (mf->insts[i].op != MIR_OP_LABEL)
+      if (mf->blocks[0].insts[i].op != MIR_OP_LABEL)
         continue;
-      int l = mf->insts[i].label;
+      int l = mf->blocks[0].insts[i].label;
       if (l >= 0 && l < mf->next_label)
         label_to_inst[l] = i;
     }
@@ -322,7 +321,7 @@ static int mir_end_reachable(const MirFunction *mf) {
     if (i == n)
       continue;
 
-    MirInst *in = &mf->insts[i];
+    MirInst *in = &mf->blocks[0].insts[i];
     int succ0 = -1;
     int succ1 = -1;
     int fall = (i + 1 <= n) ? (i + 1) : -1;
@@ -384,14 +383,14 @@ static void emit_implicit_return_if_needed(LowerCtx *ctx, Node *node) {
   mir_emit(ctx->mf, &inst);
 }
 
-static VReg lower_expr_impl(LowerCtx *ctx, Node *node, bool need_value);
+static VReg lower_expr_impl(LowerCtx *ctx, Node *node);
 static VReg lower_expr(LowerCtx *ctx, Node *node);
 static void lower_expr_discard(LowerCtx *ctx, Node *node);
 static void lower_stmt(LowerCtx *ctx, Node *node);
 
-static inline VReg lower_expr(LowerCtx *ctx, Node *node) { return lower_expr_impl(ctx, node, true); }
+static inline VReg lower_expr(LowerCtx *ctx, Node *node) { return lower_expr_impl(ctx, node); }
 
-static inline void lower_expr_discard(LowerCtx *ctx, Node *node) { (void)lower_expr_impl(ctx, node, false); }
+static inline void lower_expr_discard(LowerCtx *ctx, Node *node) { (void)lower_expr(ctx, node); }
 
 static int cast_is_noop(Type *from, Type *to) {
   if (!from || !to)
@@ -618,12 +617,7 @@ static void emit_mov(LowerCtx *ctx, VReg dst, VReg src, Type *type) {
   mir_emit(ctx->mf, &inst);
 }
 
-static VReg lower_not(LowerCtx *ctx, Node *node, bool need_value) {
-  if (!need_value) {
-    lower_expr_discard(ctx, node->lhs);
-    return MIR_INVALID_VREG;
-  }
-
+static VReg lower_not(LowerCtx *ctx, Node *node) {
   VReg src = lower_expr(ctx, node->lhs);
   VReg zero = lower_imm(ctx, 0, node->type);
   VReg dst = mir_new_vreg(ctx->mf);
@@ -637,16 +631,7 @@ static VReg lower_not(LowerCtx *ctx, Node *node, bool need_value) {
   return dst;
 }
 
-static VReg lower_logical_and(LowerCtx *ctx, Node *node, bool need_value) {
-  if (!need_value) {
-    int l_end = new_label(ctx);
-    VReg lhs = lower_expr(ctx, node->lhs);
-    emit_jz(ctx, lhs, node->lhs ? node->lhs->type : NULL, l_end);
-    lower_expr_discard(ctx, node->rhs);
-    emit_label(ctx, l_end);
-    return MIR_INVALID_VREG;
-  }
-
+static VReg lower_logical_and(LowerCtx *ctx, Node *node) {
   VReg dst = mir_new_vreg(ctx->mf);
   VReg zero = lower_imm(ctx, 0, node->type);
   VReg one = lower_imm(ctx, 1, node->type);
@@ -665,19 +650,7 @@ static VReg lower_logical_and(LowerCtx *ctx, Node *node, bool need_value) {
   return dst;
 }
 
-static VReg lower_logical_or(LowerCtx *ctx, Node *node, bool need_value) {
-  if (!need_value) {
-    int l_eval_rhs = new_label(ctx);
-    int l_end = new_label(ctx);
-    VReg lhs = lower_expr(ctx, node->lhs);
-    emit_jz(ctx, lhs, node->lhs ? node->lhs->type : NULL, l_eval_rhs);
-    emit_jmp(ctx, l_end);
-    emit_label(ctx, l_eval_rhs);
-    lower_expr_discard(ctx, node->rhs);
-    emit_label(ctx, l_end);
-    return MIR_INVALID_VREG;
-  }
-
+static VReg lower_logical_or(LowerCtx *ctx, Node *node) {
   VReg dst = mir_new_vreg(ctx->mf);
   VReg zero = lower_imm(ctx, 0, node->type);
   VReg one = lower_imm(ctx, 1, node->type);
@@ -700,14 +673,14 @@ static VReg lower_logical_or(LowerCtx *ctx, Node *node, bool need_value) {
   return dst;
 }
 
-static VReg lower_ternary(LowerCtx *ctx, Node *node, bool need_value) {
+static VReg lower_ternary(LowerCtx *ctx, Node *node) {
   if (!node->cond || !node->then || !node->els)
     lower_error_node("invalid ternary node in lowering", node);
 
   int l_else = new_label(ctx);
   int l_end = new_label(ctx);
 
-  if (!need_value || (node->type && node->type->ty == TY_VOID)) {
+  if (node->type && node->type->ty == TY_VOID) {
     if (!try_emit_jmp_if_false_cond(ctx, node->cond, l_else)) {
       VReg cond = lower_expr(ctx, node->cond);
       emit_jz(ctx, cond, node->cond ? node->cond->type : NULL, l_else);
@@ -848,7 +821,7 @@ static void emit_memcpy(LowerCtx *ctx, VReg dst_addr, VReg src_addr, int size) {
   mir_emit(ctx->mf, &inst);
 }
 
-static VReg lower_postinc(LowerCtx *ctx, Node *node, bool need_value) {
+static VReg lower_postinc(LowerCtx *ctx, Node *node) {
   if (!node->lhs || !node->rhs)
     lower_error_node("invalid postinc node in lowering", node);
 
@@ -857,42 +830,22 @@ static VReg lower_postinc(LowerCtx *ctx, Node *node, bool need_value) {
   old_value = lower_load_from_addr(ctx, addr, node->lhs->type);
   VReg new_value = lower_postinc_new_from_old(ctx, node, old_value);
   lower_store_to_addr(ctx, addr, new_value, node->lhs->type);
-  if (!need_value)
-    return MIR_INVALID_VREG;
-
   return old_value;
 }
 
-static VReg lower_binary(LowerCtx *ctx, Node *node, MirOp op, bool need_value) {
-  if (!need_value) {
-    lower_expr_discard(ctx, node->lhs);
-    lower_expr_discard(ctx, node->rhs);
-    return MIR_INVALID_VREG;
-  }
-
+static VReg lower_binary(LowerCtx *ctx, Node *node, MirOp op) {
   VReg lhs = lower_expr(ctx, node->lhs);
   VReg rhs = lower_expr(ctx, node->rhs);
   return emit_binary_inst(ctx, op, lhs, rhs, node->type);
 }
 
-static VReg lower_compare(LowerCtx *ctx, Node *node, MirOp op, bool need_value) {
-  if (!need_value) {
-    lower_expr_discard(ctx, node->lhs);
-    lower_expr_discard(ctx, node->rhs);
-    return MIR_INVALID_VREG;
-  }
-
+static VReg lower_compare(LowerCtx *ctx, Node *node, MirOp op) {
   VReg lhs = lower_expr(ctx, node->lhs);
   VReg rhs = lower_expr(ctx, node->rhs);
   return emit_binary_inst(ctx, op, lhs, rhs, pick_compare_type(node));
 }
 
-static VReg lower_unary(LowerCtx *ctx, Node *node, MirOp op, bool need_value) {
-  if (!need_value) {
-    lower_expr_discard(ctx, node->lhs);
-    return MIR_INVALID_VREG;
-  }
-
+static VReg lower_unary(LowerCtx *ctx, Node *node, MirOp op) {
   VReg src = lower_expr(ctx, node->lhs);
   VReg dst = mir_new_vreg(ctx->mf);
 
@@ -916,7 +869,7 @@ static VReg lower_const_addr(LowerCtx *ctx, Node *node, MirOp op) {
   return dst;
 }
 
-static VReg lower_call(LowerCtx *ctx, Node *node, bool need_value) {
+static VReg lower_call(LowerCtx *ctx, Node *node) {
   MirInst call;
   init_inst(&call, MIR_OP_CALL);
 
@@ -937,7 +890,7 @@ static VReg lower_call(LowerCtx *ctx, Node *node, bool need_value) {
     call.src1 = lower_expr(ctx, node->lhs);
   }
 
-  if (need_value && node->type && node->type->ty != TY_VOID)
+  if (node->type && node->type->ty != TY_VOID)
     call.dst = mir_new_vreg(ctx->mf);
 
   mir_emit(ctx->mf, &call);
@@ -988,28 +941,22 @@ static void lower_switch_stmt(LowerCtx *ctx, Node *node) {
   pop_switch_ctx(ctx, node);
 }
 
-static VReg lower_expr_impl(LowerCtx *ctx, Node *node, bool need_value) {
+static VReg lower_expr_impl(LowerCtx *ctx, Node *node) {
   if (!ctx || !ctx->mf || !node)
     lower_error_node("invalid lowering context", node);
 
   switch (node->kind) {
   case ND_NUM: {
-    if (!need_value)
-      return MIR_INVALID_VREG;
     return lower_imm(ctx, node->val, node->type);
   }
   case ND_LVAR:
   case ND_VARDEC:
   case ND_GVAR:
   case ND_GLBDEC: {
-    if (!need_value)
-      return MIR_INVALID_VREG;
     VReg addr = lower_addr(ctx, node);
     return lower_load_from_addr(ctx, addr, node->type);
   }
   case ND_FUNCNAME: {
-    if (!need_value)
-      return MIR_INVALID_VREG;
     if (!node->fn)
       lower_error_node("function name node has no function in lowering", node);
     VReg dst = mir_new_vreg(ctx->mf);
@@ -1024,83 +971,69 @@ static VReg lower_expr_impl(LowerCtx *ctx, Node *node, bool need_value) {
   case ND_ADDR:
     if (!node->lhs)
       lower_error_node("address operator has no operand in lowering", node);
-    if (!need_value) {
-      lower_expr_discard(ctx, node->lhs);
-      return MIR_INVALID_VREG;
-    }
     if (node->lhs->kind == ND_FUNCNAME)
       return lower_expr(ctx, node->lhs);
     return lower_addr(ctx, node->lhs);
   case ND_DEREF: {
-    if (!need_value) {
-      lower_expr_discard(ctx, node->lhs);
-      return MIR_INVALID_VREG;
-    }
     VReg addr = lower_expr(ctx, node->lhs);
     return lower_load_from_addr(ctx, addr, node->type);
   }
   case ND_STRING:
-    if (!need_value)
-      return MIR_INVALID_VREG;
     return lower_const_addr(ctx, node, MIR_OP_ADDR_STRING);
   case ND_ARRAY:
-    if (!need_value)
-      return MIR_INVALID_VREG;
     return lower_const_addr(ctx, node, MIR_OP_ADDR_ARRAY);
   case ND_STRUCT_LITERAL:
-    if (!need_value)
-      return MIR_INVALID_VREG;
     return lower_const_addr(ctx, node, MIR_OP_ADDR_STRUCT_LITERAL);
   case ND_ADD:
-    return lower_binary(ctx, node, MIR_OP_ADD, need_value);
+    return lower_binary(ctx, node, MIR_OP_ADD);
   case ND_SUB:
-    return lower_binary(ctx, node, MIR_OP_SUB, need_value);
+    return lower_binary(ctx, node, MIR_OP_SUB);
   case ND_MUL:
-    return lower_binary(ctx, node, MIR_OP_MUL, need_value);
+    return lower_binary(ctx, node, MIR_OP_MUL);
   case ND_DIV:
-    return lower_binary(ctx, node, (node->type && node->type->is_unsigned) ? MIR_OP_UDIV : MIR_OP_SDIV, need_value);
+    return lower_binary(ctx, node, (node->type && node->type->is_unsigned) ? MIR_OP_UDIV : MIR_OP_SDIV);
   case ND_MOD:
-    return lower_binary(ctx, node, (node->type && node->type->is_unsigned) ? MIR_OP_UMOD : MIR_OP_SMOD, need_value);
+    return lower_binary(ctx, node, (node->type && node->type->is_unsigned) ? MIR_OP_UMOD : MIR_OP_SMOD);
   case ND_EQ:
-    return lower_binary(ctx, node, MIR_OP_EQ, need_value);
+    return lower_binary(ctx, node, MIR_OP_EQ);
   case ND_NE:
-    return lower_binary(ctx, node, MIR_OP_NE, need_value);
+    return lower_binary(ctx, node, MIR_OP_NE);
   case ND_LT:
-    return lower_compare(ctx, node, MIR_OP_LT, need_value);
+    return lower_compare(ctx, node, MIR_OP_LT);
   case ND_LE:
-    return lower_compare(ctx, node, MIR_OP_LE, need_value);
+    return lower_compare(ctx, node, MIR_OP_LE);
   case ND_BITAND:
-    return lower_binary(ctx, node, MIR_OP_BITAND, need_value);
+    return lower_binary(ctx, node, MIR_OP_BITAND);
   case ND_BITOR:
-    return lower_binary(ctx, node, MIR_OP_BITOR, need_value);
+    return lower_binary(ctx, node, MIR_OP_BITOR);
   case ND_BITXOR:
-    return lower_binary(ctx, node, MIR_OP_BITXOR, need_value);
+    return lower_binary(ctx, node, MIR_OP_BITXOR);
   case ND_SHL:
-    return lower_binary(ctx, node, MIR_OP_SHL, need_value);
+    return lower_binary(ctx, node, MIR_OP_SHL);
   case ND_SHR:
-    return lower_binary(ctx, node, MIR_OP_SHR, need_value);
+    return lower_binary(ctx, node, MIR_OP_SHR);
   case ND_AND:
-    return lower_logical_and(ctx, node, need_value);
+    return lower_logical_and(ctx, node);
   case ND_OR:
-    return lower_logical_or(ctx, node, need_value);
+    return lower_logical_or(ctx, node);
   case ND_NOT:
-    return lower_not(ctx, node, need_value);
+    return lower_not(ctx, node);
   case ND_BITNOT:
-    return lower_unary(ctx, node, MIR_OP_BITNOT, need_value);
+    return lower_unary(ctx, node, MIR_OP_BITNOT);
   case ND_TERNARY:
-    return lower_ternary(ctx, node, need_value);
+    return lower_ternary(ctx, node);
   case ND_ASSIGN: {
     if (node->val) {
       VReg dst_addr = lower_addr(ctx, node->lhs);
       VReg src_addr = lower_expr(ctx, node->rhs);
       emit_memcpy(ctx, dst_addr, src_addr, get_sizeof(node->lhs->type));
-      return need_value ? src_addr : MIR_INVALID_VREG;
+      return src_addr;
     }
     if (node->lhs && node->lhs->type && (node->lhs->type->ty == TY_STRUCT || node->lhs->type->ty == TY_UNION)) {
       VReg dst_addr = lower_addr(ctx, node->lhs);
       VReg src_addr = lower_addr(ctx, node->rhs);
       emit_memcpy(ctx, dst_addr, src_addr, get_sizeof(node->lhs->type));
-      return need_value ? src_addr : MIR_INVALID_VREG;
+      return src_addr;
     }
     VReg addr = lower_addr(ctx, node->lhs);
     VReg rhs = lower_expr(ctx, node->rhs);
@@ -1109,8 +1042,6 @@ static VReg lower_expr_impl(LowerCtx *ctx, Node *node, bool need_value) {
     if (lhs_type && lhs_type->ty != TY_STRUCT && lhs_type->ty != TY_UNION && lhs_type->ty != TY_ARR)
       stored = lower_cast_value_if_needed(ctx, rhs, node->rhs ? node->rhs->type : NULL, lhs_type);
     lower_store_to_addr(ctx, addr, stored, lhs_type);
-    if (!need_value)
-      return MIR_INVALID_VREG;
 
     // Scalar-like assignments already have the stored value in "stored";
     // return it directly instead of reloading from memory.
@@ -1121,26 +1052,18 @@ static VReg lower_expr_impl(LowerCtx *ctx, Node *node, bool need_value) {
     return lower_load_from_addr(ctx, addr, lhs_type);
   }
   case ND_POSTINC:
-    return lower_postinc(ctx, node, need_value);
+    return lower_postinc(ctx, node);
   case ND_COMMA: {
-    lower_expr_discard(ctx, node->lhs);
-    if (!need_value) {
-      lower_expr_discard(ctx, node->rhs);
-      return MIR_INVALID_VREG;
-    }
+    lower_expr(ctx, node->lhs);
     return lower_expr(ctx, node->rhs);
   }
   case ND_TYPECAST: {
-    if (!need_value) {
-      lower_expr_discard(ctx, node->lhs);
-      return MIR_INVALID_VREG;
-    }
     VReg src = lower_expr(ctx, node->lhs);
     Type *from = node->lhs ? node->lhs->type : NULL;
     return lower_cast_value_if_needed(ctx, src, from, node->type);
   }
   case ND_FUNCALL:
-    return lower_call(ctx, node, need_value);
+    return lower_call(ctx, node);
   default:
     lower_error_node("unsupported expression node in lowering", node);
   }

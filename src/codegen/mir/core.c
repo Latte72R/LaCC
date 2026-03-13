@@ -4,20 +4,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-// MirFunction に必要な命令数を確保する
-static void ensure_inst_capacity(MirFunction *mf, int need) {
-  if (mf->inst_cap >= need)
+static void ensure_bb_inst_capacity(MirBasicBlock *bb, int need) {
+  if (bb->inst_cap >= need)
     return;
-
-  int cap = mf->inst_cap ? mf->inst_cap : 16;
+  int cap = bb->inst_cap ? bb->inst_cap : 16;
   while (cap < need)
     cap *= 2;
-
-  MirInst *new_buf = realloc(mf->insts, sizeof(MirInst) * cap);
+  MirInst *new_buf = realloc(bb->insts, sizeof(MirInst) * cap);
   if (!new_buf)
-    error("memory allocation failed [in ensure_inst_capacity]");
-  mf->insts = new_buf;
-  mf->inst_cap = cap;
+    error("memory allocation failed [in ensure_bb_inst_capacity]");
+  bb->insts = new_buf;
+  bb->inst_cap = cap;
 }
 
 static const char *mir_op_name(MirOp op) {
@@ -122,12 +119,42 @@ int mir_new_label(MirFunction *mf) {
   return mf->next_label++;
 }
 
+int mir_new_block(MirFunction *mf) {
+  if (!mf)
+    return -1;
+  if (mf->block_count >= mf->block_cap) {
+    int cap = mf->block_cap ? mf->block_cap * 2 : 4;
+    MirBasicBlock *new_buf = realloc(mf->blocks, sizeof(MirBasicBlock) * cap);
+    if (!new_buf)
+      error("memory allocation failed [in mir_new_block]");
+    mf->blocks = new_buf;
+    mf->block_cap = cap;
+  }
+  int id = mf->block_count++;
+  MirBasicBlock *bb = &mf->blocks[id];
+  memset(bb, 0, sizeof(*bb));
+  bb->id = id;
+  bb->label = MIR_INVALID_LABEL;
+  bb->succ[0] = -1;
+  bb->succ[1] = -1;
+  bb->succ_count = 0;
+  bb->preds = NULL;
+  bb->pred_count = 0;
+  bb->pred_cap = 0;
+  return id;
+}
+
 // MirFunction に命令を追加する
 void mir_emit(MirFunction *mf, const MirInst *inst) {
   if (!mf || !inst)
     return;
-  ensure_inst_capacity(mf, mf->inst_len + 1);
-  mf->insts[mf->inst_len++] = *inst;
+  if (mf->block_count == 0) {
+    if (mir_new_block(mf) < 0)
+      return;
+  }
+  MirBasicBlock *bb = &mf->blocks[0];
+  ensure_bb_inst_capacity(bb, bb->inst_len + 1);
+  bb->insts[bb->inst_len++] = *inst;
 }
 
 // MirFunction の内容を人間が読める形式で出力する
@@ -135,16 +162,20 @@ void mir_dump(FILE *out, const MirFunction *mf) {
   if (!out || !mf)
     return;
 
+  int total_insts = mf->block_count > 0 ? mf->blocks[0].inst_len : 0;
   if (mf->fn) {
     fprintf(out, "MIR function %.*s (insts=%d, next_vreg=%d, next_label=%d)\n", mf->fn->len, mf->fn->name,
-            mf->inst_len, mf->next_vreg, mf->next_label);
+            total_insts, mf->next_vreg, mf->next_label);
   } else {
-    fprintf(out, "MIR function <null> (insts=%d, next_vreg=%d, next_label=%d)\n", mf->inst_len, mf->next_vreg,
+    fprintf(out, "MIR function <null> (insts=%d, next_vreg=%d, next_label=%d)\n", total_insts, mf->next_vreg,
             mf->next_label);
   }
 
-  for (int i = 0; i < mf->inst_len; i++) {
-    const MirInst *in = &mf->insts[i];
+  if (mf->block_count == 0)
+    return;
+  const MirBasicBlock *bb = &mf->blocks[0];
+  for (int i = 0; i < bb->inst_len; i++) {
+    const MirInst *in = &bb->insts[i];
     fprintf(out, "  %4d: %-11s ", i, mir_op_name(in->op));
     switch (in->op) {
     case MIR_OP_IMM:
@@ -307,10 +338,20 @@ void mir_dump(FILE *out, const MirFunction *mf) {
 void mir_free(MirFunction *mf) {
   if (!mf)
     return;
-  free(mf->insts);
-  mf->insts = NULL;
-  mf->inst_len = 0;
-  mf->inst_cap = 0;
+  for (int i = 0; i < mf->block_count; i++) {
+    MirBasicBlock *bb = &mf->blocks[i];
+    for (int j = 0; j < bb->phi_count; j++) {
+      free(bb->phis[j].incoming_block);
+      free(bb->phis[j].incoming_value);
+    }
+    free(bb->phis);
+    free(bb->insts);
+    free(bb->preds);
+  }
+  free(mf->blocks);
+  mf->blocks = NULL;
+  mf->block_count = 0;
+  mf->block_cap = 0;
   mf->next_vreg = 0;
   mf->next_label = 0;
   mf->fn = NULL;
