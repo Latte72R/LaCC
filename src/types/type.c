@@ -699,6 +699,18 @@ Type *consume_type(const int should_record) {
   return type;
 }
 
+Type *consume_type_name(const int should_record, char *stmt) {
+  Type *type = parse_base_type_internal(true, should_record);
+  Token *tok = NULL;
+  if (!type)
+    return NULL;
+  type = parse_declarator(type, &tok, stmt);
+  if (tok) {
+    error_at(tok->loc, "unexpected identifier in type name [in %s]", stmt);
+  }
+  return type;
+}
+
 int is_type(Token *tok) {
   // Built-in basic types and qualifiers
   if (tok->kind == TK_TYPE)

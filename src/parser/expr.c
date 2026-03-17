@@ -732,7 +732,7 @@ Node *type_cast() {
     token = tok;
     return unary();
   }
-  Type *type = consume_type(true);
+  Type *type = consume_type_name(true, "type cast");
   if (!type) {
     token = tok;
     return unary();
@@ -785,7 +785,7 @@ Node *unary() {
     int sz;
     if (consume("(")) {
       Token *tok2 = token;
-      Type *ty = consume_type(true);
+      Type *ty = consume_type_name(true, "sizeof");
       if (ty) {
         expect(")", "after type", "sizeof");
         sz = get_sizeof(ty);

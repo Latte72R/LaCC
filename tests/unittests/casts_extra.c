@@ -63,3 +63,12 @@ int cast_extra_test12() {
   unsigned long x = 42UL;
   return (_Bool)x;
 }
+
+int cast_extra_inc(int x) { return x + 2; }
+
+int cast_extra_test13() {
+  int (*fp)(int) = cast_extra_inc;
+  return ((int (*)(int))fp)(5);
+}
+
+int cast_extra_test14() { return sizeof(int (*)(int)); }

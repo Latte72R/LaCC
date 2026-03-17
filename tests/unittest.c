@@ -335,6 +335,8 @@ int main() {
   CHECK(cast_extra_test10(), 1);
   CHECK(cast_extra_test11(), 1);
   CHECK(cast_extra_test12(), 1);
+  CHECK(cast_extra_test13(), 7);
+  CHECK(cast_extra_test14(), 8);
 
   if (failures == 0) {
     printf("\033[1;36mAll %d tests passed!\033[0m\n", test_cnt);

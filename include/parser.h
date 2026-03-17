@@ -277,6 +277,7 @@ Type *parse_declarator(Type *base_type, Token **tok, char *stmt);
 Type *parse_declarator_suffix(Type *type, char *stmt);
 Type *parse_function_suffix(Type *type, char *stmt);
 Type *consume_type(int should_record);
+Type *consume_type_name(int should_record, char *stmt);
 Type *new_type(TypeKind ty);
 Type *new_type_ptr(Type *ptr_to);
 Type *new_type_arr(Type *ptr_to, int array_size);
