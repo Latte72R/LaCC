@@ -119,7 +119,6 @@ struct MirFunction {
   Type *param_types[MAX_FUNC_PARAMS];
 };
 
-void mir_init(MirFunction *mf, Function *fn);
 VReg mir_new_vreg(MirFunction *mf);
 int mir_new_label(MirFunction *mf);
 void mir_emit(MirFunction *mf, const MirInst *inst);

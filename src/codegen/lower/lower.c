@@ -1,6 +1,6 @@
+#include "../codegen_internal.h"
 #include "diagnostics.h"
 #include "runtime.h"
-#include "../codegen_internal.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -184,6 +184,7 @@ static void emit_jmp_if_true_fallback(LowerCtx *ctx, Node *cond, int label) {
 
 static int try_emit_jmp_if_true_cond(LowerCtx *ctx, Node *cond, int label);
 
+// if cond is false, jump to label
 static int try_emit_jmp_if_false_cond(LowerCtx *ctx, Node *cond, int label) {
   if (!ctx || !cond)
     return 0;
@@ -1084,7 +1085,8 @@ static VReg lower_expr_impl(LowerCtx *ctx, Node *node) {
     VReg stored = rhs;
     if (lhs_type && lhs_type->ty != TY_STRUCT && lhs_type->ty != TY_UNION && lhs_type->ty != TY_ARR)
       stored = lower_cast_value_if_needed(ctx, rhs, node->rhs ? node->rhs->type : NULL, lhs_type);
-    if (node->lhs && (node->lhs->kind == ND_LVAR || node->lhs->kind == ND_VARDEC) && can_lower_direct_local_access(node->lhs))
+    if (node->lhs && (node->lhs->kind == ND_LVAR || node->lhs->kind == ND_VARDEC) &&
+        can_lower_direct_local_access(node->lhs))
       lower_direct_local_store(ctx, node->lhs, stored);
     else {
       VReg addr = lower_addr(ctx, node->lhs);
@@ -1307,7 +1309,7 @@ void lower_function(Node *fn_node, MirFunction *mf) {
   if (!fn_node || fn_node->kind != ND_FUNCDEF || !fn_node->fn || !fn_node->lhs || !mf)
     lower_error_node("invalid function node in lowering", fn_node);
 
-  mir_init(mf, fn_node->fn);
+  mf->fn = fn_node->fn;
   if (fn_node->val < 0 || fn_node->val > MAX_FUNC_PARAMS)
     lower_error_node("invalid function parameter count in lowering", fn_node);
   mf->param_count = fn_node->val;
