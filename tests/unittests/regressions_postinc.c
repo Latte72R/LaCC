@@ -27,3 +27,12 @@ int regress_postinc_test4() {
   int r = u++;
   return r + u; // 255 + 0 = 255 (well-defined wrap for unsigned char)
 }
+
+int regress_local_slot_test1(int x) {
+  int a[3];
+  long unused = x + 3;
+  int b[3];
+  a[0] = x;
+  b[0] = x + 1;
+  return a[0] + b[0];
+}

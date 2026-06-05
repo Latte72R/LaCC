@@ -112,6 +112,38 @@ int mir_new_label(MirFunction *mf) {
   return mf->next_label++;
 }
 
+int mir_add_local_slot(MirFunction *mf, LVar *var, Type *type, int size) {
+  if (!mf || !type || size <= 0)
+    error("invalid local slot [in mir_add_local_slot]");
+  if (mf->local_count >= mf->local_cap) {
+    int cap = mf->local_cap ? mf->local_cap * 2 : 16;
+    LVar **new_vars = realloc(mf->local_vars, sizeof(LVar *) * cap);
+    Type **new_types = realloc(mf->local_types, sizeof(Type *) * cap);
+    int *new_sizes = realloc(mf->local_sizes, sizeof(int) * cap);
+    if (!new_vars || !new_types || !new_sizes)
+      error("memory allocation failed [in mir_add_local_slot]");
+    mf->local_vars = new_vars;
+    mf->local_types = new_types;
+    mf->local_sizes = new_sizes;
+    mf->local_cap = cap;
+  }
+  int slot = mf->local_count++;
+  mf->local_vars[slot] = var;
+  mf->local_types[slot] = type;
+  mf->local_sizes[slot] = size;
+  return slot + 1;
+}
+
+int mir_get_or_add_local_slot(MirFunction *mf, LVar *var, Type *type, int size) {
+  if (!mf || !var)
+    error("invalid local variable [in mir_get_or_add_local_slot]");
+  for (int i = 0; i < mf->local_count; i++) {
+    if (mf->local_vars[i] == var)
+      return i + 1;
+  }
+  return mir_add_local_slot(mf, var, type, size);
+}
+
 int mir_new_block(MirFunction *mf) {
   if (!mf)
     return -1;
@@ -342,9 +374,17 @@ void mir_free(MirFunction *mf) {
     free(bb->preds);
   }
   free(mf->blocks);
+  free(mf->local_vars);
+  free(mf->local_types);
+  free(mf->local_sizes);
   mf->blocks = NULL;
+  mf->local_vars = NULL;
+  mf->local_types = NULL;
+  mf->local_sizes = NULL;
   mf->block_count = 0;
   mf->block_cap = 0;
+  mf->local_count = 0;
+  mf->local_cap = 0;
   mf->next_vreg = 0;
   mf->next_label = 0;
   mf->fn = NULL;

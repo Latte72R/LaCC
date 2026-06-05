@@ -26,7 +26,6 @@ static Function *create_function_entry(const char *name) {
   functions = fn;
   fn->name = (char *)name;
   fn->len = (int)strlen(name);
-  fn->offset = 0;
   fn->is_static = false;
   fn->labels = NULL;
   fn->type = NULL;
@@ -46,7 +45,6 @@ static Function *ensure_function_entry(const char *name) {
 }
 
 static void configure_common_fields(Function *fn, Type *type) {
-  fn->offset = 0;
   fn->is_static = false;
   fn->labels = NULL;
   fn->type = type;

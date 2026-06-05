@@ -27,7 +27,6 @@ struct Array {
   int id;
 };
 
-typedef struct StructLiteral StructLiteral;
 typedef struct StructReloc StructReloc;
 struct StructReloc {
   StructReloc *next;
@@ -35,6 +34,7 @@ struct StructReloc {
   String *str;
 };
 
+typedef struct StructLiteral StructLiteral;
 struct StructLiteral {
   StructLiteral *next;
   unsigned char *data;
@@ -89,7 +89,9 @@ struct LVar {
   LVar *next;
   char *name;
   int len;
-  int offset;
+  int member_offset;
+  long long init_value;
+  int has_init_value;
   int is_extern;
   Type *type;
   int is_static;
@@ -149,7 +151,6 @@ struct Function {
   Function *next;
   char *name;
   int len;
-  int offset;
   int is_static;
   Label *labels;
   Type *type;

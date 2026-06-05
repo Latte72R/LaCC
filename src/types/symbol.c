@@ -71,6 +71,9 @@ LVar *new_lvar(Token *tok, Type *type, int is_static, int is_extern) {
   lvar->is_extern = is_extern;
   lvar->is_static = is_static;
   lvar->type = type;
+  lvar->member_offset = 0;
+  lvar->init_value = 0;
+  lvar->has_init_value = false;
   lvar->init_array = NULL;
   lvar->init_struct = NULL;
   lvar->is_bitfield = 0;

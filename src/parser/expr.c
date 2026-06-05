@@ -966,7 +966,7 @@ Node *access_member() {
       }
       tok = expect_ident("object reference");
       var = find_object_member(object, tok);
-      offset_node = new_num(var->offset);
+      offset_node = new_num(var->member_offset);
       ptr_node = new_node(ND_ADDR);
       ptr_node->lhs = node;
       ptr_node->type = new_type_ptr(node->type);
@@ -988,7 +988,7 @@ Node *access_member() {
       }
       tok = expect_ident("object reference");
       var = find_object_member(object, tok);
-      offset_node = new_num(var->offset);
+      offset_node = new_num(var->member_offset);
       ptr_node = new_binary(ND_ADD, node, offset_node);
       ptr_node->type = new_type_ptr(var->type);
       node = new_deref(ptr_node);
@@ -1096,7 +1096,7 @@ Node *primary() {
   // enumのメンバー
   LVar *member = find_enum_member(tok);
   if (member) {
-    node = new_num(member->offset);
+    node = new_num(member->member_offset);
     return node;
   }
 
@@ -1134,7 +1134,7 @@ int compile_time_number() {
     if (!member) {
       error_at(token->loc, "expected a compile time constant [in compile time number]");
     }
-    result = member->offset;
+    result = member->member_offset;
   } else {
     result = expect_signed_number();
   }
