@@ -1,10 +1,9 @@
 #include "../bitset.h"
 #include "diagnostics.h"
-#include "internal.h"
 
 #include <stdlib.h>
 #include <string.h>
-#include "../cleanup/internal.h"
+#include "../cleanup/passes.h"
 
 typedef struct {
   int offset;
@@ -879,4 +878,10 @@ void mem2reg_run_promote(MirFunction *mf) {
   free(remaining_reads);
   free(addr_slot_of_vreg);
   free(slots);
+}
+
+void optimize_mir_mem2reg(MirFunction *mf) {
+  if (!mf || mf->blocks[0].inst_len <= 0 || mf->next_vreg <= 0)
+    return;
+  mem2reg_run_promote(mf);
 }
