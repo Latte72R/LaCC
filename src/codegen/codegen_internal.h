@@ -39,9 +39,6 @@ void run_cleanup_dce(MirInst **insts, int *inst_len, int *inst_cap, int next_vre
 void run_cleanup_prune_unreachable_blocks(MirInst **insts, int *inst_len, int *inst_cap, int next_label);
 void run_cleanup_sccp(MirFunction *mf);
 
-void ssa_construct(MirFunction *mf);
-void ssa_destruct(MirFunction *mf);
-
 const char *ra_preg64(int preg);
 int ra_preg_is_callee_saved(int preg);
 void regalloc_run(const MirFunction *mf, RegAllocResult *out);

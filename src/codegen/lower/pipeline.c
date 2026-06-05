@@ -457,16 +457,12 @@ void emit_mir_program_pipeline(int dump_mir, int optimize_level) {
   }
 
   run_mir_inline_pass(mfs, fns, fn_count, optimize_level);
-  for (int i = 0; i < fn_count; i++)
-    ssa_construct(&mfs[i]);
   if (optimize_level > 0) {
     for (int i = 0; i < fn_count; i++) {
       optimize_mir_cleanup(&mfs[i]);
       optimize_mir_mem2reg(&mfs[i]);
     }
   }
-  for (int i = 0; i < fn_count; i++)
-    ssa_destruct(&mfs[i]);
   for (int i = 0; i < fn_count; i++)
     assign_local_offsets(&mfs[i]);
 
