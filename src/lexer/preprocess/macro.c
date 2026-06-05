@@ -11,9 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-// ============================
-// Helpers (exported)
-// ============================
+// 複数の前処理モジュールで使う補助関数
 
 int is_ident_start_char(char c) { return (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_'); }
 
@@ -206,9 +204,7 @@ int consume_directive_keyword(char **p, const char *keyword) {
   return 1;
 }
 
-// ============================
-// Macro table (find/define/undef)
-// ============================
+// マクロテーブル
 
 // public
 Macro *find_macro(const char *name, int len) {
@@ -271,9 +267,7 @@ void undefine_macro(char *name, int len) {
   }
 }
 
-// ============================
-// Builtins (predefined macros)
-// ============================
+// 組み込みマクロ
 
 static void define_builtin_object_macro(const char *name, const char *value) {
   char *name_copy = duplicate_cstring(name);

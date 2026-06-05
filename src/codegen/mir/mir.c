@@ -1,5 +1,5 @@
-#include "mir.h"
 #include "diagnostics.h"
+#include "mir.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -100,13 +100,6 @@ static const char *mir_op_name(MirOp op) {
   }
 }
 
-void mir_init(MirFunction *mf, Function *fn) {
-  if (!mf)
-    return;
-  memset(mf, 0, sizeof(*mf));
-  mf->fn = fn;
-}
-
 VReg mir_new_vreg(MirFunction *mf) {
   if (!mf)
     return MIR_INVALID_VREG;
@@ -164,8 +157,8 @@ void mir_dump(FILE *out, const MirFunction *mf) {
 
   int total_insts = mf->block_count > 0 ? mf->blocks[0].inst_len : 0;
   if (mf->fn) {
-    fprintf(out, "MIR function %.*s (insts=%d, next_vreg=%d, next_label=%d)\n", mf->fn->len, mf->fn->name,
-            total_insts, mf->next_vreg, mf->next_label);
+    fprintf(out, "MIR function %.*s (insts=%d, next_vreg=%d, next_label=%d)\n", mf->fn->len, mf->fn->name, total_insts,
+            mf->next_vreg, mf->next_label);
   } else {
     fprintf(out, "MIR function <null> (insts=%d, next_vreg=%d, next_label=%d)\n", total_insts, mf->next_vreg,
             mf->next_label);
