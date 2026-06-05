@@ -82,7 +82,7 @@ static int has_return_stmt(Node *n) {
   return false;
 }
 
-Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int set_offset) {
+Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int is_static_storage) {
   Array *array = array_literal(type);
   if (type->ty == TY_ARR) {
     if (type->array_size == 0) {
@@ -91,7 +91,7 @@ Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int set_of
       warning_at(consumed_loc, "excess elements in array initializer [in variable declaration]");
     }
     array->len = get_sizeof(type) / array->byte;
-    if (set_offset) {
+    if (is_static_storage) {
       if (lvar)
         lvar->init_array = array;
       node->type = type;
@@ -110,7 +110,7 @@ Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int set_of
   arr_node->type = type;
   arr_node->id = array->id;
   if (type->ty == TY_PTR) {
-    if (set_offset) {
+    if (is_static_storage) {
       if (lvar)
         lvar->init_array = array;
       node->type = type;
@@ -160,9 +160,9 @@ Node *handle_scalar_initialization(Node *node, Type *type, Location *loc) {
   return node;
 }
 
-Node *handle_struct_initialization(Node *node, LVar *lvar, Type *type, int set_offset) {
+Node *handle_struct_initialization(Node *node, LVar *lvar, Type *type, int is_static_storage) {
   StructLiteral *literal = struct_literal(type);
-  if (set_offset) {
+  if (is_static_storage) {
     if (lvar)
       lvar->init_struct = literal;
     node->type = type;
@@ -179,22 +179,21 @@ Node *handle_struct_initialization(Node *node, LVar *lvar, Type *type, int set_o
 }
 
 // 変数初期化の共通処理
-Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int set_offset) {
+Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int is_static_storage) {
   if (!consume("=")) {
-    if (set_offset)
-      lvar->offset = 0;
     return node;
   }
   Location *loc = consumed_loc;
-  if (set_offset && !peek("{") && token->kind != TK_STRING) {
-    lvar->offset = expect_signed_number();
+  if (is_static_storage && !peek("{") && token->kind != TK_STRING) {
+    lvar->init_value = expect_signed_number();
+    lvar->has_init_value = true;
     return node;
   }
   if (peek("{")) {
     if (type->ty == TY_STRUCT || type->ty == TY_UNION) {
-      node = handle_struct_initialization(node, lvar, type, set_offset);
+      node = handle_struct_initialization(node, lvar, type, is_static_storage);
     } else {
-      node = handle_array_initialization(node, lvar, type, set_offset);
+      node = handle_array_initialization(node, lvar, type, is_static_storage);
     }
   } else if (token->kind == TK_STRING) {
     node = handle_string_initialization(node, type, loc);
@@ -215,7 +214,6 @@ Node *function_definition(Token *tok, Type *type, int is_static, int is_inline) 
   }
   fn->name = tok->str;
   fn->len = tok->len;
-  fn->offset = 0;
   fn->is_static = is_static;
   fn->is_inline = is_inline;
   fn->type = type;
@@ -236,16 +234,7 @@ Node *function_definition(Token *tok, Type *type, int is_static, int is_inline) 
     Node *nd_lvar = new_node(ND_LVAR);
     node->args[i] = nd_lvar;
     LVar *lvar = new_lvar(tok_lvar, ptype, false, false);
-    int base = 0;
-    if (locals)
-      base = locals->offset;
     lvar->next = locals;
-    if (is_ptr_or_arr(ptype)) {
-      lvar->offset = base + 8;
-    } else {
-      lvar->offset = base + get_sizeof(ptype);
-    }
-    fn->offset = lvar->offset;
     nd_lvar->var = lvar;
     nd_lvar->type = ptype;
     locals = lvar;
@@ -281,24 +270,12 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
   Node *node = new_node(ND_VARDEC);
   lvar = new_lvar(tok, type, is_static, false);
   LVar *static_lvar = NULL;
-  int base_offset = 0;
   if (is_static) {
     lvar->block = block_id;
     static_lvar = new_lvar(tok, type, true, false);
     static_lvar->block = lvar->block;
     static_lvar->next = statics;
     statics = static_lvar;
-  } else {
-    if (locals)
-      base_offset = locals->offset;
-    if (type->ty == TY_ARR && type->array_size == 0) {
-      lvar->offset = base_offset; // defer until initializer fixes array size
-    } else {
-      lvar->offset = base_offset + get_sizeof(type);
-      if (current_fn->offset < lvar->offset) {
-        current_fn->offset = lvar->offset;
-      }
-    }
   }
   node->var = lvar;
   node->type = type;
@@ -308,14 +285,12 @@ Node *local_variable_declaration(Token *tok, Type *type, int is_static) {
 
   // 要修正
   node = handle_variable_initialization(node, lvar, type, is_static);
-  if (!is_static && type->ty == TY_ARR && type->array_size != 0 && lvar->offset == base_offset) {
-    lvar->offset = base_offset + get_sizeof(type);
-    if (current_fn->offset < lvar->offset) {
-      current_fn->offset = lvar->offset;
-    }
+  if (static_lvar) {
+    static_lvar->init_value = lvar->init_value;
+    static_lvar->has_init_value = lvar->has_init_value;
+    static_lvar->init_array = lvar->init_array;
+    static_lvar->init_struct = lvar->init_struct;
   }
-  if (static_lvar)
-    static_lvar->offset = lvar->offset;
   node->endline = true;
   return node;
 }
@@ -405,7 +380,6 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern, int is_inline) {
       fn->builtin_kind = BUILTIN_FN_NONE;
       fn->builtin_alias = NULL;
     }
-    fn->offset = 0;
     fn->is_static = is_static;
     fn->is_inline = is_inline;
     fn->type = type;
@@ -537,13 +511,13 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
           offset += single_size - (offset % single_size);
         if (max_size < single_size)
           max_size = single_size;
-        member_var->offset = offset;
+        member_var->member_offset = offset;
         offset += get_sizeof(base_type);
       } else {
         int usz = get_sizeof(base_type);
         if (max_size < usz)
           max_size = usz;
-        member_var->offset = 0;
+        member_var->member_offset = 0;
       }
       member_var->next = object->var;
       object->var = member_var;
@@ -593,7 +567,7 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
             if (offset % single_size != 0)
               offset += single_size - (offset % single_size);
             member_var->bit_offset = 0;
-            member_var->offset = offset;
+            member_var->member_offset = offset;
           } else {
             int storage_bits = single_size * 8;
             if (!active_bitfield_type || active_bitfield_type != type ||
@@ -605,7 +579,7 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
               active_bitfield_type = type;
               active_bit_offset_bits = 0;
             }
-            member_var->offset = offset;
+            member_var->member_offset = offset;
             member_var->bit_offset = active_bit_offset_bits;
             active_bit_offset_bits += bit_width;
             if (active_bit_offset_bits == storage_bits) {
@@ -615,7 +589,7 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
             }
           }
         } else {
-          member_var->offset = 0;
+          member_var->member_offset = 0;
           member_var->bit_offset = 0;
         }
         if (max_size < single_size)
@@ -631,10 +605,10 @@ Object *struct_and_union_declaration(const int is_struct, const int is_union, co
             offset += single_size - (offset % single_size);
           if (max_size < single_size)
             max_size = single_size;
-          member_var->offset = offset;
+          member_var->member_offset = offset;
           offset += get_sizeof(type);
         } else {
-          member_var->offset = 0;
+          member_var->member_offset = 0;
           if (max_size < single_size)
             max_size = single_size;
         }
@@ -717,10 +691,10 @@ Object *enum_declaration(const int should_record) {
     }
     LVar *member_var = new_lvar(member_tok, new_type(TY_INT), false, false);
     if (assigned) {
-      member_var->offset = assigned_val;
+      member_var->member_offset = assigned_val;
       value = assigned_val + 1;
     } else {
-      member_var->offset = value++;
+      member_var->member_offset = value++;
     }
     member_var->next = object->var;
     object->var = member_var;

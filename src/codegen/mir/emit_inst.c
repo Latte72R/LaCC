@@ -1785,7 +1785,7 @@ void emit_mir_function_codegen(const MirFunction *mf) {
   int emit_epilogue_label = needs_epilogue_label(mf);
 
   for (int i = 0; i < mf->param_count; i++) {
-    int off = mf->param_offsets[i];
+    int off = mf->param_slots[i];
     if (!mir_uses_local_offset(mf, off))
       continue;
     Type *ty = mf->param_types[i];

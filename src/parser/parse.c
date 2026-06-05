@@ -387,7 +387,7 @@ static void parse_struct_or_union_initializer(StructLiteral *lit, Type *type, un
                  member_tok->str);
       }
       expect("=", "after member designator", "struct initializer");
-      parse_member_initializer(lit, member->type, base, buffer + member->offset);
+      parse_member_initializer(lit, member->type, base, buffer + member->member_offset);
       if (!consume(","))
         break;
       if (peek("}"))
@@ -410,7 +410,7 @@ static void parse_struct_or_union_initializer(StructLiteral *lit, Type *type, un
       first_decl = it;
       it = it->next;
     }
-    parse_member_initializer(lit, first_decl->type, base, buffer + first_decl->offset);
+    parse_member_initializer(lit, first_decl->type, base, buffer + first_decl->member_offset);
     if (consume(",")) {
       // Standard的には余剰要素はエラーとする
       error_at(token->loc, "excess elements in union initializer [in struct initializer]");
@@ -443,7 +443,7 @@ static void parse_struct_or_union_initializer(StructLiteral *lit, Type *type, un
       error_at(token->loc, "excess elements in struct initializer [in struct initializer]");
     }
     LVar *member = members[pos++];
-    parse_member_initializer(lit, member->type, base, buffer + member->offset);
+    parse_member_initializer(lit, member->type, base, buffer + member->member_offset);
     if (!consume(","))
       break;
     if (peek("}"))

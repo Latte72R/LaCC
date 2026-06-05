@@ -47,20 +47,6 @@ static int find_lowered_function_index(Function **fns, int fn_count, Function *t
   return -1;
 }
 
-static int mir_local_max_offset(const MirFunction *mf) {
-  if (!mf)
-    return 0;
-  int max_off = 0;
-  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
-    MirOp op = mf->blocks[0].insts[i].op;
-    if (op != MIR_OP_LOAD_LOCAL && op != MIR_OP_STORE_LOCAL && op != MIR_OP_ADDR_LOCAL)
-      continue;
-    if (mf->blocks[0].insts[i].offset > max_off)
-      max_off = mf->blocks[0].insts[i].offset;
-  }
-  return max_off;
-}
-
 static int mir_inline_cost(const MirFunction *mf) {
   if (!mf)
     return 0;
@@ -216,15 +202,13 @@ static int should_inline_callsite(const MirFunction *caller, const MirFunction *
 }
 
 static void expand_inline_callsite(MirFunction *caller, const MirFunction *callee, const MirInst *call, MirInst **out,
-                                   int *out_len, int *out_cap, int *caller_local_max) {
-  if (!caller || !callee || !call || !out || !out_len || !out_cap || !caller_local_max)
+                                   int *out_len, int *out_cap) {
+  if (!caller || !callee || !call || !out || !out_len || !out_cap)
     error("invalid inline expansion state");
 
-  int local_max = *caller_local_max;
-  int offset_delta = ((local_max + 7) / 8) * 8;
-  int callee_local_max = mir_local_max_offset(callee);
-  if (offset_delta + callee_local_max > *caller_local_max)
-    *caller_local_max = offset_delta + callee_local_max;
+  int slot_delta = caller->local_count;
+  for (int i = 0; i < callee->local_count; i++)
+    mir_add_local_slot(caller, callee->local_vars[i], callee->local_types[i], callee->local_sizes[i]);
 
   VReg *vmap = NULL;
   if (callee->next_vreg > 0) {
@@ -248,7 +232,7 @@ static void expand_inline_callsite(MirFunction *caller, const MirFunction *calle
   for (int i = 0; i < callee->param_count; i++) {
     MirInst st;
     init_inst(&st, MIR_OP_STORE_LOCAL);
-    st.offset = callee->param_offsets[i] + offset_delta;
+    st.offset = callee->param_slots[i] + slot_delta;
     st.type = callee->param_types[i];
     st.src1 = call->args[i];
     append_inst_inline(out, out_len, out_cap, &st);
@@ -280,7 +264,7 @@ static void expand_inline_callsite(MirFunction *caller, const MirFunction *calle
       out_in.args[a] = remap_inline_vreg(vmap, callee->next_vreg, out_in.args[a]);
 
     if (out_in.op == MIR_OP_LOAD_LOCAL || out_in.op == MIR_OP_STORE_LOCAL || out_in.op == MIR_OP_ADDR_LOCAL)
-      out_in.offset += offset_delta;
+      out_in.offset += slot_delta;
 
     if (out_in.op == MIR_OP_LABEL || out_in.op == MIR_OP_JMP || out_in.op == MIR_OP_JZ || out_in.op == MIR_OP_JCC) {
       if (!label_map || out_in.label < 0 || out_in.label >= callee->next_label)
@@ -307,7 +291,6 @@ static int run_inline_in_function(MirFunction *caller, MirFunction *mfs, Functio
     return 0;
 
   int changed = 0;
-  int caller_local_max = mir_local_max_offset(caller);
   MirInst *out = NULL;
   int out_len = 0;
   int out_cap = 0;
@@ -318,7 +301,7 @@ static int run_inline_in_function(MirFunction *caller, MirFunction *mfs, Functio
       int callee_idx = find_lowered_function_index(fns, fn_count, in->call_fn);
       if (callee_idx >= 0 && should_inline_callsite(caller, &mfs[callee_idx], in, optimize_level, caller_idx,
                                                     callee_idx, reach, fn_count, site_info)) {
-        expand_inline_callsite(caller, &mfs[callee_idx], in, &out, &out_len, &out_cap, &caller_local_max);
+        expand_inline_callsite(caller, &mfs[callee_idx], in, &out, &out_len, &out_cap);
         changed = 1;
         continue;
       }
@@ -336,6 +319,46 @@ static int run_inline_in_function(MirFunction *caller, MirFunction *mfs, Functio
   caller->blocks[0].inst_len = out_len;
   caller->blocks[0].inst_cap = out_cap;
   return 1;
+}
+
+static void assign_local_offsets(MirFunction *mf) {
+  if (!mf || mf->local_count <= 0)
+    return;
+
+  unsigned char *used = calloc(mf->local_count, sizeof(unsigned char));
+  int *offsets = calloc(mf->local_count, sizeof(int));
+  if (!used || !offsets)
+    error("memory allocation failed [in assign_local_offsets]");
+
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    MirInst *in = &mf->blocks[0].insts[i];
+    if (in->op != MIR_OP_LOAD_LOCAL && in->op != MIR_OP_STORE_LOCAL && in->op != MIR_OP_ADDR_LOCAL)
+      continue;
+    if (in->offset <= 0 || in->offset > mf->local_count)
+      error("invalid local slot [in assign_local_offsets]");
+    used[in->offset - 1] = 1;
+  }
+
+  int offset = 0;
+  for (int i = 0; i < mf->local_count; i++) {
+    if (!used[i])
+      continue;
+    offset += mf->local_sizes[i];
+    offsets[i] = offset;
+  }
+
+  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
+    MirInst *in = &mf->blocks[0].insts[i];
+    if (in->op == MIR_OP_LOAD_LOCAL || in->op == MIR_OP_STORE_LOCAL || in->op == MIR_OP_ADDR_LOCAL)
+      in->offset = offsets[in->offset - 1];
+  }
+  for (int i = 0; i < mf->param_count; i++) {
+    int slot = mf->param_slots[i];
+    mf->param_slots[i] = slot > 0 && slot <= mf->local_count ? offsets[slot - 1] : 0;
+  }
+
+  free(offsets);
+  free(used);
 }
 
 static void build_call_reachability(const MirFunction *mfs, Function **fns, int fn_count, unsigned char *reach) {
@@ -444,6 +467,8 @@ void emit_mir_program_pipeline(int dump_mir, int optimize_level) {
   }
   for (int i = 0; i < fn_count; i++)
     ssa_destruct(&mfs[i]);
+  for (int i = 0; i < fn_count; i++)
+    assign_local_offsets(&mfs[i]);
 
   int qh = 0;
   int qt = 0;

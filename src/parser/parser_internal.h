@@ -25,9 +25,9 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern, int is_inline);
 Object *struct_and_union_declaration(int is_struct, int is_union, int should_record);
 Object *enum_declaration(int should_record);
 Node *typedef_stmt();
-Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int set_offset);
+Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int is_static_storage);
 Node *handle_scalar_initialization(Node *node, Type *type, Location *loc);
-Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int set_offset);
+Node *handle_variable_initialization(Node *node, LVar *lvar, Type *type, int is_static_storage);
 
 Node *block_stmt();
 Node *goto_stmt();

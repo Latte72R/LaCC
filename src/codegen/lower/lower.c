@@ -76,6 +76,12 @@ static void init_inst(MirInst *inst, MirOp op) {
 
 static inline int new_label(LowerCtx *ctx) { return mir_new_label(ctx->mf); }
 
+static int local_slot(LowerCtx *ctx, LVar *var) {
+  if (!ctx || !ctx->mf || !var || !var->type)
+    error("invalid local variable [in local_slot]");
+  return mir_get_or_add_local_slot(ctx->mf, var, var->type, get_sizeof(var->type));
+}
+
 static void emit_label(LowerCtx *ctx, int label) {
   MirInst inst;
   init_inst(&inst, MIR_OP_LABEL);
@@ -739,7 +745,7 @@ static VReg lower_addr(LowerCtx *ctx, Node *node) {
   if (node->kind == ND_LVAR || node->kind == ND_VARDEC) {
     if (!node->var->is_static) {
       inst.op = MIR_OP_ADDR_LOCAL;
-      inst.offset = node->var->offset;
+      inst.offset = local_slot(ctx, node->var);
       inst.var = NULL;
     }
   }
@@ -787,7 +793,7 @@ static VReg lower_direct_local_load(LowerCtx *ctx, const Node *node) {
   MirInst load;
   init_inst(&load, MIR_OP_LOAD_LOCAL);
   load.dst = dst;
-  load.offset = node->var->offset;
+  load.offset = local_slot(ctx, node->var);
   load.type = type;
   mir_emit(ctx->mf, &load);
   return dst;
@@ -798,7 +804,7 @@ static void lower_direct_local_store(LowerCtx *ctx, const Node *node, VReg value
   MirInst store;
   init_inst(&store, MIR_OP_STORE_LOCAL);
   store.src1 = value;
-  store.offset = node->var->offset;
+  store.offset = local_slot(ctx, node->var);
   store.type = type;
   mir_emit(ctx->mf, &store);
 }
@@ -1316,8 +1322,10 @@ void lower_function(Node *fn_node, MirFunction *mf) {
   for (int i = 0; i < mf->param_count; i++) {
     if (!fn_node->args[i] || !fn_node->args[i]->var)
       lower_error_node("invalid function parameter node in lowering", fn_node);
-    mf->param_offsets[i] = fn_node->args[i]->var->offset;
     mf->param_types[i] = fn_node->args[i]->type;
+    Type *type = fn_node->args[i]->type;
+    int size = is_ptr_or_arr(type) ? 8 : get_sizeof(type);
+    mf->param_slots[i] = mir_get_or_add_local_slot(mf, fn_node->args[i]->var, type, size);
   }
 
   LowerCtx ctx = {0};

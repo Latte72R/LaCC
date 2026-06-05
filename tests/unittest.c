@@ -274,6 +274,7 @@ int main() {
   CHECK(regress_postinc_test2(), 54);
   CHECK(regress_postinc_test3(), 561);
   CHECK(regress_postinc_test4(), 255);
+  CHECK(regress_local_slot_test1(20), 41);
 
   // bool / _Bool tests
   CHECK(bool_test1(), 2);

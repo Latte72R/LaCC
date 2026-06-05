@@ -112,16 +112,16 @@ static void gen_global_variables(int *data_emitted) {
       write_array_data(var->init_array);
     } else if (var->init_struct) {
       write_struct_data(var->init_struct);
-    } else if (var->offset) {
+    } else if (var->has_init_value) {
       int sz = get_sizeof(var->type);
       if (sz == 1)
-        write_file("  .byte %d\n", var->offset);
+        write_file("  .byte %lld\n", var->init_value);
       else if (sz == 2)
-        write_file("  .word %d\n", var->offset);
+        write_file("  .word %lld\n", var->init_value);
       else if (sz == 4)
-        write_file("  .long %d\n", var->offset);
+        write_file("  .long %lld\n", var->init_value);
       else if (sz == 8)
-        write_file("  .quad %d\n", var->offset);
+        write_file("  .quad %lld\n", var->init_value);
       else
         error("invalid type size [in gen_global_variables]");
     } else {
@@ -143,16 +143,16 @@ static void gen_static_variables(int *data_emitted) {
       write_array_data(var->init_array);
     } else if (var->init_struct) {
       write_struct_data(var->init_struct);
-    } else if (var->offset) {
+    } else if (var->has_init_value) {
       int sz = get_sizeof(var->type);
       if (sz == 1)
-        write_file("  .byte %d\n", var->offset);
+        write_file("  .byte %lld\n", var->init_value);
       else if (sz == 2)
-        write_file("  .word %d\n", var->offset);
+        write_file("  .word %lld\n", var->init_value);
       else if (sz == 4)
-        write_file("  .long %d\n", var->offset);
+        write_file("  .long %lld\n", var->init_value);
       else if (sz == 8)
-        write_file("  .quad %d\n", var->offset);
+        write_file("  .quad %lld\n", var->init_value);
       else
         error("invalid type size [in gen_static_variables]");
     } else {
