@@ -1,9 +1,9 @@
 #include "../bitset.h"
+#include "../codegen_internal.h"
 #include "diagnostics.h"
 
 #include <stdlib.h>
 #include <string.h>
-#include "../cleanup/passes.h"
 
 typedef struct {
   int offset;

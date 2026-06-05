@@ -1,6 +1,6 @@
 #include "../bitset.h"
+#include "../codegen_internal.h"
 #include "diagnostics.h"
-#include "passes.h"
 
 #include <stdlib.h>
 #include <string.h>
