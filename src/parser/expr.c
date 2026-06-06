@@ -888,7 +888,7 @@ Node *access_member() {
     if (consume("[")) {
       consumed_loc_prev = consumed_loc;
       if (!is_ptr_or_arr(node->type)) {
-        error_at(consumed_loc_prev, "invalid array access [in primary]");
+        error_at(prev_tok->loc, "invalid array access [in primary]");
       }
       node = new_add(node, expr(), consumed_loc_prev);
       expect("]", "after number", "array access");
