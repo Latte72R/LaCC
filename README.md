@@ -61,16 +61,26 @@ Both global and local (stack) variable declarations are supported.
 - **Built-in predefined macros**  
   `__LACC__`, `__x86_64__`, `__LP64__`, , and a handful of compat aliases are defined so typical Unix headers can detect the environment.
 
-- **Initializer lists for arrays and structs** (with limitations)  
-  1. **Array initialization with a list of integer constants:**  
-     `int arr[3] = {3, 6, 2};`
-  2. **String literal initialization for character arrays:**  
-     `char str[15] = "Hello, World!\n";`  
-  3. **Designated initializers for structs/unions:**  
-     `struct AB v = {.a = 1, .b = 2};`
-  
-  Initializer expressions must currently be integer constants (or string literals for `char[]`).
-  Nested array initializers beyond a single level are not supported.
+- **Initializer lists for arrays, structs, and unions**
+  - Arrays support local runtime expressions and nested initialization:
+    ```c
+    int values[3] = {a, b, c};
+    int matrix[2][3] = {{a, b}, {c, d}};
+    ```
+  - Structs and unions support positional and designated initializers. Nested
+    structs and array members may also contain local runtime expressions:
+    ```c
+    struct A value = {{b, c, d}, e, f};
+    struct Pair pair = {.left = a, .right = b};
+    ```
+  - Character arrays can be initialized from string literals:
+    ```c
+    char str[15] = "Hello, World!\n";
+    ```
+
+  Runtime expressions are supported only for automatic local variables.
+  Initializers for global and `static` objects must be compile-time constants
+  or supported string literals.
 
 - **Extern declarations**  
   LaCC supports external variable declarations with basic types, pointers, and arrays.
@@ -125,7 +135,6 @@ Full floating-point semantics (dedicated `TY_FLOAT` / `TY_DOUBLE`, arithmetic, a
 LaCC does **not** support the following:
 
 - Floating-point operations: while `float` and `double` are recognized for parsing and `sizeof`, arithmetic and codegen are not implemented
-- Initializer lists do not yet support deeply nested array initializers  
 - Inline assembly  
 - Variadic functions (macros such as `va_list`, `va_start`, and `va_arg` are not supported)  
 - Nested functions (functions defined within other functions) 
@@ -138,26 +147,28 @@ LaCC does **not** support the following:
 LaCC only handles one .c file at a time — there's no support for separate compilation or linking multiple translation units.
 
 ### Optimizations
-LaCC does not emit assembly directly from AST nodes. It implements optimization around MIR (an intermediate representation).
+LaCC lowers AST nodes to a control-flow-graph-based MIR before emitting
+assembly. Local variable stack offsets are assigned after MIR optimization, so
+locals removed by optimization do not leave unused stack space.
 
 Optimization behavior depends on the optimization level:
 
 - **`-O0`**
-  - Generates MIR, then runs normal register allocation and instruction emission.
-  - Does not run the main optimization passes (inline expansion / mem2reg / CFG cleanup).
-  - Still applies parser-side constant folding and local simplifications in the emitter where possible (for example, immediate-form instruction selection).
+  - Keeps locals in memory and skips SSA optimization.
+  - Uses liveness analysis and linear-scan register allocation for MIR virtual registers.
+  - Still applies parser-side constant folding and local instruction-selection
+    simplifications, such as immediate operands.
 
 - **`-O1`**
-  - Includes all `-O0` behavior plus staged MIR-level optimization passes.
-  - Typical passes include:
-    - Conditional inlining of small `static inline` functions
-    - Copy propagation / DCE
-    - Compare/branch fusion (for `cmp+setcc+jz`-style patterns)
-    - Unreachable block and unreferenced label pruning
-    - mem2reg (promotable locals to registers)
-    - CFG-based dead store elimination
-    - VReg compaction
-    - Constant folding at the emission stage
+  - Removes unreachable basic blocks.
+  - Converts MIR to SSA form using dominators, dominance frontiers, and phi nodes.
+  - Promotes scalar locals whose addresses are not taken to SSA values (mem2reg).
+  - Performs copy/phi propagation and dead pure-value elimination in SSA form.
+  - Converts phi nodes back to parallel copies before instruction emission.
+  - Uses CFG liveness and interference-graph coloring for register allocation, with copy preferences and spilling when needed.
+
+Both levels omit unreachable internal functions, assign stack space only to locals still referenced by MIR, and reserve spill slots after register
+allocation.
 
 `-O` is currently equivalent to `-O1`.  
 There is no separate `-O2` (or higher) optimization pipeline yet.
