@@ -75,3 +75,12 @@ int struct_init_test10(int a, int b, int c, int tail) {
   WithRuntimeMatrix v = {{{a}, {b, c}}, tail};
   return v.values[0][0] * 1000 + v.values[0][1] * 100 + v.values[1][0] * 10 + v.values[1][1] + v.tail;
 }
+
+int struct_init_test11(int a, int b, int c, int tail) {
+  WithRuntimeMatrix src = {{{a, b}, {c, 4}}, tail};
+  WithRuntimeMatrix dst;
+  dst = src;
+  src.values[0][0] = 9;
+  return dst.values[0][0] * 10000 + dst.values[0][1] * 1000 + dst.values[1][0] * 100 +
+         dst.values[1][1] * 10 + dst.tail;
+}

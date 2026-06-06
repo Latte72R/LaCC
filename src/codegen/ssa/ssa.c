@@ -99,6 +99,12 @@ static int is_param_slot(const MirFunction *mf, int slot) {
   return 0;
 }
 
+static int local_index(const MirFunction *mf, const MirInst *in) {
+  if (in->offset <= 0 || in->offset > mf->local_count)
+    error("invalid local slot [in SSA]");
+  return in->offset - 1;
+}
+
 static void stack_push(VRegStack *s, VReg v) {
   if (s->len >= s->cap) {
     int cap = s->cap ? s->cap * 2 : 4;
@@ -156,8 +162,8 @@ static void collect_promotable_locals(SsaCtx *ctx) {
     MirBasicBlock *bb = &mf->blocks[b];
     for (int i = 0; i < bb->inst_len; i++) {
       MirInst *in = &bb->insts[i];
-      if (in->op == MIR_OP_ADDR_LOCAL && in->offset > 0 && in->offset <= mf->local_count)
-        ctx->promotable[in->offset - 1] = 0;
+      if (in->op == MIR_OP_ADDR_LOCAL)
+        ctx->promotable[local_index(mf, in)] = 0;
     }
   }
 }
@@ -280,16 +286,14 @@ static void insert_phis(SsaCtx *ctx) {
         if (var >= 0 && var < ctx->old_vregs && !defs[var * n + b])
           uses[var * n + b] = 1;
       }
-      if (in->op == MIR_OP_LOAD_LOCAL && in->offset > 0 && in->offset <= mf->local_count &&
-          ctx->promotable[in->offset - 1]) {
+      if (in->op == MIR_OP_LOAD_LOCAL && ctx->promotable[local_index(mf, in)]) {
         int var = ctx->old_vregs + in->offset - 1;
         if (!defs[var * n + b])
           uses[var * n + b] = 1;
       }
       if (in->dst >= 0 && in->dst < ctx->old_vregs)
         defs[in->dst * n + b] = 1;
-      if (in->op == MIR_OP_STORE_LOCAL && in->offset > 0 && in->offset <= mf->local_count &&
-          ctx->promotable[in->offset - 1])
+      if (in->op == MIR_OP_STORE_LOCAL && ctx->promotable[local_index(mf, in)])
         defs[(ctx->old_vregs + in->offset - 1) * n + b] = 1;
     }
   }
@@ -444,16 +448,14 @@ static void rename_block(SsaCtx *ctx, int b) {
     for (int a = 0; a < in.argc; a++)
       remap_use(ctx, &in.args[a]);
 
-    if (in.op == MIR_OP_STORE_LOCAL && in.offset > 0 && in.offset <= ctx->mf->local_count &&
-        ctx->promotable[in.offset - 1]) {
+    if (in.op == MIR_OP_STORE_LOCAL && ctx->promotable[local_index(ctx->mf, &in)]) {
       int var = ctx->old_vregs + in.offset - 1;
       stack_push(&ctx->stacks[var], in.src1);
       pushed[pushed_len++] = var;
       continue;
     }
 
-    if (in.op == MIR_OP_LOAD_LOCAL && in.offset > 0 && in.offset <= ctx->mf->local_count &&
-        ctx->promotable[in.offset - 1]) {
+    if (in.op == MIR_OP_LOAD_LOCAL && ctx->promotable[local_index(ctx->mf, &in)]) {
       int var = ctx->old_vregs + in.offset - 1;
       VReg value = stack_top(&ctx->stacks[var]);
       if (value != MIR_INVALID_VREG) {
@@ -650,7 +652,9 @@ static void optimize_ssa_values(MirFunction *mf) {
 }
 
 void optimize_mir_ssa(MirFunction *mf) {
-  if (!mf || mf->block_count <= 0 || mf->next_vreg <= 0)
+  if (!mf)
+    error("invalid MIR function [in optimize_mir_ssa]");
+  if (mf->block_count <= 0 || mf->next_vreg <= 0)
     return;
   mir_finalize_cfg(mf);
   prune_unreachable_blocks(mf);
@@ -712,7 +716,7 @@ static void insert_before_terminator(MirBasicBlock *bb, const MirInst *inst) {
 
 void destruct_mir_ssa(MirFunction *mf) {
   if (!mf)
-    return;
+    error("invalid MIR function [in destruct_mir_ssa]");
   for (int b = 0; b < mf->block_count; b++) {
     MirBasicBlock *bb = &mf->blocks[b];
     for (int pred_index = 0; pred_index < bb->pred_count; pred_index++) {

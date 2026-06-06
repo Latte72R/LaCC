@@ -12,7 +12,9 @@ static int should_dump_mir(void) {
 }
 
 static void assign_local_offsets(MirFunction *mf) {
-  if (!mf || mf->local_count <= 0)
+  if (!mf)
+    error("invalid MIR function [in assign_local_offsets]");
+  if (mf->local_count <= 0)
     return;
   unsigned char *used = calloc(mf->local_count, sizeof(unsigned char));
   int *offsets = calloc(mf->local_count, sizeof(int));

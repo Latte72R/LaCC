@@ -98,6 +98,7 @@ int main() {
   CHECK(struct_init_test8(2, 3), 235);
   CHECK(struct_init_test9(1, 2, 3, 4, 5), 12345);
   CHECK(struct_init_test10(1, 2, 3, 4), 1027);
+  CHECK(struct_init_test11(1, 2, 3, 5), 12345);
 
   CHECK(loops_arrays_test1(), 45);
   CHECK(loops_arrays_test2(), 15);

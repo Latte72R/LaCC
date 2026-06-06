@@ -72,7 +72,9 @@ static int align_frame_size_for_calls(int size) {
 }
 
 static int mir_uses_local_offset(const MirFunction *mf, int offset) {
-  if (!mf || offset <= 0)
+  if (!mf)
+    error("invalid MIR function [in mir_uses_local_offset]");
+  if (offset <= 0)
     return 0;
   for (int i = 0; i < mf->blocks[0].inst_len; i++) {
     MirOp op = mf->blocks[0].insts[i].op;
@@ -86,7 +88,7 @@ static int mir_uses_local_offset(const MirFunction *mf, int offset) {
 
 static int mir_has_call(const MirFunction *mf) {
   if (!mf)
-    return 0;
+    error("invalid MIR function [in mir_has_call]");
   for (int i = 0; i < mf->blocks[0].inst_len; i++) {
     if (mf->blocks[0].insts[i].op == MIR_OP_CALL)
       return 1;
@@ -96,7 +98,7 @@ static int mir_has_call(const MirFunction *mf) {
 
 static int compute_required_local_stack(const MirFunction *mf) {
   if (!mf)
-    return 0;
+    error("invalid MIR function [in compute_required_local_stack]");
 
   int max_off = 0;
   for (int i = 0; i < mf->blocks[0].inst_len; i++) {
@@ -1829,9 +1831,7 @@ void emit_mir_function_codegen(const MirFunction *mf) {
 }
 
 void emit_mir_function_internal(const MirFunction *mf) {
-  if (mf && mf->fn) {
-    emit_mir_function_codegen(mf);
-    return;
-  }
-  error("invalid MIR function in asm emitter");
+  if (!mf || !mf->fn)
+    error("invalid MIR function [in emit_mir_function_internal]");
+  emit_mir_function_codegen(mf);
 }

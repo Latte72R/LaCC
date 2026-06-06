@@ -102,13 +102,13 @@ static const char *mir_op_name(MirOp op) {
 
 VReg mir_new_vreg(MirFunction *mf) {
   if (!mf)
-    return MIR_INVALID_VREG;
+    error("invalid MIR function [in mir_new_vreg]");
   return mf->next_vreg++;
 }
 
 int mir_new_label(MirFunction *mf) {
   if (!mf)
-    return MIR_INVALID_LABEL;
+    error("invalid MIR function [in mir_new_label]");
   return mf->next_label++;
 }
 
@@ -146,7 +146,7 @@ int mir_get_or_add_local_slot(MirFunction *mf, LVar *var, Type *type, int size) 
 
 int mir_new_block(MirFunction *mf) {
   if (!mf)
-    return -1;
+    error("invalid MIR function [in mir_new_block]");
   if (mf->block_count >= mf->block_cap) {
     int cap = mf->block_cap ? mf->block_cap * 2 : 4;
     MirBasicBlock *new_buf = realloc(mf->blocks, sizeof(MirBasicBlock) * cap);
@@ -176,7 +176,7 @@ static int is_terminator(MirOp op) {
 
 void mir_emit(MirFunction *mf, const MirInst *inst) {
   if (!mf || !inst)
-    return;
+    error("invalid input [in mir_emit]");
   if (mf->block_count == 0 || mf->current_block < 0) {
     mir_new_block(mf);
   } else if (inst->op == MIR_OP_LABEL && mf->blocks[mf->current_block].inst_len > 0) {
@@ -209,7 +209,7 @@ static void add_pred(MirBasicBlock *bb, int pred) {
 
 static void add_succ(MirFunction *mf, int from, int to) {
   if (from < 0 || from >= mf->block_count || to < 0 || to >= mf->block_count)
-    return;
+    error("invalid CFG edge [in add_succ]");
   MirBasicBlock *bb = &mf->blocks[from];
   for (int i = 0; i < bb->succ_count; i++) {
     if (bb->succ[i] == to)
@@ -222,7 +222,9 @@ static void add_succ(MirFunction *mf, int from, int to) {
 }
 
 void mir_finalize_cfg(MirFunction *mf) {
-  if (!mf || mf->block_count <= 0)
+  if (!mf)
+    error("invalid MIR function [in mir_finalize_cfg]");
+  if (mf->block_count <= 0)
     return;
   int *label_to_block = malloc(sizeof(int) * (mf->next_label > 0 ? mf->next_label : 1));
   if (!label_to_block)
@@ -233,8 +235,13 @@ void mir_finalize_cfg(MirFunction *mf) {
     MirBasicBlock *bb = &mf->blocks[i];
     bb->succ_count = 0;
     bb->pred_count = 0;
-    if (bb->label >= 0 && bb->label < mf->next_label)
+    if (bb->label >= 0 && bb->label < mf->next_label) {
+      if (label_to_block[bb->label] >= 0)
+        error("duplicate MIR label [in mir_finalize_cfg]");
       label_to_block[bb->label] = i;
+    } else if (bb->label != MIR_INVALID_LABEL) {
+      error("invalid MIR label [in mir_finalize_cfg]");
+    }
   }
   for (int i = 0; i < mf->block_count; i++) {
     MirBasicBlock *bb = &mf->blocks[i];
@@ -242,11 +249,13 @@ void mir_finalize_cfg(MirFunction *mf) {
       continue;
     MirInst *term = &bb->insts[bb->inst_len - 1];
     if (term->op == MIR_OP_JMP) {
-      if (term->label >= 0 && term->label < mf->next_label)
-        add_succ(mf, i, label_to_block[term->label]);
+      if (term->label < 0 || term->label >= mf->next_label || label_to_block[term->label] < 0)
+        error("unresolved MIR jump label [in mir_finalize_cfg]");
+      add_succ(mf, i, label_to_block[term->label]);
     } else if (term->op == MIR_OP_JZ || term->op == MIR_OP_JCC) {
-      if (term->label >= 0 && term->label < mf->next_label)
-        add_succ(mf, i, label_to_block[term->label]);
+      if (term->label < 0 || term->label >= mf->next_label || label_to_block[term->label] < 0)
+        error("unresolved MIR branch label [in mir_finalize_cfg]");
+      add_succ(mf, i, label_to_block[term->label]);
       if (i + 1 < mf->block_count)
         add_succ(mf, i, i + 1);
     } else if (term->op != MIR_OP_RET && i + 1 < mf->block_count) {
@@ -257,7 +266,9 @@ void mir_finalize_cfg(MirFunction *mf) {
 }
 
 void mir_linearize(MirFunction *mf) {
-  if (!mf || mf->block_count <= 1)
+  if (!mf)
+    error("invalid MIR function [in mir_linearize]");
+  if (mf->block_count <= 1)
     return;
   int total = 0;
   for (int i = 0; i < mf->block_count; i++)

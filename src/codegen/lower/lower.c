@@ -503,7 +503,7 @@ static void collect_switch_cases(Node *node, int switch_id, int **cases, int *ca
   if (node->kind == ND_CASE && node->id == switch_id) {
     for (int i = 0; i < *case_cnt; i++) {
       if ((*cases)[i] == node->val)
-        return;
+        lower_error_node("duplicate switch case in lowering", node);
     }
     *cases = safe_realloc_array(*cases, sizeof(int), *case_cnt + 1, case_cap);
     (*cases)[(*case_cnt)++] = node->val;
@@ -814,6 +814,10 @@ static void emit_memcpy(LowerCtx *ctx, VReg dst_addr, VReg src_addr, int size) {
   mir_emit(ctx->mf, &inst);
 }
 
+static int is_aggregate_type(Type *type) {
+  return type && (type->ty == TY_ARR || type->ty == TY_STRUCT || type->ty == TY_UNION);
+}
+
 static VReg lower_postinc(LowerCtx *ctx, Node *node) {
   if (!node->lhs || !node->rhs)
     lower_error_node("invalid postinc node in lowering", node);
@@ -1018,23 +1022,19 @@ static VReg lower_expr_impl(LowerCtx *ctx, Node *node) {
   case ND_TERNARY:
     return lower_ternary(ctx, node);
   case ND_ASSIGN: {
-    if (node->val) {
+    Type *lhs_type = node->lhs ? node->lhs->type : node->type;
+    if (is_aggregate_type(lhs_type)) {
       VReg dst_addr = lower_addr(ctx, node->lhs);
-      VReg src_addr = lower_expr(ctx, node->rhs);
-      emit_memcpy(ctx, dst_addr, src_addr, get_sizeof(node->lhs->type));
-      return src_addr;
-    }
-    if (node->lhs && node->lhs->type && (node->lhs->type->ty == TY_STRUCT || node->lhs->type->ty == TY_UNION)) {
-      VReg dst_addr = lower_addr(ctx, node->lhs);
-      VReg src_addr = lower_addr(ctx, node->rhs);
-      emit_memcpy(ctx, dst_addr, src_addr, get_sizeof(node->lhs->type));
+      VReg src_addr;
+      if (node->val || lhs_type->ty == TY_ARR)
+        src_addr = lower_expr(ctx, node->rhs);
+      else
+        src_addr = lower_addr(ctx, node->rhs);
+      emit_memcpy(ctx, dst_addr, src_addr, get_sizeof(lhs_type));
       return src_addr;
     }
     VReg rhs = lower_expr(ctx, node->rhs);
-    Type *lhs_type = node->lhs ? node->lhs->type : node->type;
-    VReg stored = rhs;
-    if (lhs_type && lhs_type->ty != TY_STRUCT && lhs_type->ty != TY_UNION && lhs_type->ty != TY_ARR)
-      stored = lower_cast_value_if_needed(ctx, rhs, node->rhs ? node->rhs->type : NULL, lhs_type);
+    VReg stored = lower_cast_value_if_needed(ctx, rhs, node->rhs ? node->rhs->type : NULL, lhs_type);
     if (node->lhs && (node->lhs->kind == ND_LVAR || node->lhs->kind == ND_VARDEC) &&
         can_lower_direct_local_access(node->lhs))
       lower_direct_local_store(ctx, node->lhs, stored);
@@ -1043,14 +1043,7 @@ static VReg lower_expr_impl(LowerCtx *ctx, Node *node) {
       lower_store_to_addr(ctx, addr, stored, lhs_type);
     }
 
-    // Scalar-like assignments already have the stored value in "stored";
-    // return it directly instead of reloading from memory.
-    if (lhs_type && lhs_type->ty != TY_STRUCT && lhs_type->ty != TY_UNION && lhs_type->ty != TY_ARR)
-      return stored;
-
-    // Aggregates keep address-style value flow in the current MIR design.
-    VReg addr = lower_addr(ctx, node->lhs);
-    return lower_load_from_addr(ctx, addr, lhs_type);
+    return stored;
   }
   case ND_POSTINC:
     return lower_postinc(ctx, node);
@@ -1278,8 +1271,10 @@ void lower_function(Node *fn_node, MirFunction *mf) {
   seed_function_label_map(&ctx, fn_node->fn, fn_node);
   lower_stmt(&ctx, fn_node->lhs);
   emit_implicit_return_if_needed(&ctx, fn_node);
-  while (ctx.switch_stack)
-    pop_switch_ctx(&ctx, fn_node);
+  if (ctx.ctrl_depth != 0)
+    lower_error_node("unbalanced control stack after lowering", fn_node);
+  if (ctx.switch_stack)
+    lower_error_node("unbalanced switch stack after lowering", fn_node);
   free_label_map(ctx.label_map);
   ctx.label_map = NULL;
 }
