@@ -155,3 +155,23 @@ int loops_arrays_test21() {
   int b[2];
 } ST75;
 int loops_arrays_test22() { return sizeof(ST75 *) + sizeof(char **); /* 8 + 8 = 16 (LP64 環境を想定) */ }
+
+int loops_arrays_test23(int a, int b, int c) {
+  int arr[3] = {a, b, c};
+  return arr[0] * 100 + arr[1] * 10 + arr[2];
+}
+
+int loops_arrays_test24(int a, int b) {
+  int arr[4] = {a, b};
+  return arr[0] * 1000 + arr[1] * 100 + arr[2] * 10 + arr[3];
+}
+
+int loops_arrays_test25(int a, int b, int c, int d) {
+  int arr[2][3] = {{a, b}, {c, d}};
+  return arr[0][0] * 1000 + arr[0][1] * 100 + arr[0][2] * 10 + arr[1][0] + arr[1][1];
+}
+
+int loops_arrays_test26(int a) {
+  int arr[3] = {a++, a++, a++};
+  return arr[0] * 100 + arr[1] * 10 + arr[2] + a;
+}

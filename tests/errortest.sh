@@ -382,6 +382,50 @@ fi
 cat "$ERR_OUT"
 printf "\n"
 
+printf "\e[1;36mTest case 27:\e[0m\n"
+cat <<EOF > "$TMP_C"
+typedef struct {
+  int value;
+} S;
+int runtime_value;
+static S value = {runtime_value};
+EOF
+cat "$TMP_C"
+run_expect_error 27 $CC $TMP_C -S -o $TMP_S
+printf "\n"
+
+printf "\e[1;36mTest case 28:\e[0m\n"
+cat <<EOF > "$TMP_C"
+int runtime_value;
+int values[2] = {runtime_value, 1};
+EOF
+cat "$TMP_C"
+run_expect_error 28 $CC $TMP_C -S -o $TMP_S
+printf "\n"
+
+printf "\e[1;36mTest case 29:\e[0m\n"
+cat <<EOF > "$TMP_C"
+int f(int value) {
+  static int values[2] = {value, 1};
+  return values[0];
+}
+EOF
+cat "$TMP_C"
+run_expect_error 29 $CC $TMP_C -S -o $TMP_S
+printf "\n"
+
+printf "\e[1;36mTest case 30:\e[0m\n"
+cat <<EOF > "$TMP_C"
+typedef struct {
+  int values[2];
+} S;
+int runtime_value;
+S value = {{1, runtime_value}};
+EOF
+cat "$TMP_C"
+run_expect_error 30 $CC $TMP_C -S -o $TMP_S
+printf "\n"
+
 printf "\e[1;35mSummary:\e[0m Expected errors %d / %d\n" "$expected_error_cases" "$total_cases"
 if [ "${#missing_errors[@]}" -ne 0 ]; then
   printf "\e[1;31mNo error produced in test case: %s\e[0m\n" "${missing_errors[*]}"

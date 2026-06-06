@@ -14,10 +14,21 @@ struct String {
 };
 
 typedef struct Array Array;
+typedef struct InitExpr InitExpr;
+
+struct InitExpr {
+  InitExpr *next;
+  struct Node *expr;
+  struct Type *type;
+  Location *loc;
+  int offset;
+};
+
 struct Array {
   Array *next;
   int *val;
   String **str;
+  InitExpr *exprs;
   int val_cap;
   int str_cap;
   int byte;
@@ -39,6 +50,7 @@ struct StructLiteral {
   StructLiteral *next;
   unsigned char *data;
   StructReloc *relocs;
+  InitExpr *exprs;
   int size;
   int id;
   int needs_label;
