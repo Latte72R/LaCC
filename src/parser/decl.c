@@ -82,8 +82,28 @@ static int has_return_stmt(Node *n) {
   return false;
 }
 
+static Node *append_runtime_initializers(Node *node, Node *target, Type *type, InitExpr *exprs) {
+  for (InitExpr *init = exprs; init; init = init->next) {
+    if (init->offset >= get_sizeof(type))
+      continue;
+    Node *addr = new_node(ND_ADDR);
+    addr->lhs = target;
+    addr->type = new_type_ptr(type);
+    Node *ptr = new_binary(ND_ADD, addr, new_num(init->offset));
+    ptr->type = new_type_ptr(init->type);
+    Node *value = new_deref(ptr);
+    Node *store = assign_sub(value, init->expr, init->loc, false);
+    Node *comma = new_binary(ND_COMMA, node, store);
+    comma->type = store->type;
+    node = comma;
+  }
+  return node;
+}
+
 Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int is_static_storage) {
   Array *array = array_literal(type);
+  if (array->exprs && (is_static_storage || type->ty != TY_ARR))
+    error_at(array->exprs->loc, "expected a compile time constant [in array initializer]");
   if (type->ty == TY_ARR) {
     if (type->array_size == 0) {
       type->array_size = array->elem_count;
@@ -100,10 +120,11 @@ Node *handle_array_initialization(Node *node, LVar *lvar, Type *type, int is_sta
     Node *arr_node = new_node(ND_ARRAY);
     arr_node->type = type;
     arr_node->id = array->id;
+    Node *target = node;
     node = new_binary(ND_ASSIGN, node, arr_node);
     node->type = type;
     node->val = true;
-    return node;
+    return append_runtime_initializers(node, target, type, array->exprs);
   }
 
   Node *arr_node = new_node(ND_ARRAY);
@@ -163,6 +184,8 @@ Node *handle_scalar_initialization(Node *node, Type *type, Location *loc) {
 Node *handle_struct_initialization(Node *node, LVar *lvar, Type *type, int is_static_storage) {
   StructLiteral *literal = struct_literal(type);
   if (is_static_storage) {
+    if (literal->exprs)
+      error_at(literal->exprs->loc, "expected a compile time constant [in struct initializer]");
     if (lvar)
       lvar->init_struct = literal;
     node->type = type;
@@ -172,10 +195,11 @@ Node *handle_struct_initialization(Node *node, LVar *lvar, Type *type, int is_st
   Node *struct_node = new_node(ND_STRUCT_LITERAL);
   struct_node->type = type;
   struct_node->id = literal->id;
+  Node *target = node;
   node = new_binary(ND_ASSIGN, node, struct_node);
   node->type = type;
   node->val = true;
-  return node;
+  return append_runtime_initializers(node, target, type, literal->exprs);
 }
 
 // 変数初期化の共通処理

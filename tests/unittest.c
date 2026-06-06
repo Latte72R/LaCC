@@ -92,6 +92,12 @@ int main() {
   CHECK(struct_init_test2(), 94);
   CHECK(struct_init_test3(), 65);
   CHECK(struct_init_test4(), 18);
+  CHECK(struct_init_test5(3, 7), 37);
+  CHECK(struct_init_test6(4, 2), 42);
+  CHECK(struct_init_test7(5, 6, 7), 567);
+  CHECK(struct_init_test8(2, 3), 235);
+  CHECK(struct_init_test9(1, 2, 3, 4, 5), 12345);
+  CHECK(struct_init_test10(1, 2, 3, 4), 1027);
 
   CHECK(loops_arrays_test1(), 45);
   CHECK(loops_arrays_test2(), 15);
@@ -115,6 +121,10 @@ int main() {
   CHECK(loops_arrays_test20(), 5);
   CHECK(loops_arrays_test21(), 7);
   CHECK(loops_arrays_test22(), 16);
+  CHECK(loops_arrays_test23(1, 2, 3), 123);
+  CHECK(loops_arrays_test24(1, 2), 1200);
+  CHECK(loops_arrays_test25(1, 2, 3, 4), 1207);
+  CHECK(loops_arrays_test26(1), 127);
 
   CHECK(literals_switch_test1(), 11);
   CHECK(literals_switch_test2(), 0);

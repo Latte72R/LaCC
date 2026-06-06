@@ -118,6 +118,20 @@ static void append_array_value(Array *array, int value, String *str, int *idx) {
   (*idx)++;
 }
 
+static void add_init_expr(InitExpr **head, int offset, Type *type, Node *expr, Location *loc) {
+  InitExpr *init = malloc(sizeof(InitExpr));
+  if (!init)
+    error("memory allocation failed [in add_init_expr]");
+  init->next = NULL;
+  init->expr = expr;
+  init->type = type;
+  init->loc = loc;
+  init->offset = offset;
+  while (*head)
+    head = &(*head)->next;
+  *head = init;
+}
+
 static String *find_string_by_id(int id) {
   String *s = strings;
   while (s) {
@@ -150,6 +164,7 @@ static int parse_array_initializer_value(Array *array, Type *type, int *idx) {
   if (type->ty == TY_ARR) {
     if (peek("{")) {
       consume("{");
+      int start = *idx;
       int provided = 0;
       while (!peek("}")) {
         parse_array_initializer_value(array, type->ptr_to, idx);
@@ -164,6 +179,9 @@ static int parse_array_initializer_value(Array *array, Type *type, int *idx) {
         type->array_size = provided;
       else if (provided > type->array_size)
         warning_at(consumed_loc, "excess elements in array initializer [in variable declaration]");
+      int end = start + get_sizeof(type) / array->byte;
+      while (*idx < end)
+        append_array_value(array, 0, NULL, idx);
       return 1;
     }
     if (type->ptr_to->ty == TY_CHAR && token->kind == TK_STRING) {
@@ -214,7 +232,9 @@ static int parse_array_initializer_value(Array *array, Type *type, int *idx) {
   int ok = true;
   int value = eval_const_expr(expr_node, &ok);
   if (!ok) {
-    error_at(tok->loc, "expected a compile time constant [in array_literal statement]");
+    add_init_expr(&array->exprs, *idx * array->byte, type, expr_node, tok->loc);
+    append_array_value(array, 0, NULL, idx);
+    return 1;
   }
   consumed_loc = tok->loc;
   // For _Bool elements, normalize initializer to 0 or 1 per C rules
@@ -237,6 +257,7 @@ Array *array_literal(Type *type) {
   int idx = 0;
   array->val = malloc(sizeof(int) * array->val_cap);
   array->str = calloc(array->str_cap, sizeof(String *));
+  array->exprs = NULL;
   array->next = arrays;
   array->elem_count = 0;
   arrays = array;
@@ -273,6 +294,8 @@ static void add_struct_string_reloc(StructLiteral *lit, int offset, String *str)
   lit->relocs = rel;
 }
 
+static void parse_member_initializer(StructLiteral *lit, Type *type, unsigned char *base, unsigned char *buffer);
+
 static void parse_array_member_initializer(StructLiteral *lit, Type *type, unsigned char *base, unsigned char *buffer) {
   int size = get_sizeof(type);
   zero_bytes(buffer, size);
@@ -280,10 +303,6 @@ static void parse_array_member_initializer(StructLiteral *lit, Type *type, unsig
   if (!elem) {
     error_at(token->loc, "array element type is undefined [in struct initializer]");
   }
-  if (elem->ty == TY_STRUCT || elem->ty == TY_UNION || elem->ty == TY_ARR) {
-    error_at(token->loc, "nested aggregate initializers are not supported for array members [in struct initializer]");
-  }
-
   int elem_size = get_sizeof(elem);
   int count = type->array_size;
 
@@ -305,26 +324,13 @@ static void parse_array_member_initializer(StructLiteral *lit, Type *type, unsig
   int idx = 0;
   while (!peek("}")) {
     Location *value_loc = token->loc;
-    if (elem->ty == TY_PTR && token->kind == TK_STRING) {
-      consumed_loc = token->loc;
-      String *str = string_literal();
-      if (idx < count) {
-        int member_off = (int)(buffer - base) + (idx * elem_size);
-        add_struct_string_reloc(lit, member_off, str);
-      } else {
-        warning_at(value_loc, "excess elements in array member initializer [in struct initializer]");
-      }
+    if (idx < count) {
+      parse_member_initializer(lit, elem, base, buffer + idx * elem_size);
     } else {
-      Node *expr_node = assign();
-      int ok = true;
-      int value = eval_const_expr(expr_node, &ok);
-      if (!ok) {
-        error_at(value_loc, "expected a compile time constant [in struct initializer]");
-      }
-      if (idx < count)
-        store_scalar_bytes(elem, buffer, idx * elem_size, (long long)value);
-      else
-        warning_at(value_loc, "excess elements in array member initializer [in struct initializer]");
+      warning_at(value_loc, "excess elements in array member initializer [in struct initializer]");
+      unsigned char *discard = calloc(elem_size, 1);
+      parse_member_initializer(NULL, elem, discard, discard);
+      free(discard);
     }
     idx++;
     if (!consume(","))
@@ -352,12 +358,23 @@ static void parse_member_initializer(StructLiteral *lit, Type *type, unsigned ch
   if (type->ty == TY_PTR && token->kind == TK_STRING) {
     consumed_loc = token->loc;
     String *str = string_literal();
-    add_struct_string_reloc(lit, (int)(buffer - base), str);
+    if (lit)
+      add_struct_string_reloc(lit, (int)(buffer - base), str);
     return;
   }
 
-  long long value = expect_signed_number();
-  store_scalar_bytes(type, buffer, 0, value);
+  Location *value_loc = token->loc;
+  Node *expr_node = assign();
+  int ok = true;
+  int value = eval_const_expr(expr_node, &ok);
+  if (ok) {
+    if (type->ty == TY_BOOL)
+      value = value != 0;
+    store_scalar_bytes(type, buffer, 0, value);
+  } else {
+    if (lit)
+      add_init_expr(&lit->exprs, (int)(buffer - base), type, expr_node, value_loc);
+  }
 }
 
 static void parse_struct_or_union_initializer(StructLiteral *lit, Type *type, unsigned char *base, unsigned char *buffer) {
@@ -462,6 +479,7 @@ StructLiteral *struct_literal(Type *type) {
   literal->size = get_sizeof(type);
   literal->data = calloc(literal->size, sizeof(unsigned char));
   literal->relocs = NULL;
+  literal->exprs = NULL;
   literal->needs_label = false;
   literal->next = struct_literals;
   struct_literals = literal;
