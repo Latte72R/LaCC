@@ -166,20 +166,130 @@ int mir_new_block(MirFunction *mf) {
   bb->preds = NULL;
   bb->pred_count = 0;
   bb->pred_cap = 0;
+  mf->current_block = id;
   return id;
 }
 
-// MirFunction に命令を追加する
+static int is_terminator(MirOp op) {
+  return op == MIR_OP_JMP || op == MIR_OP_JZ || op == MIR_OP_JCC || op == MIR_OP_RET;
+}
+
 void mir_emit(MirFunction *mf, const MirInst *inst) {
   if (!mf || !inst)
     return;
-  if (mf->block_count == 0) {
-    if (mir_new_block(mf) < 0)
-      return;
+  if (mf->block_count == 0 || mf->current_block < 0) {
+    mir_new_block(mf);
+  } else if (inst->op == MIR_OP_LABEL && mf->blocks[mf->current_block].inst_len > 0) {
+    mir_new_block(mf);
   }
-  MirBasicBlock *bb = &mf->blocks[0];
+  MirBasicBlock *bb = &mf->blocks[mf->current_block];
+  if (inst->op == MIR_OP_LABEL)
+    bb->label = inst->label;
   ensure_bb_inst_capacity(bb, bb->inst_len + 1);
   bb->insts[bb->inst_len++] = *inst;
+  if (is_terminator(inst->op))
+    mf->current_block = -1;
+}
+
+static void add_pred(MirBasicBlock *bb, int pred) {
+  for (int i = 0; i < bb->pred_count; i++) {
+    if (bb->preds[i] == pred)
+      return;
+  }
+  if (bb->pred_count >= bb->pred_cap) {
+    int cap = bb->pred_cap ? bb->pred_cap * 2 : 4;
+    int *new_preds = realloc(bb->preds, sizeof(int) * cap);
+    if (!new_preds)
+      error("memory allocation failed [in add_pred]");
+    bb->preds = new_preds;
+    bb->pred_cap = cap;
+  }
+  bb->preds[bb->pred_count++] = pred;
+}
+
+static void add_succ(MirFunction *mf, int from, int to) {
+  if (from < 0 || from >= mf->block_count || to < 0 || to >= mf->block_count)
+    return;
+  MirBasicBlock *bb = &mf->blocks[from];
+  for (int i = 0; i < bb->succ_count; i++) {
+    if (bb->succ[i] == to)
+      return;
+  }
+  if (bb->succ_count >= 2)
+    error("too many CFG successors");
+  bb->succ[bb->succ_count++] = to;
+  add_pred(&mf->blocks[to], from);
+}
+
+void mir_finalize_cfg(MirFunction *mf) {
+  if (!mf || mf->block_count <= 0)
+    return;
+  int *label_to_block = malloc(sizeof(int) * (mf->next_label > 0 ? mf->next_label : 1));
+  if (!label_to_block)
+    error("memory allocation failed [in mir_finalize_cfg]");
+  for (int l = 0; l < mf->next_label; l++)
+    label_to_block[l] = -1;
+  for (int i = 0; i < mf->block_count; i++) {
+    MirBasicBlock *bb = &mf->blocks[i];
+    bb->succ_count = 0;
+    bb->pred_count = 0;
+    if (bb->label >= 0 && bb->label < mf->next_label)
+      label_to_block[bb->label] = i;
+  }
+  for (int i = 0; i < mf->block_count; i++) {
+    MirBasicBlock *bb = &mf->blocks[i];
+    if (bb->inst_len <= 0)
+      continue;
+    MirInst *term = &bb->insts[bb->inst_len - 1];
+    if (term->op == MIR_OP_JMP) {
+      if (term->label >= 0 && term->label < mf->next_label)
+        add_succ(mf, i, label_to_block[term->label]);
+    } else if (term->op == MIR_OP_JZ || term->op == MIR_OP_JCC) {
+      if (term->label >= 0 && term->label < mf->next_label)
+        add_succ(mf, i, label_to_block[term->label]);
+      if (i + 1 < mf->block_count)
+        add_succ(mf, i, i + 1);
+    } else if (term->op != MIR_OP_RET && i + 1 < mf->block_count) {
+      add_succ(mf, i, i + 1);
+    }
+  }
+  free(label_to_block);
+}
+
+void mir_linearize(MirFunction *mf) {
+  if (!mf || mf->block_count <= 1)
+    return;
+  int total = 0;
+  for (int i = 0; i < mf->block_count; i++)
+    total += mf->blocks[i].inst_len;
+  MirInst *insts = malloc(sizeof(MirInst) * (total > 0 ? total : 1));
+  if (!insts)
+    error("memory allocation failed [in mir_linearize]");
+  int n = 0;
+  for (int i = 0; i < mf->block_count; i++) {
+    MirBasicBlock *bb = &mf->blocks[i];
+    for (int j = 0; j < bb->inst_len; j++)
+      insts[n++] = bb->insts[j];
+    free(bb->insts);
+    free(bb->preds);
+    for (int j = 0; j < bb->phi_count; j++) {
+      free(bb->phis[j].incoming_block);
+      free(bb->phis[j].incoming_value);
+    }
+    free(bb->phis);
+  }
+  mf->blocks[0].insts = insts;
+  mf->blocks[0].inst_len = n;
+  mf->blocks[0].inst_cap = n;
+  mf->blocks[0].preds = NULL;
+  mf->blocks[0].pred_count = 0;
+  mf->blocks[0].pred_cap = 0;
+  mf->blocks[0].phis = NULL;
+  mf->blocks[0].phi_count = 0;
+  mf->blocks[0].phi_cap = 0;
+  mf->blocks[0].succ_count = 0;
+  mf->block_count = 1;
+  mf->current_block = 0;
 }
 
 // MirFunction の内容を人間が読める形式で出力する
@@ -187,7 +297,9 @@ void mir_dump(FILE *out, const MirFunction *mf) {
   if (!out || !mf)
     return;
 
-  int total_insts = mf->block_count > 0 ? mf->blocks[0].inst_len : 0;
+  int total_insts = 0;
+  for (int i = 0; i < mf->block_count; i++)
+    total_insts += mf->blocks[i].inst_len;
   if (mf->fn) {
     fprintf(out, "MIR function %.*s (insts=%d, next_vreg=%d, next_label=%d)\n", mf->fn->len, mf->fn->name, total_insts,
             mf->next_vreg, mf->next_label);
@@ -198,9 +310,14 @@ void mir_dump(FILE *out, const MirFunction *mf) {
 
   if (mf->block_count == 0)
     return;
-  const MirBasicBlock *bb = &mf->blocks[0];
-  for (int i = 0; i < bb->inst_len; i++) {
-    const MirInst *in = &bb->insts[i];
+  for (int bi = 0; bi < mf->block_count; bi++) {
+    const MirBasicBlock *bb = &mf->blocks[bi];
+    fprintf(out, "  block %d:", bi);
+    for (int p = 0; p < bb->phi_count; p++)
+      fprintf(out, " v%d=phi(var%d)", bb->phis[p].dst, bb->phis[p].var);
+    fprintf(out, "\n");
+    for (int i = 0; i < bb->inst_len; i++) {
+      const MirInst *in = &bb->insts[i];
     fprintf(out, "  %4d: %-11s ", i, mir_op_name(in->op));
     switch (in->op) {
     case MIR_OP_IMM:
@@ -357,6 +474,7 @@ void mir_dump(FILE *out, const MirFunction *mf) {
       break;
     }
     fprintf(out, "\n");
+    }
   }
 }
 
@@ -387,5 +505,6 @@ void mir_free(MirFunction *mf) {
   mf->local_cap = 0;
   mf->next_vreg = 0;
   mf->next_label = 0;
+  mf->current_block = -1;
   mf->fn = NULL;
 }

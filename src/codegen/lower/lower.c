@@ -285,81 +285,25 @@ static inline int is_main_function(const Function *fn) { return fn && fn->len ==
 static int mir_has_ret(const MirFunction *mf) {
   if (!mf)
     return 0;
-  for (int i = 0; i < mf->blocks[0].inst_len; i++) {
-    if (mf->blocks[0].insts[i].op == MIR_OP_RET)
-      return 1;
+  for (int b = 0; b < mf->block_count; b++) {
+    for (int i = 0; i < mf->blocks[b].inst_len; i++) {
+      if (mf->blocks[b].insts[i].op == MIR_OP_RET)
+        return 1;
+    }
   }
   return 0;
 }
 
 static int mir_end_reachable(const MirFunction *mf) {
-  if (!mf || mf->blocks[0].inst_len <= 0)
+  if (!mf || mf->block_count <= 0)
     return 1;
-
-  int n = mf->blocks[0].inst_len;
-  int *label_to_inst = NULL;
-  if (mf->next_label > 0) {
-    label_to_inst = malloc(sizeof(int) * mf->next_label);
-    if (!label_to_inst)
-      error("memory allocation failed [in mir_end_reachable label map]");
-    for (int l = 0; l < mf->next_label; l++)
-      label_to_inst[l] = -1;
-    for (int i = 0; i < n; i++) {
-      if (mf->blocks[0].insts[i].op != MIR_OP_LABEL)
-        continue;
-      int l = mf->blocks[0].insts[i].label;
-      if (l >= 0 && l < mf->next_label)
-        label_to_inst[l] = i;
-    }
-  }
-
-  unsigned char *visited = calloc((size_t)n + 1, sizeof(unsigned char));
-  int *queue = malloc(sizeof(int) * ((size_t)n + 1));
-  if (!visited || !queue)
-    error("memory allocation failed [in mir_end_reachable worklist]");
-
-  int head = 0;
-  int tail = 0;
-  queue[tail++] = 0;
-  visited[0] = 1;
-
-  while (head < tail) {
-    int i = queue[head++];
-    if (i == n)
-      continue;
-
-    MirInst *in = &mf->blocks[0].insts[i];
-    int succ0 = -1;
-    int succ1 = -1;
-    int fall = (i + 1 <= n) ? (i + 1) : -1;
-    if (in->op == MIR_OP_RET) {
-      succ0 = -1;
-    } else if (in->op == MIR_OP_JMP) {
-      if (label_to_inst && in->label >= 0 && in->label < mf->next_label)
-        succ0 = label_to_inst[in->label];
-    } else if (in->op == MIR_OP_JZ || in->op == MIR_OP_JCC) {
-      succ0 = fall;
-      if (label_to_inst && in->label >= 0 && in->label < mf->next_label)
-        succ1 = label_to_inst[in->label];
-    } else {
-      succ0 = fall;
-    }
-
-    if (succ0 >= 0 && succ0 <= n && !visited[succ0]) {
-      visited[succ0] = 1;
-      queue[tail++] = succ0;
-    }
-    if (succ1 >= 0 && succ1 <= n && !visited[succ1]) {
-      visited[succ1] = 1;
-      queue[tail++] = succ1;
-    }
-  }
-
-  int reachable = visited[n] != 0;
-  free(queue);
-  free(visited);
-  free(label_to_inst);
-  return reachable;
+  if (mf->current_block < 0)
+    return 0;
+  MirBasicBlock *bb = &mf->blocks[mf->current_block];
+  if (bb->inst_len <= 0)
+    return 1;
+  MirOp op = bb->insts[bb->inst_len - 1].op;
+  return op != MIR_OP_JMP && op != MIR_OP_RET;
 }
 
 static void emit_implicit_return_if_needed(LowerCtx *ctx, Node *node) {

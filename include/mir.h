@@ -81,7 +81,9 @@ struct MirInst {
 
 typedef struct MirPhi MirPhi;
 struct MirPhi {
+  int var;
   VReg dst;
+  Type *type;
   int *incoming_block;
   VReg *incoming_value;
   int incoming_count;
@@ -122,6 +124,7 @@ struct MirFunction {
   int *local_sizes;
   int local_count;
   int local_cap;
+  int current_block;
 };
 
 VReg mir_new_vreg(MirFunction *mf);
@@ -129,6 +132,8 @@ int mir_new_label(MirFunction *mf);
 int mir_get_or_add_local_slot(MirFunction *mf, LVar *var, Type *type, int size);
 int mir_add_local_slot(MirFunction *mf, LVar *var, Type *type, int size);
 void mir_emit(MirFunction *mf, const MirInst *inst);
+void mir_finalize_cfg(MirFunction *mf);
+void mir_linearize(MirFunction *mf);
 void mir_dump(FILE *out, const MirFunction *mf);
 void mir_free(MirFunction *mf);
 
