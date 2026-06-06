@@ -107,8 +107,9 @@ Both global and local (stack) variable declarations are supported.
 - **Comment support**
   ```c
   // single-line comment
-  /* multi-line
-     comment */
+  /* 
+    multi-line comment 
+  */
   ```
 
 - **`switch` statements and `case` / `default` labels**  
