@@ -36,3 +36,22 @@ int regress_local_slot_test1(int x) {
   b[0] = x + 1;
   return a[0] + b[0];
 }
+
+int regress_ssa_if_test(int cond) {
+  int value = 1;
+  if (cond)
+    value = 4;
+  else
+    value = 7;
+  return value;
+}
+
+int regress_ssa_loop_test(int n) {
+  int sum = 0;
+  int i = 0;
+  while (i < n) {
+    sum = sum + i;
+    i = i + 1;
+  }
+  return sum;
+}
