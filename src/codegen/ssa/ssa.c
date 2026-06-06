@@ -714,47 +714,95 @@ static void insert_before_terminator(MirBasicBlock *bb, const MirInst *inst) {
   bb->inst_len++;
 }
 
+static void insert_copy(MirBasicBlock *bb, VReg dst, VReg src, Type *type) {
+  if (dst == src)
+    return;
+  MirInst copy = {0};
+  copy.op = MIR_OP_MOV;
+  copy.dst = dst;
+  copy.src1 = src;
+  copy.src2 = MIR_INVALID_VREG;
+  copy.label = MIR_INVALID_LABEL;
+  copy.type = type;
+  insert_before_terminator(bb, &copy);
+}
+
+static void insert_parallel_copies(MirFunction *mf, MirBasicBlock *bb, VReg *dst, VReg *src, Type **types,
+                                   int count) {
+  unsigned char *pending = calloc(count > 0 ? count : 1, sizeof(unsigned char));
+  if (!pending)
+    error("memory allocation failed [in SSA parallel copy]");
+  int remaining = 0;
+  for (int i = 0; i < count; i++) {
+    if (dst[i] != src[i]) {
+      pending[i] = 1;
+      remaining++;
+    }
+  }
+
+  while (remaining > 0) {
+    int emitted = 0;
+    for (int i = 0; i < count; i++) {
+      if (!pending[i])
+        continue;
+      int dst_is_source = 0;
+      for (int j = 0; j < count; j++)
+        dst_is_source = dst_is_source || (pending[j] && src[j] == dst[i]);
+      if (dst_is_source)
+        continue;
+      insert_copy(bb, dst[i], src[i], types[i]);
+      pending[i] = 0;
+      remaining--;
+      emitted = 1;
+    }
+    if (emitted)
+      continue;
+
+    int cycle = 0;
+    while (!pending[cycle])
+      cycle++;
+    VReg saved = mir_new_vreg(mf);
+    insert_copy(bb, saved, dst[cycle], types[cycle]);
+    for (int i = 0; i < count; i++) {
+      if (pending[i] && src[i] == dst[cycle])
+        src[i] = saved;
+    }
+  }
+  free(pending);
+}
+
 void destruct_mir_ssa(MirFunction *mf) {
   if (!mf)
     error("invalid MIR function [in destruct_mir_ssa]");
   for (int b = 0; b < mf->block_count; b++) {
     MirBasicBlock *bb = &mf->blocks[b];
+    if (bb->phi_count == 0)
+      continue;
     for (int pred_index = 0; pred_index < bb->pred_count; pred_index++) {
       int pred = bb->preds[pred_index];
-      VReg *temps = malloc(sizeof(VReg) * bb->phi_count);
-      if (!temps)
+      VReg *dst = malloc(sizeof(VReg) * bb->phi_count);
+      VReg *src = malloc(sizeof(VReg) * bb->phi_count);
+      Type **types = malloc(sizeof(Type *) * bb->phi_count);
+      if (!dst || !src || !types)
         error("memory allocation failed [in SSA parallel copy]");
       for (int p = 0; p < bb->phi_count; p++) {
         MirPhi *phi = &bb->phis[p];
-        VReg src = MIR_INVALID_VREG;
+        dst[p] = phi->dst;
+        src[p] = MIR_INVALID_VREG;
+        types[p] = phi->type;
         for (int i = 0; i < phi->incoming_count; i++) {
           if (phi->incoming_block[i] == pred) {
-            src = phi->incoming_value[i];
+            src[p] = phi->incoming_value[i];
             break;
           }
         }
-        if (src == MIR_INVALID_VREG)
+        if (src[p] == MIR_INVALID_VREG)
           error("missing phi incoming value");
-        MirInst copy = {0};
-        copy.op = MIR_OP_MOV;
-        copy.dst = temps[p] = mir_new_vreg(mf);
-        copy.src1 = src;
-        copy.src2 = MIR_INVALID_VREG;
-        copy.label = MIR_INVALID_LABEL;
-        copy.type = phi->type;
-        insert_before_terminator(&mf->blocks[pred], &copy);
       }
-      for (int p = 0; p < bb->phi_count; p++) {
-        MirInst copy = {0};
-        copy.op = MIR_OP_MOV;
-        copy.dst = bb->phis[p].dst;
-        copy.src1 = temps[p];
-        copy.src2 = MIR_INVALID_VREG;
-        copy.label = MIR_INVALID_LABEL;
-        copy.type = bb->phis[p].type;
-        insert_before_terminator(&mf->blocks[pred], &copy);
-      }
-      free(temps);
+      insert_parallel_copies(mf, &mf->blocks[pred], dst, src, types, bb->phi_count);
+      free(types);
+      free(src);
+      free(dst);
     }
     for (int p = 0; p < bb->phi_count; p++) {
       free(bb->phis[p].incoming_block);

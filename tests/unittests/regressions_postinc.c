@@ -75,6 +75,18 @@ int regress_ssa_parallel_phi_test(int n) {
   return a * 10 + b;
 }
 
+int regress_ssa_phi_cycle_test(int n) {
+  int a = 1;
+  int b = 2;
+  while (n > 0) {
+    int tmp = a;
+    a = b;
+    b = tmp;
+    n = n - 1;
+  }
+  return a * 10 + b;
+}
+
 static int regress_ssa_call_identity(int value) { return value; }
 
 int regress_ssa_call_live_test(int x) {

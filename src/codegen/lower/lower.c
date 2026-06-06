@@ -125,6 +125,10 @@ static Type *pick_compare_type(const Node *node) {
   if (node->lhs && node->rhs && node->lhs->type && node->rhs->type) {
     if (is_number(node->lhs->type) && is_number(node->rhs->type))
       cmp_type = max_type(node->lhs->type, node->rhs->type);
+    else if (is_ptr_or_arr(node->lhs->type))
+      cmp_type = node->lhs->type;
+    else if (is_ptr_or_arr(node->rhs->type))
+      cmp_type = node->rhs->type;
     else if (node->lhs->type->is_unsigned)
       cmp_type = node->lhs->type;
     else if (node->rhs->type->is_unsigned)
@@ -994,9 +998,9 @@ static VReg lower_expr_impl(LowerCtx *ctx, Node *node) {
   case ND_MOD:
     return lower_binary(ctx, node, (node->type && node->type->is_unsigned) ? MIR_OP_UMOD : MIR_OP_SMOD);
   case ND_EQ:
-    return lower_binary(ctx, node, MIR_OP_EQ);
+    return lower_compare(ctx, node, MIR_OP_EQ);
   case ND_NE:
-    return lower_binary(ctx, node, MIR_OP_NE);
+    return lower_compare(ctx, node, MIR_OP_NE);
   case ND_LT:
     return lower_compare(ctx, node, MIR_OP_LT);
   case ND_LE:

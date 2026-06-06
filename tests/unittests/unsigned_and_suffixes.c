@@ -199,3 +199,9 @@ int unsigned_test34() {
   unsigned int v_u32_8000 = 0x80000000u;
   return v_i64_m1 < v_u32_8000;
 }
+
+int unsigned_test35() {
+  unsigned long value = 1;
+  value = value << 40;
+  return (value != 0) + (value == 0);
+}

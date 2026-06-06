@@ -281,6 +281,7 @@ int main() {
   CHECK(unsigned_test32(), 0);
   CHECK(unsigned_test33(), 8);
   CHECK(unsigned_test34(), 1);
+  CHECK(unsigned_test35(), 1);
   CHECK(regress_postinc_test1(), 34);
   CHECK(regress_postinc_test2(), 54);
   CHECK(regress_postinc_test3(), 561);
@@ -291,6 +292,7 @@ int main() {
   CHECK(regress_ssa_loop_test(5), 10);
   CHECK(regress_ssa_interference_test(), 114);
   CHECK(regress_ssa_parallel_phi_test(4), 93);
+  CHECK(regress_ssa_phi_cycle_test(3), 21);
   CHECK(regress_ssa_call_live_test(5), 90);
 
   // bool / _Bool tests
