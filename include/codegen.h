@@ -1,6 +1,6 @@
 #ifndef CODEGEN_H
 #define CODEGEN_H
 
-void generate_assembly_pipeline(int optimize_level);
+void generate_assembly_pipeline();
 
 #endif // CODEGEN_H

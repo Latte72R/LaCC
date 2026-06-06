@@ -2,7 +2,7 @@
 // FORTIFY 系組み込み関数の宣言とフォールバック先登録
 
 #include "diagnostics.h"
-#include "parser.h"
+#include "parser_internal.h"
 #include "runtime.h"
 
 #include <stdbool.h>

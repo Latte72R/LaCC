@@ -1,6 +1,6 @@
 
+#include "parser_internal.h"
 #include "runtime.h"
-#include "parser.h"
 
 #include <stdbool.h>
 #include <stdlib.h>

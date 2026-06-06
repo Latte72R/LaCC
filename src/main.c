@@ -208,11 +208,7 @@ static void add_include_paths_from_compiler(void) {
 }
 
 int main(int argc, char **argv) {
-  init_global_variables();
-  input_file = NULL;
-  output_file = NULL;
   int output_file_specified = false;
-  int optimize_level = 0;
 
   if (argc < 2) {
     error("invalid number of arguments.");
@@ -317,7 +313,7 @@ int main(int argc, char **argv) {
   free_all_macros();
   free_all_locations();
 
-  generate_assembly_pipeline(optimize_level);
+  generate_assembly_pipeline();
 
   free_all_nodes();
   free_all_functions();

@@ -39,41 +39,8 @@ char *output_file = NULL;
 Location *consumed_loc = NULL;
 int hierarchy_level = -1;
 bool print_include_files = false;
+int optimize_level = 0;
 
 IncludePath *include_paths = NULL;
 FILE *fp = NULL;
 Macro *macros = NULL;
-
-void init_global_variables() {
-  // グローバル変数の初期化
-  current_switch = NULL;
-  user_input_list = NULL;
-
-  // 各リストの初期化
-  functions = NULL;
-  current_fn = NULL;
-  enums = NULL;
-  current_enum_scope = NULL;
-  structs = NULL;
-  unions = NULL;
-  type_tags = NULL;
-  locals = NULL;
-  globals = NULL;
-  statics = NULL;
-  strings = NULL;
-  arrays = NULL;
-  struct_literals = NULL;
-  token = NULL;
-  token_head = NULL;
-  include_paths = NULL;
-  macros = NULL;
-
-  label_cnt = 0;
-  array_cnt = 0;
-  struct_literal_cnt = 0;
-
-  // fileポインタの初期化
-  fp = NULL;
-  input_file = NULL;
-  output_file = NULL;
-}
