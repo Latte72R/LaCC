@@ -278,6 +278,9 @@ int main() {
   CHECK(regress_ssa_if_test(1), 4);
   CHECK(regress_ssa_if_test(0), 7);
   CHECK(regress_ssa_loop_test(5), 10);
+  CHECK(regress_ssa_interference_test(), 114);
+  CHECK(regress_ssa_parallel_phi_test(4), 93);
+  CHECK(regress_ssa_call_live_test(5), 90);
 
   // bool / _Bool tests
   CHECK(bool_test1(), 2);

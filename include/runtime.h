@@ -41,11 +41,10 @@ extern char *output_file;
 extern Location *consumed_loc;
 extern int hierarchy_level;
 extern bool print_include_files;
+extern int optimize_level;
 extern IncludePath *include_paths;
 extern FILE *fp;
 extern Macro *macros;
-
-void init_global_variables();
 
 void free_user_input_list();
 void free_all_tokens();

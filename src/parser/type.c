@@ -3,7 +3,7 @@
 #include "parser.h"
 #include "runtime.h"
 
-#include "../parser/parser_internal.h"
+#include "parser_internal.h"
 
 #include <stdbool.h>
 #include <stdlib.h>

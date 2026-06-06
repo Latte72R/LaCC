@@ -1,6 +1,7 @@
 #include "../codegen_internal.h"
 #include "../bitset.h"
 #include "diagnostics.h"
+#include "runtime.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -11,6 +12,18 @@ typedef struct {
   int start;
   int end;
 } Interval;
+
+typedef struct {
+  VReg def;
+  VReg uses[2 + MAX_FUNC_PARAMS];
+  int use_count;
+  int succ[2];
+} RaInstInfo;
+
+typedef struct {
+  RaInstInfo *insts;
+  int inst_count;
+} RaAnalysis;
 
 static const char *k_ra_preg64[RA_PREG_COUNT] = {"rbx", "r12", "r13", "r14", "r15", "r8", "r9", "r10"};
 static const int k_ra_preg_callee_saved[RA_PREG_COUNT] = {1, 1, 1, 1, 1, 0, 0, 0};
@@ -29,35 +42,64 @@ int ra_preg_is_callee_saved(int preg) {
   return k_ra_preg_callee_saved[preg];
 }
 
-static void collect_use_def(const MirInst *in, unsigned long long *use, unsigned long long *def, int vreg_count) {
-  if (!in)
+static void add_use(RaInstInfo *info, VReg vreg, int vreg_count) {
+  if (vreg == MIR_INVALID_VREG)
     return;
+  if (vreg < 0 || vreg >= vreg_count)
+    error("invalid use vreg in regalloc");
+  info->uses[info->use_count++] = vreg;
+}
 
-  if (in->dst != MIR_INVALID_VREG) {
-    if (in->dst < 0 || in->dst >= vreg_count)
-      error("invalid dst vreg in regalloc");
-    bit_set(def, in->dst);
-  }
+static void analyze_mir(const MirFunction *mf, RaAnalysis *analysis) {
+  int ninst = mf->blocks[0].inst_len;
+  int *labels = malloc(sizeof(int) * (mf->next_label > 0 ? mf->next_label : 1));
+  analysis->insts = calloc(ninst > 0 ? ninst : 1, sizeof(RaInstInfo));
+  analysis->inst_count = ninst;
+  if (!labels || !analysis->insts)
+    error("memory allocation failed [in regalloc analysis]");
+  for (int l = 0; l < mf->next_label; l++)
+    labels[l] = -1;
 
-  if (in->src1 != MIR_INVALID_VREG) {
-    if (in->src1 < 0 || in->src1 >= vreg_count)
-      error("invalid src1 vreg in regalloc");
-    bit_set(use, in->src1);
-  }
-
-  if (in->src2 != MIR_INVALID_VREG) {
-    if (in->src2 < 0 || in->src2 >= vreg_count)
-      error("invalid src2 vreg in regalloc");
-    bit_set(use, in->src2);
-  }
-
-  if (in->op == MIR_OP_CALL) {
-    for (int i = 0; i < in->argc; i++) {
-      if (in->args[i] < 0 || in->args[i] >= vreg_count)
-        error("invalid call arg vreg in regalloc");
-      bit_set(use, in->args[i]);
+  for (int i = 0; i < ninst; i++) {
+    const MirInst *in = &mf->blocks[0].insts[i];
+    RaInstInfo *info = &analysis->insts[i];
+    info->def = in->dst;
+    info->succ[0] = -1;
+    info->succ[1] = -1;
+    if (info->def < MIR_INVALID_VREG || info->def >= mf->next_vreg)
+      error("invalid def vreg in regalloc");
+    add_use(info, in->src1, mf->next_vreg);
+    add_use(info, in->src2, mf->next_vreg);
+    for (int a = 0; a < in->argc; a++)
+      add_use(info, in->args[a], mf->next_vreg);
+    if (in->op == MIR_OP_LABEL) {
+      if (in->label < 0 || in->label >= mf->next_label)
+        error("invalid label id in regalloc");
+      labels[in->label] = i;
     }
   }
+
+  for (int i = 0; i < ninst; i++) {
+    const MirInst *in = &mf->blocks[0].insts[i];
+    RaInstInfo *info = &analysis->insts[i];
+    if (in->op == MIR_OP_RET)
+      continue;
+    if (in->op == MIR_OP_JMP) {
+      info->succ[0] = labels[in->label];
+    } else if (in->op == MIR_OP_JZ || in->op == MIR_OP_JCC) {
+      info->succ[0] = i + 1 < ninst ? i + 1 : -1;
+      info->succ[1] = labels[in->label];
+    } else {
+      info->succ[0] = i + 1 < ninst ? i + 1 : -1;
+    }
+  }
+  free(labels);
+}
+
+static void free_analysis(RaAnalysis *analysis) {
+  free(analysis->insts);
+  analysis->insts = NULL;
+  analysis->inst_count = 0;
 }
 
 static int cmp_interval_start(const void *a, const void *b) {
@@ -172,6 +214,177 @@ static void dump_active(FILE *out, Interval **active, int active_cnt, const int 
   fprintf(out, "\n");
 }
 
+static void add_interference(unsigned char *graph, int n, int a, int b) {
+  if (a < 0 || b < 0 || a == b)
+    return;
+  graph[a * n + b] = 1;
+  graph[b * n + a] = 1;
+}
+
+static int count_neighbor_colors(const unsigned char *graph, int n, int v, const int *colors) {
+  unsigned mask = 0;
+  for (int u = 0; u < n; u++) {
+    if (graph[v * n + u] && colors[u] >= 0)
+      mask |= 1u << colors[u];
+  }
+  int count = 0;
+  for (int p = 0; p < RA_PREG_COUNT; p++)
+    count += (mask >> p) & 1u;
+  return count;
+}
+
+static void regalloc_graph(const MirFunction *mf, RegAllocResult *out, const RaAnalysis *analysis) {
+  int n = mf->next_vreg;
+  int ninst = mf->blocks[0].inst_len;
+  unsigned char *uses = calloc((size_t)ninst * (size_t)n, sizeof(unsigned char));
+  unsigned char *defs = calloc((size_t)ninst * (size_t)n, sizeof(unsigned char));
+  unsigned char *ins = calloc((size_t)ninst * (size_t)n, sizeof(unsigned char));
+  unsigned char *outs = calloc((size_t)ninst * (size_t)n, sizeof(unsigned char));
+  unsigned char *graph = calloc((size_t)n * (size_t)n, sizeof(unsigned char));
+  unsigned char *present = calloc(n, sizeof(unsigned char));
+  unsigned char *crosses_call = calloc(n, sizeof(unsigned char));
+  int *degree = calloc(n, sizeof(int));
+  int *colors = malloc(sizeof(int) * n);
+  int *preferred = malloc(sizeof(int) * n);
+  if (!uses || !defs || !ins || !outs || !graph || !present || !crosses_call || !degree || !colors || !preferred)
+    error("memory allocation failed [in graph regalloc]");
+
+  for (int v = 0; v < n; v++) {
+    colors[v] = -1;
+    preferred[v] = MIR_INVALID_VREG;
+  }
+  for (int i = 0; i < ninst; i++) {
+    const MirInst *in = &mf->blocks[0].insts[i];
+    const RaInstInfo *info = &analysis->insts[i];
+    if (info->def >= 0) {
+      present[info->def] = 1;
+      defs[i * n + info->def] = 1;
+    }
+    for (int u = 0; u < info->use_count; u++) {
+      VReg v = info->uses[u];
+      present[v] = 1;
+      uses[i * n + v] = 1;
+    }
+    if (in->dst < 0)
+      continue;
+    if (in->src1 >= 0 && can_coalesce_with_src1(in->op))
+      preferred[in->dst] = in->src1;
+  }
+
+  int changed = 1;
+  while (changed) {
+    changed = 0;
+    for (int i = ninst - 1; i >= 0; i--) {
+      for (int v = 0; v < n; v++) {
+        int out = 0;
+        if (analysis->insts[i].succ[0] >= 0)
+          out |= ins[analysis->insts[i].succ[0] * n + v];
+        if (analysis->insts[i].succ[1] >= 0)
+          out |= ins[analysis->insts[i].succ[1] * n + v];
+        int in = uses[i * n + v] || (out && !defs[i * n + v]);
+        if (outs[i * n + v] != out || ins[i * n + v] != in) {
+          outs[i * n + v] = out;
+          ins[i * n + v] = in;
+          changed = 1;
+        }
+      }
+    }
+  }
+
+  for (int i = 0; i < ninst; i++) {
+    const MirInst *in = &mf->blocks[0].insts[i];
+    if (in->op == MIR_OP_CALL) {
+      for (int v = 0; v < n; v++)
+        crosses_call[v] |= ins[i * n + v] && outs[i * n + v];
+    }
+    if (in->dst < 0)
+      continue;
+    for (int v = 0; v < n; v++) {
+      if (outs[i * n + v] && !(in->op == MIR_OP_MOV && v == in->src1))
+        add_interference(graph, n, in->dst, v);
+    }
+  }
+  for (int v = 0; v < n; v++) {
+    for (int u = 0; u < n; u++)
+      degree[v] += graph[v * n + u] ? 1 : 0;
+  }
+
+  unsigned callee_mask = 0;
+  unsigned all_mask = 0;
+  for (int p = 0; p < RA_PREG_COUNT; p++) {
+    all_mask |= 1u << p;
+    if (ra_preg_is_callee_saved(p))
+      callee_mask |= 1u << p;
+  }
+
+  for (int assigned = 0; assigned < n; assigned++) {
+    int best = -1;
+    int best_saturation = -1;
+    int best_degree = -1;
+    for (int v = 0; v < n; v++) {
+      if (!present[v] || colors[v] != -1)
+        continue;
+      int saturation = count_neighbor_colors(graph, n, v, colors);
+      if (saturation > best_saturation || (saturation == best_saturation && degree[v] > best_degree)) {
+        best = v;
+        best_saturation = saturation;
+        best_degree = degree[v];
+      }
+    }
+    if (best < 0)
+      break;
+
+    unsigned allowed = crosses_call[best] ? callee_mask : all_mask;
+    unsigned unavailable = 0;
+    for (int u = 0; u < n; u++) {
+      if (graph[best * n + u] && colors[u] >= 0)
+        unavailable |= 1u << colors[u];
+    }
+    int color = -1;
+    int pref = preferred[best];
+    if (pref >= 0 && pref < n && colors[pref] >= 0 && (allowed & (1u << colors[pref])) &&
+        !(unavailable & (1u << colors[pref])))
+      color = colors[pref];
+    const int *order = crosses_call[best] ? k_ra_pref_callee_first : k_ra_pref_caller_first;
+    if (color < 0) {
+      for (int i = 0; i < RA_PREG_COUNT; i++) {
+        int p = order[i];
+        if ((allowed & (1u << p)) && !(unavailable & (1u << p))) {
+          color = p;
+          break;
+        }
+      }
+    }
+    colors[best] = color >= 0 ? color : -2;
+  }
+
+  out->spill_count = 0;
+  out->used_reg_mask = 0;
+  for (int v = 0; v < n; v++) {
+    if (!present[v])
+      continue;
+    if (colors[v] >= 0) {
+      out->locs[v].kind = RA_LOC_REG;
+      out->locs[v].reg = colors[v];
+      out->used_reg_mask |= 1u << colors[v];
+    } else {
+      out->locs[v].kind = RA_LOC_STACK;
+      out->locs[v].stack_slot = out->spill_count++;
+    }
+  }
+
+  free(preferred);
+  free(colors);
+  free(degree);
+  free(crosses_call);
+  free(present);
+  free(graph);
+  free(outs);
+  free(ins);
+  free(defs);
+  free(uses);
+}
+
 void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   if (!mf || !out)
     error("invalid input [in regalloc_run]");
@@ -199,6 +412,8 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   }
 
   int ninst = mf->blocks[0].inst_len;
+  RaAnalysis analysis = {0};
+  analyze_mir(mf, &analysis);
   int words = bit_words(mf->next_vreg);
   unsigned long long *use = calloc(ninst * words, sizeof(unsigned long long));
   unsigned long long *def = calloc(ninst * words, sizeof(unsigned long long));
@@ -207,44 +422,14 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   if (!use || !def || !in || !out_bits)
     error("memory allocation failed [in regalloc_run bitsets]");
 
-  int *label_to_inst = NULL;
-  if (mf->next_label > 0) {
-    label_to_inst = malloc(sizeof(int) * mf->next_label);
-    if (!label_to_inst)
-      error("memory allocation failed [in regalloc_run label map]");
-    for (int i = 0; i < mf->next_label; i++)
-      label_to_inst[i] = -1;
+  for (int i = 0; i < ninst; i++) {
+    RaInstInfo *info = &analysis.insts[i];
+    if (info->def >= 0)
+      bit_set(bit_row(def, i, words), info->def);
+    for (int u = 0; u < info->use_count; u++)
+      bit_set(bit_row(use, i, words), info->uses[u]);
   }
 
-  for (int i = 0; i < ninst; i++) {
-    collect_use_def(&mf->blocks[0].insts[i], bit_row(use, i, words), bit_row(def, i, words), mf->next_vreg);
-    if (mf->blocks[0].insts[i].op == MIR_OP_LABEL) {
-      int l = mf->blocks[0].insts[i].label;
-      if (l < 0 || l >= mf->next_label)
-        error("invalid label id in MIR_OP_LABEL [in regalloc_run]");
-      label_to_inst[l] = i;
-    }
-  }
-
-  int *succ0 = malloc(sizeof(int) * ninst);
-  int *succ1 = malloc(sizeof(int) * ninst);
-  if (!succ0 || !succ1)
-    error("memory allocation failed [in regalloc_run succ]");
-  for (int i = 0; i < ninst; i++) {
-    succ0[i] = -1;
-    succ1[i] = -1;
-    MirInst *in_i = &mf->blocks[0].insts[i];
-    if (in_i->op == MIR_OP_RET) {
-      continue;
-    } else if (in_i->op == MIR_OP_JMP) {
-      succ0[i] = label_to_inst ? label_to_inst[in_i->label] : -1;
-    } else if (in_i->op == MIR_OP_JZ || in_i->op == MIR_OP_JCC) {
-      succ0[i] = (i + 1 < ninst) ? (i + 1) : -1;
-      succ1[i] = label_to_inst ? label_to_inst[in_i->label] : -1;
-    } else {
-      succ0[i] = (i + 1 < ninst) ? (i + 1) : -1;
-    }
-  }
   // out[i]: この命令の直後に live な集合
   unsigned long long *tmp_out = malloc(sizeof(unsigned long long) * words);
   // in[i]: この命令の直前に live な集合
@@ -258,10 +443,10 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
     for (int i = ninst - 1; i >= 0; i--) {
       // out[i] = in[succ0[i]] ∪ in[succ1[i]]
       memset(tmp_out, 0, sizeof(unsigned long long) * words);
-      if (succ0[i] >= 0)
-        bit_or(tmp_out, cbit_row(in, succ0[i], words), words);
-      if (succ1[i] >= 0)
-        bit_or(tmp_out, cbit_row(in, succ1[i], words), words);
+      if (analysis.insts[i].succ[0] >= 0)
+        bit_or(tmp_out, cbit_row(in, analysis.insts[i].succ[0], words), words);
+      if (analysis.insts[i].succ[1] >= 0)
+        bit_or(tmp_out, cbit_row(in, analysis.insts[i].succ[1], words), words);
 
       // in[i] = use[i] ∪ (out[i] - def[i])
       bit_copy(tmp_in, cbit_row(use, i, words), words);
@@ -327,6 +512,23 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
       if (bit_get(in_i, v) && bit_get(out_i, v))
         crosses_call[v] = 1;
     }
+  }
+
+  if (optimize_level > 0) {
+    regalloc_graph(mf, out, &analysis);
+    free(use_site_count);
+    free(crosses_call);
+    free(copy_src_at_start);
+    free(end);
+    free(start);
+    free(tmp_in);
+    free(tmp_out);
+    free_analysis(&analysis);
+    free(out_bits);
+    free(in);
+    free(def);
+    free(use);
+    return;
   }
 
   int interval_cnt = 0;
@@ -549,9 +751,7 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   free(start);
   free(tmp_in);
   free(tmp_out);
-  free(succ1);
-  free(succ0);
-  free(label_to_inst);
+  free_analysis(&analysis);
   free(out_bits);
   free(in);
   free(def);

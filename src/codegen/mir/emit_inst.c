@@ -188,7 +188,7 @@ static const char *vreg_assigned_reg64(const MirAsmCtx *ctx, VReg vreg) {
     return ra_preg64(loc->reg);
   if (loc->kind == RA_LOC_STACK)
     return NULL;
-  error("invalid vreg location [in vreg_assigned_reg64]");
+  error("invalid vreg location v%d in %.*s [in vreg_assigned_reg64]", vreg, ctx->mf->fn->len, ctx->mf->fn->name);
   return NULL;
 }
 

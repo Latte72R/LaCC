@@ -64,14 +64,14 @@ static int find_function(MirFunction *mfs, int count, Function *fn) {
   return -1;
 }
 
-static void mark_reachable_functions(MirFunction *mfs, int count, int optimize_level, unsigned char *reachable) {
+static void mark_reachable_functions(MirFunction *mfs, int count, unsigned char *reachable) {
   int *queue = malloc(sizeof(int) * count);
   if (!queue)
     error("memory allocation failed [in function reachability]");
   int head = 0;
   int tail = 0;
   for (int i = 0; i < count; i++) {
-    if (!mfs[i].fn->is_static && !(optimize_level > 0 && mfs[i].fn->is_inline)) {
+    if (!mfs[i].fn->is_static && !mfs[i].fn->is_inline) {
       reachable[i] = 1;
       queue[tail++] = i;
     }
@@ -95,10 +95,17 @@ static void mark_reachable_functions(MirFunction *mfs, int count, int optimize_l
   free(queue);
 }
 
-static void emit_text(int optimize_level) {
+static void emit_text() {
   int count = 0;
   for (int i = 0; code[i]->kind != ND_NONE; i++)
     count += code[i]->kind == ND_FUNCDEF ? 1 : 0;
+  if (count == 0)
+    return;
+#if LACC_PLATFORM_APPLE
+  write_file("  .section __TEXT,__text,regular,pure_instructions\n");
+#else
+  write_file("  .text\n");
+#endif
   MirFunction *mfs = calloc(count > 0 ? count : 1, sizeof(MirFunction));
   unsigned char *reachable = calloc(count > 0 ? count : 1, sizeof(unsigned char));
   if (!mfs || !reachable)
@@ -116,7 +123,7 @@ static void emit_text(int optimize_level) {
       destruct_mir_ssa(mf);
     }
   }
-  mark_reachable_functions(mfs, count, optimize_level, reachable);
+  mark_reachable_functions(mfs, count, reachable);
   for (int i = 0; i < count; i++) {
     MirFunction *mf = &mfs[i];
     if (!reachable[i]) {
@@ -134,17 +141,12 @@ static void emit_text(int optimize_level) {
   free(mfs);
 }
 
-void generate_assembly_pipeline(int optimize_level) {
+void generate_assembly_pipeline() {
   write_file(".intel_syntax noprefix\n");
 #if !LACC_PLATFORM_APPLE
   write_file("  .section .note.GNU-stack,\"\",@progbits\n");
 #endif
   gen_rodata_section();
   gen_data_section();
-#if LACC_PLATFORM_APPLE
-  write_file("  .section __TEXT,__text,regular,pure_instructions\n");
-#else
-  write_file("  .text\n");
-#endif
-  emit_text(optimize_level > 0 ? 1 : 0);
+  emit_text();
 }

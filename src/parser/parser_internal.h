@@ -70,4 +70,42 @@ Node *primary();
 int compile_time_number();
 Node *lower_builtin_function_call(Node *call);
 
+// Symbol helpers
+Node *new_node(NodeKind kind);
+Node *new_num(int val);
+Node *new_deref(Node *lhs);
+Node *new_binary(NodeKind kind, Node *lhs, Node *rhs);
+LVar *new_lvar(Token *tok, Type *type, int is_static, int is_extern);
+LVar *find_lvar(Token *tok);
+LVar *find_gvar(Token *tok);
+Object *find_struct(Token *tok);
+Object *find_union(Token *tok);
+Object *find_enum(Token *tok);
+LVar *find_enum_member(Token *tok);
+LVar *find_object_member(Object *object, Token *tok);
+TypeTag *find_type_tag(Token *tok);
+Function *find_fn(Token *tok);
+
+// Type system helpers
+Type *parse_base_type_internal(int should_consume, int should_record);
+Type *peek_base_type();
+Type *parse_pointer_qualifiers(Type *base_type);
+Type *parse_declarator(Type *base_type, Token **tok, char *stmt);
+Type *parse_declarator_suffix(Type *type, char *stmt);
+Type *parse_function_suffix(Type *type, char *stmt);
+Type *consume_type(int should_record);
+Type *consume_type_name(int should_record, char *stmt);
+Type *new_type(TypeKind ty);
+Type *new_type_ptr(Type *ptr_to);
+Type *new_type_arr(Type *ptr_to, int array_size);
+Type *parse_array_dimensions(Type *base_type);
+void substitute_type(Type *where, Type *placeholder, Type *actual);
+int is_type(Token *tok);
+int is_enum_type(Type *type);
+char *type_name(Type *type);
+int is_type_compatible(Type *lhs, Type *rhs);
+int is_type_identical(Type *lhs, Type *rhs);
+int is_type_assignable(Type *lhs, Type *rhs);
+int eval_const_expr(Node *node, int *ok);
+
 #endif // PARSER_INTERNAL_H
