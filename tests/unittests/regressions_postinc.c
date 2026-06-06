@@ -55,3 +55,30 @@ int regress_ssa_loop_test(int n) {
   }
   return sum;
 }
+
+int regress_ssa_interference_test() {
+  int values[2];
+  values[0] = 11;
+  values[1] = 4;
+  return values[0] * 10 + values[1];
+}
+
+int regress_ssa_parallel_phi_test(int n) {
+  int a = 1;
+  int b = 2;
+  while (n > 0) {
+    int next = a + b;
+    a = b;
+    b = next;
+    n = n - 1;
+  }
+  return a * 10 + b;
+}
+
+static int regress_ssa_call_identity(int value) { return value; }
+
+int regress_ssa_call_live_test(int x) {
+  int before = x + 3;
+  int called = regress_ssa_call_identity(x * 2);
+  return before * 10 + called;
+}

@@ -99,6 +99,13 @@ static void emit_text() {
   int count = 0;
   for (int i = 0; code[i]->kind != ND_NONE; i++)
     count += code[i]->kind == ND_FUNCDEF ? 1 : 0;
+  if (count == 0)
+    return;
+#if LACC_PLATFORM_APPLE
+  write_file("  .section __TEXT,__text,regular,pure_instructions\n");
+#else
+  write_file("  .text\n");
+#endif
   MirFunction *mfs = calloc(count > 0 ? count : 1, sizeof(MirFunction));
   unsigned char *reachable = calloc(count > 0 ? count : 1, sizeof(unsigned char));
   if (!mfs || !reachable)
@@ -141,10 +148,5 @@ void generate_assembly_pipeline() {
 #endif
   gen_rodata_section();
   gen_data_section();
-#if LACC_PLATFORM_APPLE
-  write_file("  .section __TEXT,__text,regular,pure_instructions\n");
-#else
-  write_file("  .text\n");
-#endif
   emit_text();
 }

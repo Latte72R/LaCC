@@ -1,6 +1,7 @@
 #include "../codegen_internal.h"
 #include "../bitset.h"
 #include "diagnostics.h"
+#include "runtime.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -172,6 +173,188 @@ static void dump_active(FILE *out, Interval **active, int active_cnt, const int 
   fprintf(out, "\n");
 }
 
+static void add_interference(unsigned char *graph, int n, int a, int b) {
+  if (a < 0 || b < 0 || a == b)
+    return;
+  graph[a * n + b] = 1;
+  graph[b * n + a] = 1;
+}
+
+static int count_neighbor_colors(const unsigned char *graph, int n, int v, const int *colors) {
+  unsigned mask = 0;
+  for (int u = 0; u < n; u++) {
+    if (graph[v * n + u] && colors[u] >= 0)
+      mask |= 1u << colors[u];
+  }
+  int count = 0;
+  for (int p = 0; p < RA_PREG_COUNT; p++)
+    count += (mask >> p) & 1u;
+  return count;
+}
+
+typedef struct {
+  const int *succ0;
+  const int *succ1;
+} GraphLiveness;
+
+static void regalloc_graph(const MirFunction *mf, RegAllocResult *out, const GraphLiveness *live) {
+  int n = mf->next_vreg;
+  int ninst = mf->blocks[0].inst_len;
+  unsigned char *uses = calloc((size_t)ninst * (size_t)n, sizeof(unsigned char));
+  unsigned char *defs = calloc((size_t)ninst * (size_t)n, sizeof(unsigned char));
+  unsigned char *ins = calloc((size_t)ninst * (size_t)n, sizeof(unsigned char));
+  unsigned char *outs = calloc((size_t)ninst * (size_t)n, sizeof(unsigned char));
+  unsigned char *graph = calloc((size_t)n * (size_t)n, sizeof(unsigned char));
+  unsigned char *present = calloc(n, sizeof(unsigned char));
+  unsigned char *crosses_call = calloc(n, sizeof(unsigned char));
+  int *degree = calloc(n, sizeof(int));
+  int *colors = malloc(sizeof(int) * n);
+  int *preferred = malloc(sizeof(int) * n);
+  if (!uses || !defs || !ins || !outs || !graph || !present || !crosses_call || !degree || !colors || !preferred)
+    error("memory allocation failed [in graph regalloc]");
+
+  for (int v = 0; v < n; v++) {
+    colors[v] = -1;
+    preferred[v] = MIR_INVALID_VREG;
+  }
+  for (int i = 0; i < ninst; i++) {
+    const MirInst *in = &mf->blocks[0].insts[i];
+    if (in->dst >= 0) {
+      present[in->dst] = 1;
+      defs[i * n + in->dst] = 1;
+    }
+    if (in->src1 >= 0) {
+      present[in->src1] = 1;
+      uses[i * n + in->src1] = 1;
+    }
+    if (in->src2 >= 0) {
+      present[in->src2] = 1;
+      uses[i * n + in->src2] = 1;
+    }
+    for (int a = 0; a < in->argc; a++) {
+      present[in->args[a]] = 1;
+      uses[i * n + in->args[a]] = 1;
+    }
+    if (in->dst < 0)
+      continue;
+    if (in->src1 >= 0 && can_coalesce_with_src1(in->op))
+      preferred[in->dst] = in->src1;
+  }
+
+  int changed = 1;
+  while (changed) {
+    changed = 0;
+    for (int i = ninst - 1; i >= 0; i--) {
+      for (int v = 0; v < n; v++) {
+        int out = 0;
+        if (live->succ0[i] >= 0)
+          out |= ins[live->succ0[i] * n + v];
+        if (live->succ1[i] >= 0)
+          out |= ins[live->succ1[i] * n + v];
+        int in = uses[i * n + v] || (out && !defs[i * n + v]);
+        if (outs[i * n + v] != out || ins[i * n + v] != in) {
+          outs[i * n + v] = out;
+          ins[i * n + v] = in;
+          changed = 1;
+        }
+      }
+    }
+  }
+
+  for (int i = 0; i < ninst; i++) {
+    const MirInst *in = &mf->blocks[0].insts[i];
+    if (in->op == MIR_OP_CALL) {
+      for (int v = 0; v < n; v++)
+        crosses_call[v] |= ins[i * n + v] && outs[i * n + v];
+    }
+    if (in->dst < 0)
+      continue;
+    for (int v = 0; v < n; v++) {
+      if (outs[i * n + v] && !(in->op == MIR_OP_MOV && v == in->src1))
+        add_interference(graph, n, in->dst, v);
+    }
+  }
+  for (int v = 0; v < n; v++) {
+    for (int u = 0; u < n; u++)
+      degree[v] += graph[v * n + u] ? 1 : 0;
+  }
+
+  unsigned callee_mask = 0;
+  unsigned all_mask = 0;
+  for (int p = 0; p < RA_PREG_COUNT; p++) {
+    all_mask |= 1u << p;
+    if (ra_preg_is_callee_saved(p))
+      callee_mask |= 1u << p;
+  }
+
+  for (int assigned = 0; assigned < n; assigned++) {
+    int best = -1;
+    int best_saturation = -1;
+    int best_degree = -1;
+    for (int v = 0; v < n; v++) {
+      if (!present[v] || colors[v] != -1)
+        continue;
+      int saturation = count_neighbor_colors(graph, n, v, colors);
+      if (saturation > best_saturation || (saturation == best_saturation && degree[v] > best_degree)) {
+        best = v;
+        best_saturation = saturation;
+        best_degree = degree[v];
+      }
+    }
+    if (best < 0)
+      break;
+
+    unsigned allowed = crosses_call[best] ? callee_mask : all_mask;
+    unsigned unavailable = 0;
+    for (int u = 0; u < n; u++) {
+      if (graph[best * n + u] && colors[u] >= 0)
+        unavailable |= 1u << colors[u];
+    }
+    int color = -1;
+    int pref = preferred[best];
+    if (pref >= 0 && pref < n && colors[pref] >= 0 && (allowed & (1u << colors[pref])) &&
+        !(unavailable & (1u << colors[pref])))
+      color = colors[pref];
+    const int *order = crosses_call[best] ? k_ra_pref_callee_first : k_ra_pref_caller_first;
+    if (color < 0) {
+      for (int i = 0; i < RA_PREG_COUNT; i++) {
+        int p = order[i];
+        if ((allowed & (1u << p)) && !(unavailable & (1u << p))) {
+          color = p;
+          break;
+        }
+      }
+    }
+    colors[best] = color >= 0 ? color : -2;
+  }
+
+  out->spill_count = 0;
+  out->used_reg_mask = 0;
+  for (int v = 0; v < n; v++) {
+    if (!present[v])
+      continue;
+    if (colors[v] >= 0) {
+      out->locs[v].kind = RA_LOC_REG;
+      out->locs[v].reg = colors[v];
+      out->used_reg_mask |= 1u << colors[v];
+    } else {
+      out->locs[v].kind = RA_LOC_STACK;
+      out->locs[v].stack_slot = out->spill_count++;
+    }
+  }
+
+  free(preferred);
+  free(colors);
+  free(degree);
+  free(crosses_call);
+  free(present);
+  free(graph);
+  free(outs);
+  free(ins);
+  free(defs);
+  free(uses);
+}
+
 void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
   if (!mf || !out)
     error("invalid input [in regalloc_run]");
@@ -327,6 +510,28 @@ void regalloc_run(const MirFunction *mf, RegAllocResult *out) {
       if (bit_get(in_i, v) && bit_get(out_i, v))
         crosses_call[v] = 1;
     }
+  }
+
+  if (optimize_level > 0) {
+    GraphLiveness live;
+    live.succ0 = succ0;
+    live.succ1 = succ1;
+    regalloc_graph(mf, out, &live);
+    free(use_site_count);
+    free(crosses_call);
+    free(copy_src_at_start);
+    free(end);
+    free(start);
+    free(tmp_in);
+    free(tmp_out);
+    free(succ1);
+    free(succ0);
+    free(label_to_inst);
+    free(out_bits);
+    free(in);
+    free(def);
+    free(use);
+    return;
   }
 
   int interval_cnt = 0;

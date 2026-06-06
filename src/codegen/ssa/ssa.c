@@ -715,60 +715,42 @@ void destruct_mir_ssa(MirFunction *mf) {
     return;
   for (int b = 0; b < mf->block_count; b++) {
     MirBasicBlock *bb = &mf->blocks[b];
-    for (int p = 0; p < bb->phi_count; p++) {
-      MirPhi *phi = &bb->phis[p];
-      int needs_slot = bb->phi_count > 1;
-      for (int i = 0; i < phi->incoming_count; i++)
-        needs_slot = needs_slot || mf->blocks[phi->incoming_block[i]].succ_count > 1;
-      if (needs_slot) {
-        int slot = mir_add_local_slot(mf, NULL, phi->type, get_sizeof(phi->type));
+    for (int pred_index = 0; pred_index < bb->pred_count; pred_index++) {
+      int pred = bb->preds[pred_index];
+      VReg *temps = malloc(sizeof(VReg) * bb->phi_count);
+      if (!temps)
+        error("memory allocation failed [in SSA parallel copy]");
+      for (int p = 0; p < bb->phi_count; p++) {
+        MirPhi *phi = &bb->phis[p];
+        VReg src = MIR_INVALID_VREG;
         for (int i = 0; i < phi->incoming_count; i++) {
-          MirInst store = {0};
-          store.op = MIR_OP_STORE_LOCAL;
-          store.dst = MIR_INVALID_VREG;
-          store.src1 = phi->incoming_value[i];
-          store.src2 = MIR_INVALID_VREG;
-          store.label = MIR_INVALID_LABEL;
-          store.offset = slot;
-          store.type = phi->type;
-          insert_before_terminator(&mf->blocks[phi->incoming_block[i]], &store);
+          if (phi->incoming_block[i] == pred) {
+            src = phi->incoming_value[i];
+            break;
+          }
         }
-        MirInst load = {0};
-        load.op = MIR_OP_LOAD_LOCAL;
-        load.dst = phi->dst;
-        load.src1 = MIR_INVALID_VREG;
-        load.src2 = MIR_INVALID_VREG;
-        load.label = MIR_INVALID_LABEL;
-        load.offset = slot;
-        load.type = phi->type;
-        if (bb->inst_len >= bb->inst_cap) {
-          int cap = bb->inst_cap ? bb->inst_cap * 2 : 8;
-          MirInst *insts = realloc(bb->insts, sizeof(MirInst) * cap);
-          if (!insts)
-            error("memory allocation failed [in SSA phi load]");
-          bb->insts = insts;
-          bb->inst_cap = cap;
-        }
-        int pos = bb->inst_len > 0 && bb->insts[0].op == MIR_OP_LABEL ? 1 : 0;
-        memmove(&bb->insts[pos + 1], &bb->insts[pos], sizeof(MirInst) * (bb->inst_len - pos));
-        bb->insts[pos] = load;
-        bb->inst_len++;
-        continue;
+        if (src == MIR_INVALID_VREG)
+          error("missing phi incoming value");
+        MirInst copy = {0};
+        copy.op = MIR_OP_MOV;
+        copy.dst = temps[p] = mir_new_vreg(mf);
+        copy.src1 = src;
+        copy.src2 = MIR_INVALID_VREG;
+        copy.label = MIR_INVALID_LABEL;
+        copy.type = phi->type;
+        insert_before_terminator(&mf->blocks[pred], &copy);
       }
-      for (int i = 0; i < phi->incoming_count; i++) {
-        MirInst first = {0};
-        first.op = MIR_OP_MOV;
-        first.dst = mir_new_vreg(mf);
-        first.src1 = phi->incoming_value[i];
-        first.src2 = MIR_INVALID_VREG;
-        first.label = MIR_INVALID_LABEL;
-        first.type = phi->type;
-        insert_before_terminator(&mf->blocks[phi->incoming_block[i]], &first);
-        MirInst second = first;
-        second.dst = phi->dst;
-        second.src1 = first.dst;
-        insert_before_terminator(&mf->blocks[phi->incoming_block[i]], &second);
+      for (int p = 0; p < bb->phi_count; p++) {
+        MirInst copy = {0};
+        copy.op = MIR_OP_MOV;
+        copy.dst = bb->phis[p].dst;
+        copy.src1 = temps[p];
+        copy.src2 = MIR_INVALID_VREG;
+        copy.label = MIR_INVALID_LABEL;
+        copy.type = bb->phis[p].type;
+        insert_before_terminator(&mf->blocks[pred], &copy);
       }
+      free(temps);
     }
     for (int p = 0; p < bb->phi_count; p++) {
       free(bb->phis[p].incoming_block);
