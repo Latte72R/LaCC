@@ -160,6 +160,7 @@ static void add_include_paths_from_compiler(void) {
 
   char buf[4096];
   int in_block = 0;
+  int parsing_done = 0;
   int added = 0;
 
   while (1) {
@@ -171,14 +172,21 @@ static void add_include_paths_from_compiler(void) {
       error("read from compiler output failed: %s", strerror(errno));
     }
 
+    // Do not close the pipe immediately after parsing the search list.
+    // The compiler may continue writing diagnostic output to stderr.
+    if (parsing_done)
+      continue;
+
     if (!in_block) {
       if (strstr(buf, "#include <...> search starts here:"))
         in_block = 1;
       continue;
     }
 
-    if (strstr(buf, "End of search list."))
-      break;
+    if (strstr(buf, "End of search list.")) {
+      parsing_done = 1;
+      continue;
+    }
 
     char *line = lstrip_whitespace(buf);
     if (*line == '\0')
@@ -202,8 +210,23 @@ static void add_include_paths_from_compiler(void) {
   if (waitpid(pid, &status, 0) < 0) {
     error("waitpid failed: %s", strerror(errno));
   }
-  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0 || !added) {
-    error("failed to get include paths from default compiler");
+  // if (!WIFEXITED(status) || WEXITSTATUS(status) != 0 || !added) {
+  //   error("failed to get include paths from default compiler");
+  // }
+  if (WIFSIGNALED(status)) {
+    error("default compiler terminated by signal %d", WTERMSIG(status));
+  }
+
+  if (!WIFEXITED(status)) {
+    error("default compiler terminated abnormally");
+  }
+
+  if (WEXITSTATUS(status) != 0) {
+    error("default compiler exited with status %d", WEXITSTATUS(status));
+  }
+
+  if (!added) {
+    error("failed to parse include paths from default compiler");
   }
 }
 
