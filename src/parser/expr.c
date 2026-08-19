@@ -859,10 +859,16 @@ Node *increment_decrement() {
   if (consume("++")) {
     loc = consumed_loc;
     node = access_member();
+    if (consume("++") || consume("--")) {
+      error_at(consumed_loc, "expression is not assignable [in increment & decrement]");
+    }
     return assign_sub(node, new_add(node, new_num(1), consumed_loc), loc, true);
   } else if (consume("--")) {
     loc = consumed_loc;
     node = access_member();
+    if (consume("++") || consume("--")) {
+      error_at(consumed_loc, "expression is not assignable [in increment & decrement]");
+    }
     return assign_sub(node, new_sub(node, new_num(1), consumed_loc), loc, true);
   }
   node = access_member();
@@ -870,6 +876,9 @@ Node *increment_decrement() {
     node = new_binary(ND_POSTINC, node, new_add(node, new_num(1), consumed_loc));
   } else if (consume("--")) {
     node = new_binary(ND_POSTINC, node, new_sub(node, new_num(1), consumed_loc));
+  }
+  if (consume("++") || consume("--")) {
+    error_at(consumed_loc, "expression is not assignable [in increment & decrement]");
   }
   return node;
 }
