@@ -427,25 +427,23 @@ run_expect_error 30 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;36mTest case 31:\e[0m\n"
-printf 'int main() {\n\treturn 2[3];\n}\n' > "$TMP_C"
+cat <<EOF > "$TMP_C"
+int main() {
+  return sizeof int;
+}
+EOF
 cat "$TMP_C"
-total_cases=$((total_cases + 1))
-ERR_OUT="$BUILD_DIR/diagnostic-tab-position.err"
-"$CC" "$TMP_C" -S -o "$TMP_S" 2> "$ERR_OUT"
-status=$?
-if [ $status -ne 0 ]; then
-  plain_caret=$(sed 's/\x1b\[[0-9;]*m//g' "$ERR_OUT" | tail -n 1)
-  expected_caret=$(printf '\t       ^')
-  if [ "$plain_caret" = "$expected_caret" ]; then
-    expected_error_cases=$((expected_error_cases + 1))
-  else
-    printf "\e[1;31mWrong diagnostic position: '%s'\e[0m\n" "$plain_caret"
-    missing_errors+=("31")
-  fi
-else
-  missing_errors+=("31")
-fi
-cat "$ERR_OUT"
+run_expect_error 31 $CC $TMP_C -S -o $TMP_S
+printf "\n"
+
+printf "\e[1;36mTest case 32:\e[0m\n"
+cat <<EOF > "$TMP_C"
+int main() {
+  return 2[3];
+}
+EOF
+cat "$TMP_C"
+run_expect_error 32 $CC $TMP_C -S -o $TMP_S
 printf "\n"
 
 printf "\e[1;35mSummary:\e[0m Expected errors %d / %d\n" "$expected_error_cases" "$total_cases"
