@@ -45,3 +45,20 @@ int sizeof_test8() {
   int r = u++;
   return r; // 255
 }
+
+int sizeof_test9() {
+  // 文字列リテラルのサイズは配列サイズ
+  return sizeof "Hello"; // 6
+}
+
+int sizeof_test10() {
+  // char ポインタのサイズ
+  char *ptr = "Hello";
+  return sizeof ptr; // 8
+}
+
+int sizeof_test11() {
+  // char 配列のサイズ
+  char arr[6] = "Hello";
+  return sizeof arr; // 6
+}

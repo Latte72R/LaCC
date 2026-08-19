@@ -65,6 +65,7 @@ int main() {
   CHECK(basic_test22(), 35);
   CHECK(basic_test23(), 2);
   CHECK(basic_test24(), 97);
+
   CHECK(struct_bits_test1(), 37);
   CHECK(struct_bits_test2(), 8);
   CHECK(struct_bits_test3(), 67);
@@ -90,10 +91,12 @@ int main() {
   CHECK(struct_bits_test23(), 1);
   CHECK(struct_bits_test24(), 26);
   CHECK(struct_bits_test25(), -4);
+
   CHECK(struct_init_test1(), 3);
   CHECK(struct_init_test2(), 94);
   CHECK(struct_init_test3(), 65);
   CHECK(struct_init_test4(), 18);
+
   CHECK(struct_init_test5(3, 7), 37);
   CHECK(struct_init_test6(4, 2), 42);
   CHECK(struct_init_test7(5, 6, 7), 567);
@@ -206,6 +209,7 @@ int main() {
   CHECK(unions_funcptrs_test23(), 4);
   CHECK(unions_funcptrs_test24(), 6);
   CHECK(unions_funcptrs_test25(), 37);
+
   CHECK(nullable_fp_test1(), 6);
   CHECK(nullable_fp_test2(), 31);
   CHECK(nullable_fp_test3(), 11);
@@ -247,6 +251,10 @@ int main() {
   CHECK(sizeof_test6(), 8);
   CHECK(sizeof_test7(), 8);
   CHECK(sizeof_test8(), 255);
+  CHECK(sizeof_test9(), 6);
+  CHECK(sizeof_test10(), 8);
+  CHECK(sizeof_test11(), 6);
+
   CHECK(inline_keyword_test1(), 42);
   CHECK(inline_keyword_test2(), 25);
   CHECK(inline_keyword_test3(), 7);
@@ -286,6 +294,7 @@ int main() {
   CHECK(unsigned_test33(), 8);
   CHECK(unsigned_test34(), 1);
   CHECK(unsigned_test35(), 1);
+
   CHECK(regress_postinc_test1(), 34);
   CHECK(regress_postinc_test2(), 54);
   CHECK(regress_postinc_test3(), 561);
