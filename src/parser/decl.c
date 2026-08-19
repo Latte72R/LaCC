@@ -359,9 +359,15 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern, int is_inline) {
 
   Node *node;
   if (consume(";")) {
-    // expression として扱う
     token = prev_tok;
-    return expression_stmt();
+
+    Type *type = consume_type(true);
+    expect(";", "after type", "type declaration");
+
+    Node *node = new_node(ND_TYPE);
+    node->type = type;
+    node->endline = true;
+    return node;
   }
 
   token = prev_tok;

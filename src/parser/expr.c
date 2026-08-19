@@ -510,8 +510,7 @@ Node *equality() {
       Node *rhs = relational();
       // enum の異種比較は警告
       if (is_enum_type(node->type) && is_enum_type(rhs->type) && node->type->object != rhs->type->object) {
-        warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(node->type),
-                   type_name(rhs->type));
+        warning_at(consumed_loc, "comparison of different enum types");
       }
       // ポインタと整数の比較は警告（ただし整数が 0 のリテラルは除く）
       if ((is_ptr_or_arr(node->type) && is_number(rhs->type) && !(rhs->kind == ND_NUM && rhs->val == 0)) ||
@@ -547,8 +546,7 @@ Node *relational() {
     if (consume("<")) {
       Node *rhs = bit_shift();
       if (is_enum_type(node->type) && is_enum_type(rhs->type) && node->type->object != rhs->type->object) {
-        warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(node->type),
-                   type_name(rhs->type));
+        warning_at(consumed_loc, "comparison of different enum types");
       }
       if ((is_ptr_or_arr(node->type) && is_number(rhs->type) && !(rhs->kind == ND_NUM && rhs->val == 0)) ||
           (is_number(node->type) && is_ptr_or_arr(rhs->type) && !(node->kind == ND_NUM && node->val == 0))) {
@@ -559,8 +557,7 @@ Node *relational() {
     } else if (consume("<=")) {
       Node *rhs = bit_shift();
       if (is_enum_type(node->type) && is_enum_type(rhs->type) && node->type->object != rhs->type->object) {
-        warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(node->type),
-                   type_name(rhs->type));
+        warning_at(consumed_loc, "comparison of different enum types");
       }
       if ((is_ptr_or_arr(node->type) && is_number(rhs->type) && !(rhs->kind == ND_NUM && rhs->val == 0)) ||
           (is_number(node->type) && is_ptr_or_arr(rhs->type) && !(node->kind == ND_NUM && node->val == 0))) {
@@ -571,8 +568,7 @@ Node *relational() {
     } else if (consume(">")) {
       Node *lhs = bit_shift();
       if (is_enum_type(lhs->type) && is_enum_type(node->type) && lhs->type->object != node->type->object) {
-        warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(lhs->type),
-                   type_name(node->type));
+        warning_at(consumed_loc, "comparison of different enum types");
       }
       if ((is_ptr_or_arr(node->type) && is_number(lhs->type) && !(lhs->kind == ND_NUM && lhs->val == 0)) ||
           (is_number(node->type) && is_ptr_or_arr(lhs->type) && !(node->kind == ND_NUM && node->val == 0))) {
@@ -583,8 +579,7 @@ Node *relational() {
     } else if (consume(">=")) {
       Node *lhs = bit_shift();
       if (is_enum_type(lhs->type) && is_enum_type(node->type) && lhs->type->object != node->type->object) {
-        warning_at(consumed_loc, "comparison of different enum types ('%s' and '%s')", type_name(lhs->type),
-                   type_name(node->type));
+        warning_at(consumed_loc, "comparison of different enum types");
       }
       if ((is_ptr_or_arr(node->type) && is_number(lhs->type) && !(lhs->kind == ND_NUM && lhs->val == 0)) ||
           (is_number(node->type) && is_ptr_or_arr(lhs->type) && !(node->kind == ND_NUM && node->val == 0))) {
@@ -801,7 +796,7 @@ Node *unary() {
     }
     Node *n = new_num(sz);
     // C の sizeof の結果型は size_t（LP64想定で unsigned long）
-    n->type = new_type(TY_LONG);
+    n->type = new_type(TY_LONGLONG);
     n->type->is_unsigned = true;
     return n;
   }
@@ -1068,15 +1063,7 @@ Node *primary() {
     String *str = string_literal();
     node = new_node(ND_STRING);
     node->id = str->id;
-    node->type = new_type_ptr(new_type(TY_CHAR));
-    return node;
-  }
-
-  // 型
-  if (is_type(token)) {
-    Type *type = consume_type(true);
-    node = new_node(ND_TYPE);
-    node->type = type;
+    node->type = new_type_arr(new_type(TY_CHAR), str->len + 1);
     return node;
   }
 
