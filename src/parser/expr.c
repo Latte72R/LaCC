@@ -1063,17 +1063,9 @@ Node *primary() {
     String *str = string_literal();
     node = new_node(ND_STRING);
     node->id = str->id;
-    node->type = new_type_ptr(new_type(TY_CHAR));
+    node->type = new_type_arr(new_type(TY_CHAR), str->len + 1);
     return node;
   }
-
-  // 型
-  // if (is_type(token)) {
-  //   Type *type = consume_type(true);
-  //   node = new_node(ND_TYPE);
-  //   node->type = type;
-  //   return node;
-  // }
 
   if (token->kind != TK_IDENT) {
     error_at(token->loc, "expected expression [in primary]");
