@@ -8,6 +8,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static void print_caret(const char *line, int column) {
+  if (column < 0)
+    column = 0;
+  for (int i = 0; i < column; i++)
+    fputc(line[i] == '\t' ? '\t' : ' ', stderr);
+  fprintf(stderr, "\033[1;32m^\033[0m\n");
+}
+
 // Write formatted output to the output file.
 void write_file(char *fmt, ...) {
   va_list args;
@@ -60,9 +68,7 @@ void error_at(Location *location, char *fmt, ...) {
     fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
     // エラー箇所を"^"で指し示す
-    if (column < 0)
-      column = 0;
-    fprintf(stderr, "%*s\033[1;32m^\033[0m\n", column, "");
+    print_caret(line, column);
   }
 
   // ファイルを削除してプログラムを終了
@@ -114,9 +120,7 @@ void warning_at(Location *location, char *fmt, ...) {
     fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
     // 警告箇所を"^"で指し示す
-    if (column < 0)
-      column = 0;
-    fprintf(stderr, "%*s\033[1;32m^\033[0m\n", column, "");
+    print_caret(line, column);
   }
 
   warning_cnt++;
