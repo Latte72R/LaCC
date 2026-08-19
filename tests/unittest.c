@@ -21,16 +21,18 @@ void check_with_name(int result, const char *name, int ans) {
 #include "unittests/casts_extra.c"
 #include "unittests/comma.c"
 #include "unittests/enum_init.c"
-#include "unittests/funcptrs_ternary_sizeof.c"
+#include "unittests/funcptrs.c"
 #include "unittests/inline_keyword.c"
 #include "unittests/literals_and_switch.c"
 #include "unittests/loops_strings_arrays.c"
 #include "unittests/macro.c"
 #include "unittests/nullable_funcptrs.c"
 #include "unittests/regressions_postinc.c"
+#include "unittests/sizeof.c"
 #include "unittests/struct_arrays_bits.c"
 #include "unittests/struct_initializers.c"
 #include "unittests/switch_goto_casts.c"
+#include "unittests/ternary.c"
 #include "unittests/unions_typedefs_funcptrs.c"
 #include "unittests/unsigned_and_suffixes.c"
 
@@ -219,30 +221,32 @@ int main() {
   CHECK(comma_chained_side_effects(), 10);
   CHECK(comma_in_for_loop(), 18);
 
-  CHECK(fptr_ternary_sizeof_test1(), 5);
-  CHECK(fptr_ternary_sizeof_test2(), 13);
-  CHECK(fptr_ternary_sizeof_test3(), 7);
-  CHECK(fptr_ternary_sizeof_test4(), 5);
-  CHECK(fptr_ternary_sizeof_test5(), 10);
-  CHECK(fptr_ternary_sizeof_test6(), 202);
-  CHECK(fptr_ternary_sizeof_test7(), 67);
-  CHECK(fptr_ternary_sizeof_test8(), 12);
-  CHECK(fptr_ternary_sizeof_test9(), 5);
-  CHECK(fptr_ternary_sizeof_test10(), 333);
-  CHECK(fptr_ternary_sizeof_test11(), 45);
-  CHECK(fptr_ternary_sizeof_test12(), 2);
-  CHECK(fptr_ternary_sizeof_test13(), 5);
-  CHECK(fptr_ternary_sizeof_test14(), 7);
-  CHECK(fptr_ternary_sizeof_test15(), 20);
-  CHECK(fptr_ternary_sizeof_test16(), 11);
-  CHECK(fptr_ternary_sizeof_test17(), 4);
-  CHECK(fptr_ternary_sizeof_test18(), 1);
-  CHECK(fptr_ternary_sizeof_test19(), 8);
-  CHECK(fptr_ternary_sizeof_test20(), 200);
-  CHECK(fptr_ternary_sizeof_test21(), 199);
-  CHECK(fptr_ternary_sizeof_test22(), 8);
-  CHECK(fptr_ternary_sizeof_test23(), 1);
-  CHECK(fptr_ternary_sizeof_test24(), 255);
+  CHECK(funcptrs_test1(), 5);
+  CHECK(funcptrs_test2(), 13);
+  CHECK(funcptrs_test3(), 200);
+  CHECK(funcptrs_test4(), 199);
+
+  CHECK(ternary_test1(), 7);
+  CHECK(ternary_test2(), 5);
+  CHECK(ternary_test3(), 10);
+  CHECK(ternary_test4(), 202);
+  CHECK(ternary_test5(), 67);
+  CHECK(ternary_test6(), 12);
+  CHECK(ternary_test7(), 5);
+  CHECK(ternary_test8(), 333);
+  CHECK(ternary_test9(), 45);
+  CHECK(ternary_test10(), 2);
+  CHECK(ternary_test11(), 5);
+  CHECK(ternary_test12(), 1);
+
+  CHECK(sizeof_test1(), 7);
+  CHECK(sizeof_test2(), 20);
+  CHECK(sizeof_test3(), 11);
+  CHECK(sizeof_test4(), 4);
+  CHECK(sizeof_test5(), 1);
+  CHECK(sizeof_test6(), 8);
+  CHECK(sizeof_test7(), 8);
+  CHECK(sizeof_test8(), 255);
   CHECK(inline_keyword_test1(), 42);
   CHECK(inline_keyword_test2(), 25);
   CHECK(inline_keyword_test3(), 7);
