@@ -891,11 +891,12 @@ Node *access_member() {
   for (;;) {
     if (consume("[")) {
       consumed_loc_prev = consumed_loc;
-      if (!is_ptr_or_arr(node->type)) {
-        error_at(prev_tok->loc, "invalid array access [in primary]");
-      }
+      prev_tok = token;
       node = new_add(node, expr(), consumed_loc_prev);
       expect("]", "after number", "array access");
+      if (!is_ptr_or_arr(node->type)) {
+        error_at(prev_tok->loc, "invalid array access [in access member]");
+      }
       node = new_deref(node);
     } else if (consume("(")) {
       Location *loc = consumed_loc;
