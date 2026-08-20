@@ -168,3 +168,9 @@ ENUM24 basic_test23() {
 
 // 文字定数の返却
 char basic_test24() { return 'a'; }
+
+// 配列アクセスは入れ替えても等価
+int basic_test25() {
+  int arr[3] = {11, 9, 7};
+  return 2 [arr];
+}
