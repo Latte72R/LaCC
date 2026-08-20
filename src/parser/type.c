@@ -737,10 +737,15 @@ int is_type(Token *tok) {
   return false;
 }
 
-// 予約しているスタック領域のサイズ
+// 型のオブジェクトを格納するために必要な領域サイズを返す
+// 配列は全要素を含むサイズとして扱う
 int get_sizeof(Type *type) {
+  Location *loc = token ? token->loc : NULL;
   if (type->object && !type->object->is_defined) {
-    error_at(token->loc, "invalid application of 'sizeof' to an incomplete type [in get_sizeof]");
+    if (loc)
+      error_at(loc, "invalid application of 'sizeof' to an incomplete type [in get_sizeof]");
+    else
+      error("invalid application of 'sizeof' to an incomplete type [in get_sizeof]");
   }
   switch (type->ty) {
   case TY_BOOL:
@@ -763,14 +768,23 @@ int get_sizeof(Type *type) {
   case TY_UNION:
     return type->object->size;
   default:
-    error_at(token->loc, "invalid type [in get_sizeof]");
+    if (loc)
+      error_at(loc, "invalid type [in get_sizeof]");
+    else
+      error("invalid type [in get_sizeof]");
     return 0;
   }
 }
 
+// 式の評価や型変換で値として扱う際のサイズを返す
+// 配列と関数引数配列はポインタ幅として扱う
 int type_size(Type *type) {
+  Location *loc = token ? token->loc : NULL;
   if (type->object && !type->object->is_defined) {
-    error_at(token->loc, "incomplete definition of type [in type_size]");
+    if (loc)
+      error_at(loc, "incomplete definition of type [in type_size]");
+    else
+      error("incomplete definition of type [in type_size]");
   }
   switch (type->ty) {
   case TY_VOID:
@@ -794,7 +808,10 @@ int type_size(Type *type) {
   case TY_UNION:
     return type->object->size;
   default:
-    error_at(token->loc, "invalid type [in type_size]");
+    if (loc)
+      error_at(loc, "invalid type [in type_size]");
+    else
+      error("invalid type [in type_size]");
     return 0;
   }
 }
@@ -836,6 +853,7 @@ static Type *clone_integer_type(Type *type) {
   return t;
 }
 
+// 通常算術変換後の共通整数型を返す
 Type *max_type(Type *lhs, Type *rhs) {
   if (!lhs)
     return rhs;

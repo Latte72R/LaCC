@@ -359,6 +359,7 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern, int is_inline) {
 
   Node *node;
   if (consume(";")) {
+    // struct や enum などの型の宣言
     token = prev_tok;
 
     Type *type = consume_type(true);
@@ -372,61 +373,12 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern, int is_inline) {
 
   token = prev_tok;
   Type *base_type = parse_base_type_internal(true, true);
-  // ヘッダ由来の未対応トークンなどで基底型を解釈できない場合、
-  // 壊れた状態で進めず式文として扱って安全にエラーへ誘導する
+  // 型を解釈できない場合はエラーにする
   if (!base_type) {
     token = prev_tok;
     return expression_stmt();
   }
   prev_tok = token;
-
-  Token *tok;
-  type = parse_declarator(base_type, &tok, "variable declaration");
-  if (!tok) {
-    Location *loc = token ? token->loc : consumed_loc;
-    error_at(loc, "expected an identifier [in variable declaration statement]");
-  }
-  skip_gnu_asm_specifier("asm specifier");
-
-  if (type->ty == TY_FUNC) {
-    // 関数型の宣言/定義
-    // ブロック内でも関数プロトタイプ宣言は合法 (int f();)。
-    // 一方、関数本体を伴う定義 ( { ... } ) はネストした関数となり未対応。
-    if (peek("{")) {
-      if (current_fn)
-        error_at(token->loc, "nested function is not supported [in function definition]");
-      return function_definition(tok, type, is_static, is_inline);
-    }
-
-    // ここはプロトタイプ宣言。外側の関数のローカル情報(locals/current_fn)を
-    // 破壊しないよう、関数定義用の処理は使わないで登録のみ行う。
-    Function *fn = find_fn(tok);
-    if (!fn) {
-      fn = malloc(sizeof(Function));
-      fn->next = functions;
-      functions = fn;
-      fn->name = tok->str;
-      fn->len = tok->len;
-      fn->builtin_kind = BUILTIN_FN_NONE;
-      fn->builtin_alias = NULL;
-    }
-    fn->is_static = is_static;
-    fn->is_inline = is_inline;
-    fn->type = type;
-    fn->is_defined = false;
-    // パラメータ未指定(例: f();) は型チェックしない
-    fn->type_check = (type->param_count != 0) && !type->is_variadic;
-    fn->labels = NULL;
-
-    Node *node = new_node(ND_EXTERN);
-    expect(";", "after line", "function declaration");
-    node->endline = true;
-    return node;
-  }
-
-  if (type && !is_extern && type->object && !type->object->is_defined) {
-    error_at(tok->loc, "variable has incomplete type [in variable declaration]");
-  }
 
   node = new_node(ND_BLOCK);
   int cap = 16;
@@ -434,27 +386,69 @@ Node *vardec_and_funcdef_stmt(int is_static, int is_extern, int is_inline) {
   node->body = malloc(sizeof(Node *) * cap);
 
   for (;;) {
-    node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1, &cap);
-    if (is_extern) {
-      node->body[i++] = extern_variable_declaration(tok, type);
-    } else if (current_fn) {
-      node->body[i++] = local_variable_declaration(tok, type, is_static);
-    } else {
-      node->body[i++] = global_variable_declaration(tok, type, is_static);
-    }
-    if (!consume(","))
-      break;
+    Token *tok;
     type = parse_declarator(base_type, &tok, "variable declaration");
     if (!tok) {
       Location *loc = token ? token->loc : consumed_loc;
-      error_at(loc, "expected an identifier [in variable declaration statement]");
+      error_at(loc, "expected an identifier [in variable declaration]");
     }
     skip_gnu_asm_specifier("asm specifier");
+
+    if (type->ty == TY_FUNC) {
+      // 関数型の宣言/定義
+      // ブロック内でも関数プロトタイプ宣言は合法 (int f();)
+      // 関数本体を伴う定義 ( { ... } ) はネストした関数となり未対応
+      if (peek("{")) {
+        if (i != 0) {
+          error_at(token->loc, "expected ';' after top level declarator [in function definition]");
+        }
+        if (current_fn)
+          error_at(token->loc, "nested function is not supported [in function definition]");
+        return function_definition(tok, type, is_static, is_inline);
+      }
+
+      // プロトタイプ宣言
+      // 関数定義用の処理は使わないで登録のみ行う
+      Function *fn = find_fn(tok);
+      if (!fn) {
+        fn = malloc(sizeof(Function));
+        fn->next = functions;
+        functions = fn;
+        fn->name = tok->str;
+        fn->len = tok->len;
+        fn->builtin_kind = BUILTIN_FN_NONE;
+        fn->builtin_alias = NULL;
+      }
+      fn->is_static = is_static;
+      fn->is_inline = is_inline;
+      fn->type = type;
+      fn->is_defined = false;
+      // パラメータ未指定(例: f();) は型チェックしない
+      fn->type_check = (type->param_count != 0) && !type->is_variadic;
+      fn->labels = NULL;
+
+      node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1, &cap);
+      node->body[i++] = new_node(ND_EXTERN);
+    } else if (type && !is_extern && type->object && !type->object->is_defined) {
+      error_at(tok->loc, "variable has incomplete type [in variable declaration]");
+    } else {
+      // 変数の宣言
+      node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1, &cap);
+      if (is_extern) {
+        node->body[i++] = extern_variable_declaration(tok, type);
+      } else if (current_fn) {
+        node->body[i++] = local_variable_declaration(tok, type, is_static);
+      } else {
+        node->body[i++] = global_variable_declaration(tok, type, is_static);
+      }
+    }
+    if (!consume(","))
+      break;
   }
 
   node->body = safe_realloc_array(node->body, sizeof(Node *), i + 1, &cap);
   node->body[i] = new_node(ND_NONE);
-  expect(";", "after line", "variable declaration");
+  expect(";", "after line", "variable & function declaration");
   node->endline = true;
 
   return node;

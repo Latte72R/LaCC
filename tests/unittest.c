@@ -66,6 +66,8 @@ int main() {
   CHECK(basic_test23(), 2);
   CHECK(basic_test24(), 97);
   CHECK(basic_test25(), 7);
+  CHECK(basic_test26(), 4);
+  CHECK(basic_test27(), 27);
 
   CHECK(struct_bits_test1(), 37);
   CHECK(struct_bits_test2(), 8);
