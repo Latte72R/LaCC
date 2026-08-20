@@ -174,3 +174,14 @@ int basic_test25() {
   int arr[3] = {11, 9, 7};
   return 2 [arr];
 }
+
+// 関数と変数の混ざった宣言
+int sub_function26(int n) { return 26 * n; }
+int basic_test26() {
+  int n, arr[2], (*func)(int);
+  n = 36;
+  arr[0] = 4;
+  arr[1] = 3;
+  func = sub_function26;
+  return func(2) - (n + arr[0] * arr[1]);
+}
