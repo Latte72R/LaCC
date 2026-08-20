@@ -185,3 +185,13 @@ int basic_test26() {
   func = sub_function26;
   return func(2) - (n + arr[0] * arr[1]);
 }
+
+// 変数と関数プロトタイプが混在する宣言
+int mixed_decl_a27, mixed_decl_f27(), mixed_decl_g27(), mixed_decl_c27;
+int mixed_decl_f27() { return 3; }
+int mixed_decl_g27() { return 5; }
+int basic_test27() {
+  mixed_decl_a27 = 7;
+  mixed_decl_c27 = 12;
+  return mixed_decl_a27 + mixed_decl_f27() + mixed_decl_g27() + mixed_decl_c27;
+}
